@@ -175,7 +175,21 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   
   document.addEventListener("click", () => activeSelect?.close());
-  window.addEventListener('resize', () => activeSelect?.close(), true);
+  
+  // Na mobile nie zamykaj przy resize (klawiatura)
+  let resizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      // Zamknij tylko jeśli to nie mobile lub nie ma focus na search
+      const isMobile = window.innerWidth <= 768;
+      const searchHasFocus = document.activeElement?.classList.contains('custom-select-search');
+      
+      if (!isMobile || !searchHasFocus) {
+        activeSelect?.close();
+      }
+    }, 100);
+  }, true);
   
   // ==================== PANEL TRAS - ELEMENTY DOM ====================
   const routeCard = document.getElementById("routeCard");
