@@ -1556,9 +1556,19 @@ body.dark .btn-print-mats:hover {
     
     /* Custom select - mniejsze panele */
     #select-portal > .custom-select-panel.open {
-      max-height: 60vh !important;
+      max-height: 50vh !important;
       width: calc(100vw - 32px) !important;
       left: 16px !important;
+      top: auto !important;
+      bottom: 10px !important; /* Panel na dole gdy klawiatura otwarta */
+      transform: none !important;
+    }
+    
+    /* Wyszukiwarka w custom select - większy touch target */
+    .custom-select-search {
+      font-size: 16px !important;
+      padding: 16px !important;
+      min-height: 52px;
     }
     
     /* Wyszukiwarka - większy font */
