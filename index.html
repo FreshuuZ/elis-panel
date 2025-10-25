@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Centrum — Elis</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0d1117">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+</head>
+<body class="light">
+
+  <div class="background-aurora"></div>
+
+  <header class="app-header">
+    <div class="header-left">
+      <button id="backBtn" class="back-btn" style="display: none;" aria-label="Powrót">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m15 18-6-6 6-6"/>
+        </svg>
+      </button>
+      <div class="brand">
+        <img src="icons/icon-192.png" alt="Elis" class="brand-logo">
+        <span class="brand-title" id="headerTitle">Centrum Główne</span>
+      </div>
+    </div>
+    <button id="themeToggle" class="theme-toggle" aria-label="Zmień motyw">
+      <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+      <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+    </button>
+  </header>
+
+  <div id="app">
+    
+    <!-- WIDOK: CENTRUM GŁÓWNE -->
+    <div id="homeView" class="view active">
+      <main class="home-main">
+        <h1 class="home-welcome">Witaj w Systemie Elis</h1>
+        <p class="home-subtitle">Wybierz moduł, z którego chcesz skorzystać</p>
+        
+        <div class="home-grid">
+          <button class="home-tile" data-navigate="panel">
+            <div class="home-tile-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                <line x1="12" y1="22.08" x2="12" y2="12"></line>
+              </svg>
+            </div>
+            <div class="home-tile-content">
+              <h2>Panel Tras i Zmian</h2>
+              <p>Zarządzaj trasami i zmianami mat</p>
+            </div>
+          </button>
+
+          <button class="home-tile" data-navigate="mats">
+            <div class="home-tile-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+                <polyline points="10 9 9 9 8 9"></polyline>
+              </svg>
+            </div>
+            <div class="home-tile-content">
+              <h2>Lista Mat Logo</h2>
+              <p>Inwentaryzacja i zarządzanie matami</p>
+            </div>
+          </button>
+        </div>
+      </main>
+    </div>
+
+    <!-- WIDOK: PANEL TRAS (obecna funkcjonalność) -->
+    <div id="panelView" class="view">
+      <main class="app-main">
+        <section id="routeCard" class="card">
+          <h2>🚚 Wybierz trasę</h2>
+          <div id="routeSelectWrapper" class="custom-select-wrapper"></div>
+        </section>
+
+        <section id="baseCard" class="card form-section-disabled">
+          <h2>🧶 Brakująca mata podstawowa</h2>
+          <div id="baseMatSelectWrapper" class="custom-select-wrapper"></div>
+        </section>
+
+        <section id="altCard" class="card form-section-disabled">
+          <div class="card-header">
+            <h2>🔄 Zamienniki</h2>
+            <div class="advanced-toggle-wrapper">
+              <label for="advancedModeToggle" class="advanced-toggle-label">Tryb zaawansowany</label>
+              <input type="checkbox" id="advancedModeToggle" class="advanced-toggle">
+            </div>
+          </div>
+
+          <div id="simpleModeContainer">
+            <div id="altMatSelectWrapper" class="custom-select-wrapper"></div>
+            <div class="input-row">
+              <input type="text" id="simpleClientInput" placeholder="Klient (opcjonalnie)">
+            </div>
+            <div class="qty-row">
+              <button id="qtyDec" class="btn-secondary" aria-label="Zmniejsz">−</button>
+              <input type="number" id="qty" min="1" max="100" value="1" inputmode="numeric" placeholder="Ilość">
+              <button id="qtyInc" class="btn-secondary" aria-label="Zwiększ">+</button>
+            </div>
+          </div>
+
+          <div id="advancedModeContainer" style="display: none;">
+            <div class="advanced-section">
+              <h3>Ilość mat bazowych</h3>
+              <div class="qty-row">
+                <button id="advQtyBaseDec" class="btn-secondary" aria-label="Zmniejsz">−</button>
+                <input type="number" id="advQtyBase" min="1" max="100" value="1" inputmode="numeric">
+                <button id="advQtyBaseInc" class="btn-secondary" aria-label="Zwiększ">+</button>
+              </div>
+            </div>
+            
+            <div class="advanced-section">
+              <h3>Kreator listy zamienników</h3>
+              <div class="multi-alt-builder">
+                <div id="multiAltSelectWrapper" class="custom-select-wrapper"></div>
+                <div class="multi-alt-input-row">
+                  <input type="text" id="multiAltClientInput" placeholder="Klient (opcjonalnie)">
+                  <div class="qty-row mini">
+                    <input type="number" id="multiAltQtyInput" value="1" min="1" max="100" inputmode="numeric" placeholder="Ilość">
+                  </div>
+                  <button id="addTempAltBtn" class="btn-add-alt" aria-label="Dodaj ten zamiennik do listy">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14m-7-7h14"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div id="tempMultiAltList" class="temp-multi-alt-list"></div>
+            </div>
+          </div>
+          
+          <button id="addBtn" class="btn-primary" disabled>
+            <span class="btn-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14m-7-7h14"/></svg>
+            </span>
+            <span class="btn-label">Dodaj do listy zmian</span>
+          </button>
+        </section>
+
+        <section>
+          <h2 class="section-title">📋 Lista zmian</h2>
+          <div id="changesList" class="list"></div>
+        </section>
+      </main>
+    </div>
+
+    <!-- WIDOK: LISTA MAT LOGO -->
+    <div id="matsView" class="view">
+      <main class="app-main">
+        <section class="card">
+          <section class="card">
+          <div class="card-header">
+            <h2>🔍 Wyszukiwarka Mat Logo</h2>
+            <button id="printMatsBtn" class="btn-print-mats" aria-label="Drukuj listę mat">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                <rect x="6" y="14" width="12" height="8"></rect>
+              </svg>
+              <span>Drukuj</span>
+            </button>
+          </div>
+          <div class="search-box">
+          <div class="search-box">
+            <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <path d="m21 21-4.35-4.35"></path>
+            </svg>
+            <input type="text" id="matsSearch" placeholder="Wpisz nazwę, lokalizację lub rozmiar..." class="search-input">
+          </div>
+          <div class="mats-stats">
+            <span id="matsCount">Załadowano: 0 mat</span>
+            <span id="matsFiltered" style="display:none;"></span>
+          </div>
+        </section>
+
+        <section>
+          <h2 class="section-title">📦 Lista Mat (inwentaryzacja)</h2>
+          <div id="matsList" class="mats-list"></div>
+        </section>
+      </main>
+    </div>
+
+  </div>
+
+  <footer class="app-footer">
+    <span>Created by Dominik Bocian</span>
+  </footer>
+
+  <div id="toast" class="toast"></div>
+
+  <!-- Modale Panel Tras -->
+  <div id="editSimpleModal" class="modal">
+    <div class="modal-content">
+      <h3>Edytuj zmianę</h3>
+      <input type="number" id="editSimpleQtyInput" min="1" max="100" placeholder="Ilość">
+      <input type="text" id="editSimpleClientInput" placeholder="Klient (opcjonalnie)">
+      <div class="modal-actions">
+        <button id="editSimpleCancel" class="btn-secondary">Anuluj</button>
+        <button id="editSimpleSave" class="btn-primary">Zapisz</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="editAdvancedModal" class="modal">
+    <div class="modal-content large">
+      <h3>Edytuj zmianę zaawansowaną</h3>
+      <div id="editAdvChangeDetails"></div>
+      <div class="advanced-section">
+          <h4>Ilość mat bazowych</h4>
+          <div class="qty-row">
+            <button id="editAdvQtyBaseDec" class="btn-secondary">−</button>
+            <input type="number" id="editAdvQtyBaseInput" min="1" max="100" value="1" inputmode="numeric">
+            <button id="editAdvQtyBaseInc" class="btn-secondary">+</button>
+          </div>
+      </div>
+      <div class="advanced-section">
+          <h4>Kreator listy zamienników</h4>
+          <div class="multi-alt-builder">
+            <div id="editMultiAltSelectWrapper" class="custom-select-wrapper"></div>
+            <div class="multi-alt-input-row">
+              <input type="text" id="editMultiAltClientInput" placeholder="Klient (opcjonalnie)">
+              <div class="qty-row mini">
+                <input type="number" id="editMultiAltQtyInput" value="1" min="1" max="100" inputmode="numeric">
+              </div>
+              <button id="editAddTempAltBtn" class="btn-add-alt" aria-label="Dodaj zamiennik">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14m-7-7h14"/></svg>
+              </button>
+            </div>
+          </div>
+          <div id="editTempMultiAltList" class="edit-temp-multi-alt-list"></div>
+      </div>
+      <div class="modal-actions">
+        <button id="editAdvancedCancel" class="btn-secondary">Anuluj</button>
+        <button id="editAdvancedSave" class="btn-primary">Zapisz zmiany</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="deleteModal" class="modal">
+    <div class="modal-content">
+      <h3>Potwierdź usunięcie</h3>
+      <p id="deleteModalText"></p>
+      <div class="modal-actions">
+        <button id="deleteCancel" class="btn-secondary">Anuluj</button>
+        <button id="deleteConfirm" class="btn-danger">Usuń</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="deleteGroupModal" class="modal">
+    <div class="modal-content">
+      <h3>Potwierdzenie usunięcia</h3> 
+      <p id="deleteGroupModalText"></p>
+      <div class="modal-actions">
+        <button id="deleteGroupCancel" class="btn-secondary">Anuluj</button>
+        <button id="deleteGroupConfirm" class="btn-danger">Usuń trasę</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Edycji Maty -->
+  <div id="editMatModal" class="modal">
+    <div class="modal-content">
+      <h3>Edytuj ilość</h3>
+      <p id="editMatName" style="text-align: center; font-weight: 600; margin-bottom: 16px;"></p>
+      <div class="qty-row">
+        <button id="editMatQtyDec" class="btn-secondary">−</button>
+        <input type="number" id="editMatQtyInput" min="0" max="9999" inputmode="numeric">
+        <button id="editMatQtyInc" class="btn-secondary">+</button>
+      </div>
+      <div class="modal-actions">
+        <button id="editMatCancel" class="btn-secondary">Anuluj</button>
+        <button id="editMatSave" class="btn-primary">Zapisz</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Usuwania Maty -->
+  <div id="deleteMatModal" class="modal">
+    <div class="modal-content">
+      <h3>⚠️ Potwierdź usunięcie</h3>
+      <p id="deleteMatText"></p>
+      <p style="color: var(--accent); font-size: 0.9rem; margin-top: 12px;">Ta operacja jest nieodwracalna!</p>
+      <div class="modal-actions">
+        <button id="deleteMatCancel" class="btn-secondary">Anuluj</button>
+        <button id="deleteMatConfirm" class="btn-danger">Usuń na zawsze</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="print-container">
+    <div id="print-output"></div>
+  </div>
+  
+  <div id="select-portal"></div>
+
+  <script src="script.js"></script>
+</body>
+</html>
