@@ -75,12 +75,33 @@
       </main>
     </div>
 
-    <!-- WIDOK: PANEL TRAS (obecna funkcjonalność) -->
+    <!-- WIDOK: PANEL TRAS -->
     <div id="panelView" class="view">
       <main class="app-main">
         <section id="routeCard" class="card">
           <h2>🚚 Wybierz trasę</h2>
           <div id="routeSelectWrapper" class="custom-select-wrapper"></div>
+        </section>
+
+        <!-- Karta wyboru akcji -->
+        <section id="actionCard" class="card form-section-disabled">
+          <h2>🔀 Wybierz typ operacji</h2>
+          <div class="action-buttons">
+            <button id="actionReplacement" class="action-btn">
+              <div class="action-btn-icon">🔄</div>
+              <div class="action-btn-content">
+                <h3>Zamiennik</h3>
+                <p>Zamień brakującą matę</p>
+              </div>
+            </button>
+            <button id="actionAddition" class="action-btn">
+              <div class="action-btn-icon">➕</div>
+              <div class="action-btn-content">
+                <h3>Dołożenie</h3>
+                <p>Dodaj matę do trasy</p>
+              </div>
+            </button>
+          </div>
         </section>
 
         <section id="baseCard" class="card form-section-disabled">
@@ -145,6 +166,23 @@
           </button>
         </section>
 
+        <!-- Karta dołożenia -->
+        <section id="additionCard" class="card form-section-disabled" style="display: none;">
+          <h2>➕ Dołóż matę do trasy</h2>
+          <div id="additionMatSelectWrapper" class="custom-select-wrapper"></div>
+          <div class="qty-row">
+            <button id="additionQtyDec" class="btn-secondary" aria-label="Zmniejsz">−</button>
+            <input type="number" id="additionQty" min="1" max="100" value="1" inputmode="numeric" placeholder="Ilość">
+            <button id="additionQtyInc" class="btn-secondary" aria-label="Zwiększ">+</button>
+          </div>
+          <button id="addAdditionBtn" class="btn-primary" disabled>
+            <span class="btn-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14m-7-7h14"/></svg>
+            </span>
+            <span class="btn-label">Dodaj dołożenie</span>
+          </button>
+        </section>
+
         <section>
           <h2 class="section-title">📋 Lista zmian</h2>
           <div id="changesList" class="list"></div>
@@ -156,7 +194,6 @@
     <div id="matsView" class="view">
       <main class="app-main">
         <section class="card">
-          <section class="card">
           <div class="card-header">
             <h2>🔍 Wyszukiwarka Mat Logo</h2>
             <button id="printMatsBtn" class="btn-print-mats" aria-label="Drukuj listę mat">
@@ -168,7 +205,6 @@
               <span>Drukuj</span>
             </button>
           </div>
-          <div class="search-box">
           <div class="search-box">
             <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="11" cy="11" r="8"></circle>
@@ -192,7 +228,7 @@
   </div>
 
   <footer class="app-footer">
-    <span>Created by D. & M. Bocian</span>
+    <span>Created by Dominik Bocian</span>
   </footer>
 
   <div id="toast" class="toast"></div>
@@ -267,42 +303,13 @@
     </div>
   </div>
 
-  <!-- Modal Edycji Maty -->
-  <div id="editMatModal" class="modal">
-    <div class="modal-content">
-      <h3>Edytuj ilość</h3>
-      <p id="editMatName" style="text-align: center; font-weight: 600; margin-bottom: 16px;"></p>
-      <div class="qty-row">
-        <button id="editMatQtyDec" class="btn-secondary">−</button>
-        <input type="number" id="editMatQtyInput" min="0" max="9999" inputmode="numeric">
-        <button id="editMatQtyInc" class="btn-secondary">+</button>
-      </div>
-      <div class="modal-actions">
-        <button id="editMatCancel" class="btn-secondary">Anuluj</button>
-        <button id="editMatSave" class="btn-primary">Zapisz</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal Usuwania Maty -->
-  <div id="deleteMatModal" class="modal">
-    <div class="modal-content">
-      <h3>⚠️ Potwierdź usunięcie</h3>
-      <p id="deleteMatText"></p>
-      <p style="color: var(--accent); font-size: 0.9rem; margin-top: 12px;">Ta operacja jest nieodwracalna!</p>
-      <div class="modal-actions">
-        <button id="deleteMatCancel" class="btn-secondary">Anuluj</button>
-        <button id="deleteMatConfirm" class="btn-danger">Usuń na zawsze</button>
-      </div>
-    </div>
-  </div>
-
   <div id="print-container">
     <div id="print-output"></div>
   </div>
   
   <div id="select-portal"></div>
 
+  <script src="logoData.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
