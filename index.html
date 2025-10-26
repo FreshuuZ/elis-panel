@@ -303,6 +303,23 @@
     </div>
   </div>
 
+  <!-- Modal Edycji Dołożenia -->
+  <div id="editAdditionModal" class="modal">
+    <div class="modal-content">
+      <h3>Edytuj dołożenie</h3>
+      <p id="editAdditionName" style="text-align: center; font-weight: 600; margin-bottom: 16px; color: var(--primary);"></p>
+      <div class="qty-row">
+        <button id="editAdditionQtyDec" class="btn-secondary">−</button>
+        <input type="number" id="editAdditionQtyInput" min="1" max="100" inputmode="numeric">
+        <button id="editAdditionQtyInc" class="btn-secondary">+</button>
+      </div>
+      <div class="modal-actions">
+        <button id="editAdditionCancel" class="btn-secondary">Anuluj</button>
+        <button id="editAdditionSave" class="btn-primary">Zapisz</button>
+      </div>
+    </div>
+  </div>
+
   <div id="print-container">
     <div id="print-output"></div>
   </div>
