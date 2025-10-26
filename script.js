@@ -97,7 +97,13 @@ document.addEventListener("DOMContentLoaded", () => {
             
             populateOptions();
             searchInput.value = "";
-            searchInput.focus();
+            
+            // Na mobile nie focusuj automatycznie (zapobiega otwieraniu klawiatury)
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
+            if (!isMobile) {
+                searchInput.focus();
+            }
+            
             activeSelect = selectInstance;
         },
         close: () => {
@@ -161,11 +167,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
     optionsList.addEventListener("click", (e) => {
       if (e.target.tagName === "LI" && e.target.dataset.value) {
+        // Blur search przed zamknięciem (zapobiega miganiu klawiatury)
+        if (document.activeElement === searchInput) {
+          searchInput.blur();
+        }
+        
         appState[stateKey] = e.target.dataset.value;
         trigger.textContent = appState[stateKey];
         trigger.classList.remove("placeholder");
-        selectInstance.close();
-        wrapper.dispatchEvent(new Event("change", { bubbles: true }));
+        
+        // Małe opóźnienie dla płynności
+        setTimeout(() => {
+          selectInstance.close();
+          wrapper.dispatchEvent(new Event("change", { bubbles: true }));
+        }, 50);
       }
     });
 
@@ -181,14 +196,13 @@ document.addEventListener("DOMContentLoaded", () => {
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
-      // Zamknij tylko jeśli to nie mobile lub nie ma focus na search
-      const isMobile = window.innerWidth <= 768;
+      // Zamknij tylko jeśli search nie ma focusa
       const searchHasFocus = document.activeElement?.classList.contains('custom-select-search');
       
-      if (!isMobile || !searchHasFocus) {
+      if (!searchHasFocus) {
         activeSelect?.close();
       }
-    }, 100);
+    }, 150);
   }, true);
   
   // ==================== PANEL TRAS - ELEMENTY DOM ====================
