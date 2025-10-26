@@ -402,10 +402,9 @@ h3, h4 {
   position: relative;
   margin-bottom: 16px;
 }
-
 .search-icon {
   position: absolute;
-  left: 16px;
+  left: 14px !important;
   top: 50%;
   transform: translateY(-50%);
   width: 20px;
@@ -414,10 +413,9 @@ h3, h4 {
   pointer-events: none;
   z-index: 1;
 }
-
 .search-input {
   width: 100%;
-  padding: 14px 16px 14px 54px !important;  /* !important wymusza zmianę */
+  padding: 14px 16px 14px 48px !important;
   font-size: 1rem;
   border-radius: 10px;
   border: 2px solid var(--border-color);
@@ -426,11 +424,9 @@ h3, h4 {
   transition: all 0.2s ease;
   font-weight: 500;
 }
-
 .search-input::placeholder {
-  padding-left: 0;
+  padding-left: 0 !important;
 }
-
 .search-input:focus {
   outline: none;
   border-color: var(--primary);
@@ -940,6 +936,155 @@ body.dark .btn-secondary:hover:not(:disabled) {
   transform: scale(1.05);
 }
 
+/* Przycisk drukowania listy mat */
+.btn-print-mats {
+  background: rgba(0, 169, 190, 0.1);
+  border: 2px solid rgba(0, 169, 190, 0.3);
+  color: var(--primary);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.btn-print-mats:hover {
+  background: rgba(0, 169, 190, 0.2);
+  border-color: var(--primary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 169, 190, 0.2);
+}
+
+.btn-print-mats svg {
+  width: 20px;
+  height: 20px;
+}
+
+body.dark .btn-print-mats {
+  background: rgba(0, 194, 209, 0.12);
+  border-color: rgba(0, 194, 209, 0.3);
+}
+
+body.dark .btn-print-mats:hover {
+  background: rgba(0, 194, 209, 0.2);
+}
+
+/* --- SYSTEM DOŁOŻEŃ === */
+
+/* Przyciski wyboru akcji */
+.action-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.action-btn {
+  background: var(--bg-card);
+  border: 2px solid var(--border-color);
+  border-radius: 12px;
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-height: 140px;
+}
+
+.action-btn:hover {
+  border-color: var(--primary);
+  background: rgba(0, 169, 190, 0.05);
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(0, 169, 190, 0.15);
+}
+
+.action-btn.selected {
+  border-color: var(--primary);
+  background: rgba(0, 169, 190, 0.1);
+  border-width: 3px;
+}
+
+body.dark .action-btn:hover {
+  background: rgba(0, 194, 209, 0.08);
+}
+
+.action-btn-icon {
+  font-size: 2.5rem;
+  line-height: 1;
+}
+
+.action-btn-content {
+  text-align: center;
+}
+
+.action-btn-content h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0 0 4px;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.action-btn-content p {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 0;
+  line-height: 1.3;
+}
+
+/* Wyróżnienie dołożeń w liście zmian - SUBTELNE */
+.change-addition {
+  background: rgba(0, 169, 190, 0.03);
+  border: 1px solid rgba(0, 169, 190, 0.2);
+  border-radius: 8px;
+  position: relative;
+}
+
+body.dark .change-addition {
+  background: rgba(0, 194, 209, 0.05);
+  border-color: rgba(0, 194, 209, 0.25);
+}
+
+/* Badge dołożenia - subtelny jak inne badge */
+.change-addition-badge {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(0, 169, 190, 0.12);
+  color: var(--primary);
+  border: 1px solid rgba(0, 169, 190, 0.25);
+  padding: 4px 10px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+body.dark .change-addition-badge {
+  background: rgba(0, 194, 209, 0.15);
+  border-color: rgba(0, 194, 209, 0.3);
+  color: var(--primary);
+}
+
+/* Plus w przycisku - mniejszy */
+#addAdditionBtn .btn-icon svg,
+#addTempAltBtn svg,
+#editAddTempAltBtn svg {
+  width: 18px !important;
+  height: 18px !important;
+}
+
+.btn-add-alt svg {
+  width: 18px !important;
+  height: 18px !important;
+}
+
 /* --- Lista Zmian --- */
 .list { 
   display: flex; 
@@ -1304,233 +1449,40 @@ body.dark #editAdvChangeDetails {
   display: none !important;
 }
 
-/* Przycisk drukowania listy mat */
-.btn-print-mats {
-  background: rgba(0, 169, 190, 0.1);
-  border: 2px solid rgba(0, 169, 190, 0.3);
-  color: var(--primary);
-  padding: 10px 16px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.95rem;
-  min-height: 44px;
-  white-space: nowrap;
+/* === OPTYMALIZACJA MOBILE === */
+/* Hardware acceleration dla animacji */
+.theme-toggle,
+.theme-toggle svg,
+.view,
+.modal,
+.toast,
+.custom-select-panel {
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  will-change: transform, opacity;
 }
 
-.btn-print-mats:hover {
-  background: rgba(0, 169, 190, 0.2);
-  border-color: var(--primary);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 169, 190, 0.2);
+/* Smooth theme transition tylko dla body */
+body {
+  transition: background-color 0.2s ease, color 0.2s ease !important;
 }
 
-.btn-print-mats svg {
-  width: 20px;
-  height: 20px;
+/* Szybsze przełączanie motywu */
+body * {
+  transition-duration: 0.15s !important;
 }
 
-body.dark .btn-print-mats {
-  background: rgba(0, 194, 209, 0.12);
-  border-color: rgba(0, 194, 209, 0.3);
+/* Podczas zmiany motywu wyłącz kosztowne efekty */
+body.transitioning * {
+  transition: none !important;
+  animation: none !important;
 }
 
-body.dark .btn-print-mats:hover {
-  background: rgba(0, 194, 209, 0.2);
+body.transitioning {
+  transition: background-color 0.2s ease, color 0.2s ease !important;
 }
 
-@media print { 
-  @page { 
-    size: A4;
-    margin: 0;
-  }
-  * {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-  body { 
-    background: white !important; 
-    color: #000 !important; 
-    font-size: 11pt;
-    line-height: 1.4;
-    padding: 2cm 1.5cm;
-    -webkit-font-smoothing: antialiased;
-  } 
-  body > *:not(#print-container) { display: none !important; } 
-  #print-container, #print-output { display: block !important; } 
-  .print-header { 
-    display: flex; justify-content: space-between; align-items: flex-start;
-    padding-bottom: 15px; margin-bottom: 25px; border-bottom: 2px solid #000;
-  } 
-  .print-header img { max-width: 80px; height: auto; } 
-  .print-header .title-block { text-align: right; } 
-  .print-header h1 { font-size: 18pt; margin: 0; font-weight: 700; color: #000; } 
-  .print-header p { font-size: 10pt; margin: 6px 0 0; color: #333; } 
-  #print-output h2 { 
-    font-size: 14pt; padding-bottom: 6px; margin: 25px 0 15px;
-    font-weight: 700; color: #000; border-bottom: 1px solid #666;
-    page-break-after: avoid; 
-  } 
-  .print-change-item { 
-    margin-bottom: 16px;
-    break-inside: avoid;
-  } 
-  .print-change-item .base { font-weight: 700; font-size: 11pt; color: #000; margin-bottom: 4px; } 
-  .print-change-item .simple-alt { padding-left: 20px; margin-top: 3px; font-size: 10pt; } 
-  .print-change-item .simple-alt::before { content: '→ '; font-weight: 600; } 
-  .print-change-item .multi-alt-list { list-style: none; padding-left: 20px; margin: 6px 0 0 0; } 
-  .print-change-item .multi-alt-list li { margin-bottom: 3px; font-size: 10pt; line-height: 1.5; }
-  .print-change-item .multi-alt-list li::before { content: '- '; font-weight: 600; } 
-  .print-change-item .client { font-style: italic; color: #444; }
-
-  /* === DRUKOWANIE LISTY MAT === */
-  .print-mats-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    padding-bottom: 15px;
-    margin-bottom: 25px;
-    border-bottom: 3px solid #000;
-  }
-
-  .print-mats-header img {
-    max-width: 80px;
-    height: auto;
-  }
-
-  .print-mats-header .title-block {
-    text-align: right;
-  }
-
-  .print-mats-header h1 {
-    font-size: 20pt;
-    margin: 0;
-    font-weight: 700;
-    color: #000;
-  }
-
-  .print-mats-header p {
-    font-size: 10pt;
-    margin: 6px 0 0;
-    color: #333;
-  }
-
-  .print-mats-summary {
-    background: #f5f5f5;
-    padding: 12px;
-    margin-bottom: 20px;
-    border-radius: 6px;
-    border-left: 4px solid #00a9be;
-  }
-
-  .print-mats-summary p {
-    margin: 4px 0;
-    font-size: 10pt;
-    text-align: left;
-  }
-
-  .print-mats-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 20px;
-    font-size: 9pt;
-  }
-
-  .print-mats-table thead {
-    background: #f0f0f0;
-    border-bottom: 2px solid #000;
-  }
-
-  .print-mats-table th {
-    padding: 10px 8px;
-    text-align: left;
-    font-weight: 700;
-    color: #000;
-    font-size: 9pt;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  .print-mats-table tbody tr {
-    border-bottom: 1px solid #ddd;
-    page-break-inside: avoid;
-  }
-
-  .print-mats-table tbody tr:nth-child(even) {
-    background: #fafafa;
-  }
-
-  .print-mats-table td {
-    padding: 8px;
-    color: #000;
-    vertical-align: top;
-  }
-
-  .print-mats-table td:first-child {
-    font-weight: 600;
-  }
-
-  .print-mats-table td:last-child {
-    text-align: center;
-    font-weight: 700;
-  }
-
-  .print-mats-footer {
-    margin-top: 30px;
-    padding-top: 15px;
-    border-top: 2px solid #ccc;
-    text-align: center;
-    font-size: 8pt;
-    color: #666;
-  }
-}
-
-@media (max-width: 768px) {
-  .home-welcome {
-    font-size: 2rem;
-  }
-  .home-grid {
-    grid-template-columns: 1fr;
-  }
-  .mat-item {
-    grid-template-columns: 1fr;
-  }
-  .mat-actions {
-    width: 100%;
-    justify-content: stretch;
-  }
-  .mat-actions button {
-    flex: 1;
-  }
-}
-
-@media (max-width: 480px) {
-  .app-header {
-    padding: 12px;
-  }
-  .brand-title {
-    font-size: 1.1rem;
-  }
-  .card {
-    padding: 16px;
-  }
-  h2 {
-    font-size: 1.1rem;
-  }
-  .change-meta-row {
-    grid-template-columns: 80px 1fr;
-    font-size: 14px;
-  }
-  .home-welcome {
-    font-size: 1.75rem;
-  }
-  .home-tile {
-    min-height: 200px;
-    padding: 24px 20px;
-  }
-
-  /* === DODATKOWE POPRAWKI MOBILE === */
-
+/* === MEDIA QUERIES === */
 @media (max-width: 640px) {
   /* Wyłącz kosztowne efekty na mobile */
   .background-aurora {
@@ -1630,62 +1582,342 @@ body.dark .btn-print-mats:hover {
   .modal-content {
     max-height: 85vh;
   }
+  
+  /* Przyciski akcji na mobile */
+  .action-buttons {
+    grid-template-columns: 1fr;
+  }
+  
+  .action-btn {
+    min-height: 120px;
+  }
+  
+  /* Mniejszy plus na mobile */
+  .btn-add-alt {
+    padding: 8px;
+  }
 }
 
-  @media (max-width: 360px) {
-    /* Bardzo małe ekrany */
-    .brand-title {
-      font-size: 0.9rem;
-    }
-    
-    .home-welcome {
-      font-size: 1.5rem;
-    }
-    
-    .mat-name {
-      font-size: 0.95rem;
-    }
+@media (max-width: 360px) {
+  /* Bardzo małe ekrany */
+  .brand-title {
+    font-size: 0.9rem;
+  }
+  
+  .home-welcome {
+    font-size: 1.5rem;
+  }
+  
+  .mat-name {
+    font-size: 0.95rem;
+  }
+}
+
+/* Landscape mobile */
+@media (max-width: 768px) and (orientation: landscape) {
+  .home-main {
+    min-height: auto;
+    padding: 20px 16px;
+  }
+  
+  .home-welcome {
+    font-size: 1.75rem;
+    margin-bottom: 8px;
+  }
+  
+  .home-subtitle {
+    margin-bottom: 24px;
+  }
+}
+
+/* Touch-friendly - większe obszary klikalne */
+@media (hover: none) and (pointer: coarse) {
+  button {
+    min-height: 48px;
+  }
+  
+  .custom-select-trigger {
+    min-height: 56px;
+  }
+  
+  input[type="text"],
+  input[type="number"] {
+    min-height: 48px;
+    font-size: 16px;
+  }
+  
+  .route-header {
+    padding: 18px 20px;
+  }
+  
+  .mat-item {
+    padding: 18px;
+  }
+}
+
+@media (max-width: 768px) {
+  .home-welcome {
+    font-size: 2rem;
+  }
+  .home-grid {
+    grid-template-columns: 1fr;
+  }
+  .mat-item {
+    grid-template-columns: 1fr;
+  }
+  .mat-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+  .mat-actions button {
+    flex: 1;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-header {
+    padding: 12px;
+  }
+  .brand-title {
+    font-size: 1.1rem;
+  }
+  .card {
+    padding: 16px;
+  }
+  h2 {
+    font-size: 1.1rem;
+  }
+  .change-meta-row {
+    grid-template-columns: 80px 1fr;
+    font-size: 14px;
+  }
+  .home-welcome {
+    font-size: 1.75rem;
+  }
+  .home-tile {
+    min-height: 200px;
+    padding: 24px 20px;
+  }
+}
+
+/* === DRUKOWANIE === */
+@media print { 
+  @page { 
+    size: A4;
+    margin: 0;
+  }
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  body { 
+    background: white !important; 
+    color: #000 !important; 
+    font-size: 11pt;
+    line-height: 1.4;
+    padding: 2cm 1.5cm;
+    -webkit-font-smoothing: antialiased;
+  } 
+  body > *:not(#print-container) { display: none !important; } 
+  #print-container, #print-output { display: block !important; } 
+  
+  /* Header druku */
+  .print-header { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: flex-start;
+    padding-bottom: 15px; 
+    margin-bottom: 25px; 
+    border-bottom: 2px solid #000;
+  } 
+  .print-header img { 
+    max-width: 80px; 
+    height: auto; 
+  } 
+  .print-header .title-block { 
+    text-align: right; 
+  } 
+  .print-header h1 { 
+    font-size: 18pt; 
+    margin: 0; 
+    font-weight: 700; 
+    color: #000; 
+  } 
+  .print-header p { 
+    font-size: 10pt; 
+    margin: 6px 0 0; 
+    color: #333; 
+  } 
+  
+  /* Nagłówki sekcji */
+  #print-output h2 { 
+    font-size: 14pt; 
+    padding-bottom: 6px; 
+    margin: 25px 0 15px;
+    font-weight: 700; 
+    color: #000; 
+    border-bottom: 1px solid #666;
+    page-break-after: avoid; 
+  } 
+  
+  /* Elementy zmian */
+  .print-change-item { 
+    margin-bottom: 16px;
+    break-inside: avoid;
+  } 
+  .print-change-item .base { 
+    font-weight: 700; 
+    font-size: 11pt; 
+    color: #000; 
+    margin-bottom: 4px; 
+  } 
+  .print-change-item .simple-alt { 
+    padding-left: 20px; 
+    margin-top: 3px; 
+    font-size: 10pt; 
+  } 
+  .print-change-item .simple-alt::before { 
+    content: '→ '; 
+    font-weight: 600; 
+  } 
+  .print-change-item .multi-alt-list { 
+    list-style: none; 
+    padding-left: 20px; 
+    margin: 6px 0 0 0; 
+  } 
+  .print-change-item .multi-alt-list li { 
+    margin-bottom: 3px; 
+    font-size: 10pt; 
+    line-height: 1.5; 
+  }
+  .print-change-item .multi-alt-list li::before { 
+    content: '- '; 
+    font-weight: 600; 
+  } 
+  .print-change-item .client { 
+    font-style: italic; 
+    color: #444; 
+  }
+  
+  /* Styl dla dołożeń w druku - subtelny */
+  .print-addition {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    padding: 10px 12px !important;
+    border-radius: 4px;
+    margin-bottom: 8px !important;
   }
 
-  /* Landscape mobile */
-  @media (max-width: 768px) and (orientation: landscape) {
-    .home-main {
-      min-height: auto;
-      padding: 20px 16px;
-    }
-    
-    .home-welcome {
-      font-size: 1.75rem;
-      margin-bottom: 8px;
-    }
-    
-    .home-subtitle {
-      margin-bottom: 24px;
-    }
+  .print-addition .base::before {
+    content: '+ ';
+    color: #00a9be;
+    font-weight: 700;
+    margin-right: 4px;
+  }
+  
+  .print-addition .base {
+    color: #000;
+    font-weight: 600;
+  }
+  
+  /* === DRUKOWANIE LISTY MAT === */
+  .print-mats-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding-bottom: 15px;
+    margin-bottom: 25px;
+    border-bottom: 3px solid #000;
   }
 
-  /* Touch-friendly - większe obszary klikalne */
-  @media (hover: none) and (pointer: coarse) {
-    button {
-      min-height: 48px;
-    }
-    
-    .custom-select-trigger {
-      min-height: 56px;
-    }
-    
-    input[type="text"],
-    input[type="number"] {
-      min-height: 48px;
-      font-size: 16px; /* Zapobiega zoom */
-    }
-    
-    .route-header {
-      padding: 18px 20px;
-    }
-    
-    .mat-item {
-      padding: 18px;
-    }
+  .print-mats-header img {
+    max-width: 80px;
+    height: auto;
+  }
+
+  .print-mats-header .title-block {
+    text-align: right;
+  }
+
+  .print-mats-header h1 {
+    font-size: 20pt;
+    margin: 0;
+    font-weight: 700;
+    color: #000;
+  }
+
+  .print-mats-header p {
+    font-size: 10pt;
+    margin: 6px 0 0;
+    color: #333;
+  }
+
+  .print-mats-summary {
+    background: #f5f5f5;
+    padding: 12px;
+    margin-bottom: 20px;
+    border-radius: 6px;
+    border-left: 4px solid #00a9be;
+  }
+
+  .print-mats-summary p {
+    margin: 4px 0;
+    font-size: 10pt;
+    text-align: left;
+  }
+
+  .print-mats-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    font-size: 9pt;
+  }
+
+  .print-mats-table thead {
+    background: #f0f0f0;
+    border-bottom: 2px solid #000;
+  }
+
+  .print-mats-table th {
+    padding: 10px 8px;
+    text-align: left;
+    font-weight: 700;
+    color: #000;
+    font-size: 9pt;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .print-mats-table tbody tr {
+    border-bottom: 1px solid #ddd;
+    page-break-inside: avoid;
+  }
+
+  .print-mats-table tbody tr:nth-child(even) {
+    background: #fafafa;
+  }
+
+  .print-mats-table td {
+    padding: 8px;
+    color: #000;
+    vertical-align: top;
+  }
+
+  .print-mats-table td:first-child {
+    font-weight: 600;
+  }
+
+  .print-mats-table td:last-child {
+    text-align: center;
+    font-weight: 700;
+  }
+
+  .print-mats-footer {
+    margin-top: 30px;
+    padding-top: 15px;
+    border-top: 2px solid #ccc;
+    text-align: center;
+    font-size: 8pt;
+    color: #666;
   }
 }
