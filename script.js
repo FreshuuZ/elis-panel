@@ -255,6 +255,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const editAdvancedSave = document.getElementById("editAdvancedSave");
   let editTempAlternatives = [];
 
+  // Modal edycji dołożenia
+  const editAdditionModal = document.getElementById("editAdditionModal");
+  const editAdditionName = document.getElementById("editAdditionName");
+  const editAdditionQtyInput = document.getElementById("editAdditionQtyInput");
+  const editAdditionQtyDec = document.getElementById("editAdditionQtyDec");
+  const editAdditionQtyInc = document.getElementById("editAdditionQtyInc");
+  const editAdditionCancel = document.getElementById("editAdditionCancel");
+  const editAdditionSave = document.getElementById("editAdditionSave");
+
   const deleteModal = document.getElementById("deleteModal");
   const deleteModalText = document.getElementById("deleteModalText");
   const deleteCancel = document.getElementById("deleteCancel");
@@ -439,7 +448,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 </div>
             `;
         }
-        item.innerHTML = `<div class="change-details">${detailsHtml}</div><div class="change-actions"><button class="btn-danger" data-action="delete-item">🗑️ Usuń</button>${c.type !== 'addition' ? '<button class="btn-secondary" data-action="edit-item">✏️ Edytuj</button>' : ''}</div>`;
+        item.innerHTML = `<div class="change-details">${detailsHtml}</div><div class="change-actions"><button class="btn-danger" data-action="delete-item">🗑️ Usuń</button><button class="btn-secondary" data-action="edit-item">✏️ Edytuj</button></div>`;
         changesContainer.appendChild(item);
       });
       changesList.appendChild(wrapper);
@@ -474,6 +483,16 @@ document.addEventListener("DOMContentLoaded", () => {
     openModal(editAdvancedModal);
   }
   
+  function openAdditionEditModal(index) {
+    editIndex = index;
+    const change = changes[index];
+    if (!change || change.type !== 'addition') return;
+    editAdditionName.textContent = change.mat;
+    editAdditionQtyInput.value = change.qty;
+    openModal(editAdditionModal);
+    editAdditionQtyInput.focus();
+  }
+
   function openDeleteModal(index, element) { 
     itemToDelete = { index, element }; 
     const change = changes[index];
@@ -483,11 +502,12 @@ document.addEventListener("DOMContentLoaded", () => {
     openModal(deleteModal); 
   }
   
-  function openDeleteGroupModal(route, element) { 
-    routeGroupToDelete = { route, element }; 
-    const changeCount = changes.filter(c => c.route === route).length; 
-    deleteGroupModalText.innerHTML = `Na pewno usunąć trasę <b>${route}</b> i wszystkie <b>${changeCount}</b> powiązane z nią zmiany?`; 
-    openModal(deleteGroupModal); 
+  function openDeleteGroupModal(route, element) {
+    // Zapisujemy referencję do nadrzędnego kontenera `.route-group`
+    routeGroupToDelete = { route, element: element.closest('.route-group') }; 
+    const changeCount = changes.filter(c => c.route === route).length;
+    deleteGroupModalText.innerHTML = `Na pewno usunąć trasę <b>${route}</b> i wszystkie <b>${changeCount}</b> powiązane z nią zmiany?`;
+    openModal(deleteGroupModal);
   }
 
   editSimpleSave.addEventListener("click", () => {
@@ -515,6 +535,20 @@ document.addEventListener("DOMContentLoaded", () => {
     closeModal(editAdvancedModal);
   });
 
+  editAdditionSave.addEventListener("click", () => {
+    if (editIndex === null) return;
+    const newQty = Number(editAdditionQtyInput.value);
+    if (isNaN(newQty) || newQty < 1 || newQty > 100) { 
+      showToast("Ilość musi być od 1 do 100!", "error"); 
+      return; 
+    }
+    changes[editIndex].qty = newQty;
+    persist();
+    renderChanges();
+    showToast("✅ Dołożenie zaktualizowane");
+    closeModal(editAdditionModal);
+  });
+
   deleteConfirm.addEventListener("click", () => { 
     if (itemToDelete.index === null) return; 
     const { index, element } = itemToDelete; 
@@ -523,15 +557,42 @@ document.addEventListener("DOMContentLoaded", () => {
     closeModal(deleteModal); 
   });
   
-  deleteGroupConfirm.addEventListener("click", () => { 
-    if (routeGroupToDelete.route === null) return; 
-    const { route, element } = routeGroupToDelete; 
-    element.classList.add("is-hiding"); 
-    setTimeout(() => { removeRouteGroup(route); renderChanges(); showToast(`🗑️ Usunięto całą trasę ${route}`, "error"); }, 300); 
-    closeModal(deleteGroupModal); 
+
+  deleteGroupConfirm.addEventListener("click", () => {
+      if (routeGroupToDelete.route === null || !routeGroupToDelete.element) return;
+      const { route, element } = routeGroupToDelete;
+      
+      closeModal(deleteGroupModal);
+      element.classList.add("is-hiding");
+
+      setTimeout(() => {
+        // Usuń z danych
+        removeRouteGroup(route);
+        
+        // Usuń tylko ten element DOM (nie przebudowuj wszystkiego!)
+        element.remove();
+        
+        // Jeśli lista pusta, pokaż empty state
+        if (changes.length === 0) {
+          changesList.innerHTML = `
+            <div class="empty-state">
+              <svg class="empty-state-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="12" y1="18" x2="12" y2="12"></line>
+                <line x1="9" y1="15" x2="15" y2="15"></line>
+              </svg>
+              <div class="empty-state-text">Lista zmian jest pusta.<br>Wybierz trasę i dodaj pierwszą zmianę.</div>
+            </div>
+          `;
+        }
+        
+        showToast("🗑️ Usunięto trasę", "error");
+        routeGroupToDelete = { route: null, element: null }; 
+      }, 400); // 400ms - dopasowane do transition w CSS (0.4s)
   });
-  
-  [editSimpleCancel, editAdvancedCancel, deleteCancel, deleteGroupCancel].forEach(btn => 
+
+  [editSimpleCancel, editAdvancedCancel, editAdditionCancel, deleteCancel, deleteGroupCancel].forEach(btn => 
     btn.addEventListener("click", () => closeModal(btn.closest('.modal')))
   );
     changesList.addEventListener("click", (e) => {
@@ -548,6 +609,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const change = changes[index]; 
         if (change.type === 'multi') { openAdvancedEditModal(index); } 
         else if (change.type === 'simple') { openSimpleEditModal(index); }
+        else if (change.type === 'addition') { openAdditionEditModal(index); }
         break;
       case "print-group":
         const route = groupElement.dataset.route;
@@ -694,6 +756,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const change = e.target.id.includes('Dec') ? -1 : 1; 
     editAdvQtyBaseInput.value = Math.max(1, Math.min(100, Number(editAdvQtyBaseInput.value) + change)); 
   }));
+  
+  // Przyciski +/- dla edycji dołożenia
+  editAdditionQtyDec.addEventListener("click", () => {
+    editAdditionQtyInput.value = Math.max(1, Math.min(100, Number(editAdditionQtyInput.value) - 1));
+  });
+  editAdditionQtyInc.addEventListener("click", () => {
+    editAdditionQtyInput.value = Math.max(1, Math.min(100, Number(editAdditionQtyInput.value) + 1));
+  });
   
   addBtn.addEventListener("click", () => {
     if (!appState.route || !appState.baseMat) { showToast("Wybierz trasę i matę bazową!", "error"); return; }
