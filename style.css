@@ -1531,69 +1531,106 @@ body.dark .btn-print-mats:hover {
 
   /* === DODATKOWE POPRAWKI MOBILE === */
 
-  @media (max-width: 640px) {
-    /* Przycisk drukowania - stack na mobile */
-    .card-header {
-      flex-direction: column;
-      align-items: stretch !important;
-      gap: 12px;
-    }
-    
-    .card-header h2 {
-      text-align: center;
-    }
-    
-    .btn-print-mats {
-      width: 100%;
-      justify-content: center;
-    }
-    
-    /* Header - lepsze łamanie tytułu */
-    .brand-title {
-      font-size: 1rem;
-      line-height: 1.2;
-    }
-    
-    /* Custom select - mniejsze panele */
-    #select-portal > .custom-select-panel.open {
-      max-height: 50vh !important;
-      width: calc(100vw - 32px) !important;
-      left: 16px !important;
-      top: auto !important;
-      bottom: 10px !important; /* Panel na dole gdy klawiatura otwarta */
-      transform: none !important;
-    }
-    
-    /* Wyszukiwarka w custom select - większy touch target */
-    .custom-select-search {
-      font-size: 16px !important;
-      padding: 16px !important;
-      min-height: 52px;
-    }
-    
-    /* Wyszukiwarka - większy font */
-    .search-input {
-      font-size: 16px !important; /* Zapobiega zoom na iOS */
-    }
-    
-    /* Przyciski mat - większe dla dotyku */
-    .mat-actions .btn-icon-only {
-      width: 48px;
-      height: 48px;
-      min-width: 48px;
-      min-height: 48px;
-    }
-    
-    /* Toast - wyżej nad klawiaturą */
-    .toast.show {
-      bottom: 80px;
-    }
-    
-    /* Modalne - pełna wysokość */
-    .modal-content {
-      max-height: 85vh;
-    }
+@media (max-width: 640px) {
+  /* Wyłącz kosztowne efekty na mobile */
+  .background-aurora {
+    filter: blur(80px) saturate(1.2) !important;
+    opacity: 0.08 !important;
   }
+  
+  body.dark .background-aurora {
+    opacity: 0.12 !important;
+  }
+  
+  /* Mniejszy backdrop-filter na mobile */
+  .app-header,
+  .card,
+  .app-footer {
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+  }
+  
+  /* Wyłącz cienie na mobile dla lepszej wydajności */
+  .card,
+  .route-group,
+  .mat-item {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+  }
+  
+  body.dark .card,
+  body.dark .route-group,
+  body.dark .mat-item {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+  }
+  
+  /* Przycisk drukowania - stack na mobile */
+  .card-header {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 12px;
+  }
+  
+  .card-header h2 {
+    text-align: center;
+  }
+  
+  .btn-print-mats {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  /* Header - lepsze łamanie tytułu */
+  .brand-title {
+    font-size: 1rem;
+    line-height: 1.2;
+  }
+  
+  /* Custom select - mniejsze panele */
+  #select-portal > .custom-select-panel.open {
+    max-height: 60vh !important;
+    width: calc(100vw - 32px) !important;
+    left: 16px !important;
+  }
+  
+  /* Wyszukiwarka - większy font */
+  .search-input {
+    font-size: 16px !important;
+  }
+  
+  /* Search input w custom select - większy touch target */
+  .custom-select-search {
+    font-size: 16px !important;
+    padding: 16px !important;
+    min-height: 52px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  /* Opcje w liście - większy touch target */
+  .custom-select-options li {
+    padding: 14px 16px !important;
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+  }
+  
+  /* Przyciski mat - większe dla dotyku */
+  .mat-actions .btn-icon-only {
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    min-height: 48px;
+  }
+  
+  /* Toast - wyżej nad klawiaturą */
+  .toast.show {
+    bottom: 80px;
+  }
+  
+  /* Modalne - pełna wysokość */
+  .modal-content {
+    max-height: 85vh;
+  }
+}
 
   @media (max-width: 360px) {
     /* Bardzo małe ekrany */
