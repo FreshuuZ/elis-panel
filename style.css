@@ -1039,14 +1039,14 @@ body.dark .action-btn:hover {
 
 /* Wyróżnienie dołożeń w liście zmian - SUBTELNE */
 .change-addition {
-  background: rgba(0, 169, 190, 0.03);
+  background: rgba(0, 169, 190, 0.03) !important;
   border: 1px solid rgba(0, 169, 190, 0.2);
   border-radius: 8px;
   position: relative;
 }
 
 body.dark .change-addition {
-  background: rgba(0, 194, 209, 0.05);
+  background: rgba(0, 194, 209, 0.05) !important;
   border-color: rgba(0, 194, 209, 0.25);
 }
 
@@ -1311,6 +1311,18 @@ body.dark .multi-alternatives-list li {
   border-width: 0 !important; 
   overflow: hidden; 
   transition: all 0.3s ease; 
+}
+
+/* Animacja ukrywania całej grupy tras */
+.route-group.is-hiding {
+  opacity: 0 !important;
+  transform: translateX(-20px) scale(0.98) !important;
+  max-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border-width: 0 !important;
+  overflow: hidden !important;
+  transition: all 0.4s cubic-bezier(0.4, 0, 1, 1) !important;
 }
 
 /* --- Modale i Toast --- */
