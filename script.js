@@ -886,6 +886,241 @@ document.addEventListener("DOMContentLoaded", () => {
     renderMats(e.target.value);
   });
 
+  // Eksport do Excel - wersja profesjonalna
+  const exportExcelBtn = document.getElementById('exportExcelBtn');
+  
+  exportExcelBtn.addEventListener('click', async () => {
+    if (typeof ExcelJS === 'undefined') {
+      showToast("Biblioteka Excel nie jest załadowana", "error");
+      return;
+    }
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Inwentaryzacja Mat', {
+        pageSetup: { 
+          paperSize: 9, 
+          orientation: 'portrait',
+          fitToPage: true,
+          fitToWidth: 1,
+          fitToHeight: 0
+        }
+      });
+
+      // Metadane dokumentu
+      workbook.creator = 'Elis System';
+      workbook.created = new Date();
+      workbook.company = 'Elis';
+      
+      const currentDate = new Date().toLocaleDateString('pl-PL', { 
+        day: '2-digit', 
+        month: '2-digit', 
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      
+      const totalQuantity = logoData.reduce((sum, mat) => sum + mat.quantity, 0);
+      const sortedMats = [...logoData].sort((a, b) => a.name.localeCompare(b.name, 'pl'));
+
+      // === NAGŁÓWEK DOKUMENTU ===
+      worksheet.mergeCells('A1:D1');
+      const titleCell = worksheet.getCell('A1');
+      titleCell.value = 'ELIS - INWENTARYZACJA MAT LOGO';
+      titleCell.font = { 
+        name: 'Calibri', 
+        size: 18, 
+        bold: true, 
+        color: { argb: 'FFFFFFFF' } 
+      };
+      titleCell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF00A9BE' } // Kolor Elis
+      };
+      titleCell.alignment = { 
+        vertical: 'middle', 
+        horizontal: 'center' 
+      };
+      worksheet.getRow(1).height = 35;
+
+      // === INFORMACJE O DOKUMENCIE ===
+      worksheet.mergeCells('A2:D2');
+      const dateCell = worksheet.getCell('A2');
+      dateCell.value = `Data wygenerowania: ${currentDate}`;
+      dateCell.font = { name: 'Calibri', size: 10, italic: true };
+      dateCell.alignment = { horizontal: 'center' };
+      dateCell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFF0F0F0' }
+      };
+
+      // Pusta linia
+      worksheet.addRow([]);
+
+      // === PODSUMOWANIE ===
+      const summaryRow1 = worksheet.addRow(['PODSUMOWANIE', '', '', '']);
+      worksheet.mergeCells(`A${summaryRow1.number}:D${summaryRow1.number}`);
+      summaryRow1.getCell(1).font = { 
+        name: 'Calibri', 
+        size: 12, 
+        bold: true 
+      };
+      summaryRow1.getCell(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE3E9F0' }
+      };
+      summaryRow1.height = 25;
+
+      const statsRow1 = worksheet.addRow(['Liczba pozycji:', logoData.length, '', '']);
+      const statsRow2 = worksheet.addRow(['Suma mat (szt.):', totalQuantity, '', '']);
+      
+      [statsRow1, statsRow2].forEach(row => {
+        row.getCell(1).font = { name: 'Calibri', size: 11, bold: true };
+        row.getCell(2).font = { name: 'Calibri', size: 11 };
+        row.getCell(2).alignment = { horizontal: 'left' };
+      });
+
+      // Pusta linia
+      worksheet.addRow([]);
+
+      // === NAGŁÓWEK TABELI ===
+      const headerRow = worksheet.addRow(['Nazwa maty', 'Lokalizacja', 'Rozmiar', 'Ilość (szt.)']);
+      headerRow.height = 30;
+      headerRow.font = { 
+        name: 'Calibri', 
+        size: 11, 
+        bold: true, 
+        color: { argb: 'FFFFFFFF' } 
+      };
+      headerRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF0D1117' } // Ciemny kolor
+      };
+      headerRow.alignment = { 
+        vertical: 'middle', 
+        horizontal: 'center' 
+      };
+      
+      // Obramowanie nagłówka
+      headerRow.eachCell((cell) => {
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FF000000' } },
+          left: { style: 'thin', color: { argb: 'FF000000' } },
+          bottom: { style: 'medium', color: { argb: 'FF000000' } },
+          right: { style: 'thin', color: { argb: 'FF000000' } }
+        };
+      });
+
+      // === DANE MAT ===
+      sortedMats.forEach((mat, index) => {
+        const row = worksheet.addRow([
+          mat.name,
+          mat.location || 'Nie określono',
+          mat.size || 'Nie określono',
+          mat.quantity
+        ]);
+        
+        row.height = 22;
+        row.font = { name: 'Calibri', size: 10 };
+        
+        // Zebra striping (co drugi wiersz)
+        if (index % 2 === 0) {
+          row.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFF9FAFB' }
+          };
+        }
+        
+        // Wyrównanie
+        row.getCell(1).alignment = { vertical: 'middle', horizontal: 'left' };
+        row.getCell(2).alignment = { vertical: 'middle', horizontal: 'left' };
+        row.getCell(3).alignment = { vertical: 'middle', horizontal: 'center' };
+        row.getCell(4).alignment = { vertical: 'middle', horizontal: 'center' };
+        
+        // Pogrubienie ilości
+        row.getCell(4).font = { name: 'Calibri', size: 10, bold: true };
+        
+        // Obramowanie
+        row.eachCell((cell) => {
+          cell.border = {
+            top: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+            left: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+            bottom: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+            right: { style: 'thin', color: { argb: 'FFD1D5DB' } }
+          };
+        });
+      });
+
+      // === SUMA NA DOLE ===
+      worksheet.addRow([]); // Pusta linia
+      const totalRow = worksheet.addRow(['', '', 'SUMA CAŁKOWITA:', totalQuantity]);
+      totalRow.height = 28;
+      totalRow.getCell(3).font = { 
+        name: 'Calibri', 
+        size: 11, 
+        bold: true 
+      };
+      totalRow.getCell(4).font = { 
+        name: 'Calibri', 
+        size: 12, 
+        bold: true,
+        color: { argb: 'FF00A9BE' }
+      };
+      totalRow.getCell(3).alignment = { horizontal: 'right', vertical: 'middle' };
+      totalRow.getCell(4).alignment = { horizontal: 'center', vertical: 'middle' };
+      totalRow.getCell(4).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0F7FA' }
+      };
+
+      // === STOPKA ===
+      worksheet.addRow([]);
+      const footerRow = worksheet.addRow(['Dokument wygenerowany automatycznie przez system Elis', '', '', '']);
+      worksheet.mergeCells(`A${footerRow.number}:D${footerRow.number}`);
+      footerRow.getCell(1).font = { 
+        name: 'Calibri', 
+        size: 9, 
+        italic: true, 
+        color: { argb: 'FF6B7280' } 
+      };
+      footerRow.getCell(1).alignment = { horizontal: 'center' };
+
+      // === SZEROKOŚCI KOLUMN ===
+      worksheet.columns = [
+        { width: 40 },  // Nazwa
+        { width: 25 },  // Lokalizacja
+        { width: 18 },  // Rozmiar
+        { width: 15 }   // Ilość
+      ];
+
+      // === GENEROWANIE PLIKU ===
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { 
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+      });
+      
+      const fileName = `Elis_Inwentaryzacja_Mat_${new Date().toISOString().split('T')[0]}.xlsx`;
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      link.click();
+      window.URL.revokeObjectURL(url);
+      
+      showToast("Wyeksportowano do Excel!");
+      
+    } catch (error) {
+      console.error('Błąd eksportu:', error);
+      showToast("Błąd podczas eksportu do Excel", "error");
+    }
+  });
+
   // Drukowanie listy mat
   printMatsBtn.addEventListener('click', () => {
     const printDate = new Date().toLocaleDateString('pl-PL', { 
