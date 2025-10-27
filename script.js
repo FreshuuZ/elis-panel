@@ -255,6 +255,29 @@ document.addEventListener("DOMContentLoaded", () => {
   const editAdvancedSave = document.getElementById("editAdvancedSave");
   let editTempAlternatives = [];
 
+  // Elementy kreatora podziału
+  const singleModeSection = document.getElementById('singleModeSection');
+  const distributeModeSection = document.getElementById('distributeModeSection');
+  const distributeStep1 = document.getElementById('distributeStep1');
+  const distributeStep2 = document.getElementById('distributeStep2');
+  const distributeTotalQty = document.getElementById('distributeTotalQty');
+  const startDistributeBtn = document.getElementById('startDistributeBtn');
+  const distributeMatName = document.getElementById('distributeMatName');
+  const distributeRemaining = document.getElementById('distributeRemaining');
+  const distributeTotal = document.getElementById('distributeTotal');
+  const distributeAssigned = document.getElementById('distributeAssigned');
+  const distributeLeft = document.getElementById('distributeLeft');
+  const distributeProgressFill = document.getElementById('distributeProgressFill');
+  const distributeClientInput = document.getElementById('distributeClientInput');
+  const distributeClientQty = document.getElementById('distributeClientQty');
+  const addDistributeClientBtn = document.getElementById('addDistributeClientBtn');
+  const distributeClientsList = document.getElementById('distributeClientsList');
+  const cancelDistributeBtn = document.getElementById('cancelDistributeBtn');
+  const confirmDistributeBtn = document.getElementById('confirmDistributeBtn');
+
+  let distributeClients = [];
+  let distributeData = { mat: '', total: 0 };
+
   // Modal edycji dołożenia
   const editAdditionModal = document.getElementById("editAdditionModal");
   const editAdditionName = document.getElementById("editAdditionName");
@@ -282,7 +305,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let selectedAction = null;
   let appState = {
       route: '', baseMat: '', altMat: '',
-      multiAltMat: '', editMultiAltMat: '', additionMat: ''
+      multiAltMat: '', editMultiAltMat: '', additionMat: '', distributeMat: ''
   };
 
   const routesByDay = {
@@ -352,14 +375,24 @@ document.addEventListener("DOMContentLoaded", () => {
   function renderTempAltList() {
     tempMultiAltList.innerHTML = tempAlternatives.length === 0 
       ? `<p style="text-align: center; color: var(--muted); font-size: 14px; margin: 12px 0 0 0;">Brak dodanych zamienników.</p>`
-      : tempAlternatives.map((alt, index) => 
-        `<div class="temp-alt-item">
-          <div class="temp-alt-item-details">
-            <div class="temp-alt-item-mat">${alt.alt}<span class="badge">×${alt.qty}</span></div>
-            ${alt.client ? `<div class="temp-alt-item-client">${alt.client}</div>` : ''}
-          </div>
-          <button class="btn-danger" data-index="${index}" aria-label="Usuń ten zamiennik">🗑️</button>
-        </div>`).join('');
+      : tempAlternatives.map((alt, index) => {
+          // Sprawdź czy to nowo dodany element (ostatnie kilka)
+          const isNew = index >= tempAlternatives.length - 5;
+          return `<div class="temp-alt-item ${isNew ? 'just-added' : ''}">
+            <div class="temp-alt-item-details">
+              <div class="temp-alt-item-mat">${alt.alt}<span class="badge">×${alt.qty}</span></div>
+              ${alt.client ? `<div class="temp-alt-item-client">${alt.client}</div>` : ''}
+            </div>
+            <button class="btn-danger" data-index="${index}" aria-label="Usuń ten zamiennik">🗑️</button>
+          </div>`;
+        }).join('');
+    
+    // Usuń klasę just-added po animacji
+    setTimeout(() => {
+      document.querySelectorAll('.temp-alt-item.just-added').forEach(el => {
+        el.classList.remove('just-added');
+      });
+    }, 1500);
   }
 
   function renderEditTempAltList() {
@@ -375,7 +408,7 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>`).join('');
   }
 
-  function renderChanges() {
+    function renderChanges() {
     const openRoutes = Array.from(changesList.querySelectorAll(".route-group.open")).map(g => g.dataset.route);
     changesList.innerHTML = "";
 
@@ -503,7 +536,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   
   function openDeleteGroupModal(route, element) {
-    // Zapisujemy referencję do nadrzędnego kontenera `.route-group`
     routeGroupToDelete = { route, element: element.closest('.route-group') }; 
     const changeCount = changes.filter(c => c.route === route).length;
     deleteGroupModalText.innerHTML = `Na pewno usunąć trasę <b>${route}</b> i wszystkie <b>${changeCount}</b> powiązane z nią zmiany?`;
@@ -556,46 +588,42 @@ document.addEventListener("DOMContentLoaded", () => {
     setTimeout(() => { removeChange(index); renderChanges(); showToast("🗑️ Usunięto", "error"); }, 300); 
     closeModal(deleteModal); 
   });
-  
 
   deleteGroupConfirm.addEventListener("click", () => {
-      if (routeGroupToDelete.route === null || !routeGroupToDelete.element) return;
-      const { route, element } = routeGroupToDelete;
-      
-      closeModal(deleteGroupModal);
-      element.classList.add("is-hiding");
+    if (routeGroupToDelete.route === null || !routeGroupToDelete.element) return;
+    const { route, element } = routeGroupToDelete;
+    
+    closeModal(deleteGroupModal);
+    element.classList.add("is-hiding");
 
-      setTimeout(() => {
-        // Usuń z danych
-        removeRouteGroup(route);
-        
-        // Usuń tylko ten element DOM (nie przebudowuj wszystkiego!)
-        element.remove();
-        
-        // Jeśli lista pusta, pokaż empty state
-        if (changes.length === 0) {
-          changesList.innerHTML = `
-            <div class="empty-state">
-              <svg class="empty-state-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <polyline points="14 2 14 8 20 8"></polyline>
-                <line x1="12" y1="18" x2="12" y2="12"></line>
-                <line x1="9" y1="15" x2="15" y2="15"></line>
-              </svg>
-              <div class="empty-state-text">Lista zmian jest pusta.<br>Wybierz trasę i dodaj pierwszą zmianę.</div>
-            </div>
-          `;
-        }
-        
-        showToast("🗑️ Usunięto trasę", "error");
-        routeGroupToDelete = { route: null, element: null }; 
-      }, 400); // 400ms - dopasowane do transition w CSS (0.4s)
+    setTimeout(() => {
+      removeRouteGroup(route);
+      element.remove();
+      
+      if (changes.length === 0) {
+        changesList.innerHTML = `
+          <div class="empty-state">
+            <svg class="empty-state-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="12" y1="18" x2="12" y2="12"></line>
+              <line x1="9" y1="15" x2="15" y2="15"></line>
+            </svg>
+            <div class="empty-state-text">Lista zmian jest pusta.<br>Wybierz trasę i dodaj pierwszą zmianę.</div>
+          </div>
+        `;
+      }
+      
+      showToast("🗑️ Usunięto trasę", "error");
+      routeGroupToDelete = { route: null, element: null }; 
+    }, 400); 
   });
 
   [editSimpleCancel, editAdvancedCancel, editAdditionCancel, deleteCancel, deleteGroupCancel].forEach(btn => 
     btn.addEventListener("click", () => closeModal(btn.closest('.modal')))
   );
-    changesList.addEventListener("click", (e) => {
+
+  changesList.addEventListener("click", (e) => {
     const actionElement = e.target.closest("[data-action]");
     if (!actionElement) return;
     const action = actionElement.dataset.action;
@@ -757,14 +785,14 @@ document.addEventListener("DOMContentLoaded", () => {
     editAdvQtyBaseInput.value = Math.max(1, Math.min(100, Number(editAdvQtyBaseInput.value) + change)); 
   }));
   
-  // Przyciski +/- dla edycji dołożenia
   editAdditionQtyDec.addEventListener("click", () => {
     editAdditionQtyInput.value = Math.max(1, Math.min(100, Number(editAdditionQtyInput.value) - 1));
   });
   editAdditionQtyInc.addEventListener("click", () => {
     editAdditionQtyInput.value = Math.max(1, Math.min(100, Number(editAdditionQtyInput.value) + 1));
   });
-  
+
+    
   addBtn.addEventListener("click", () => {
     if (!appState.route || !appState.baseMat) { showToast("Wybierz trasę i matę bazową!", "error"); return; }
     let newChange;
@@ -886,7 +914,7 @@ document.addEventListener("DOMContentLoaded", () => {
     renderMats(e.target.value);
   });
 
-  // Eksport do Excel - wersja profesjonalna
+  // Eksport do Excel
   const exportExcelBtn = document.getElementById('exportExcelBtn');
   
   exportExcelBtn.addEventListener('click', async () => {
@@ -907,7 +935,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       });
 
-      // Metadane dokumentu
       workbook.creator = 'Elis System';
       workbook.created = new Date();
       workbook.company = 'Elis';
@@ -936,7 +963,7 @@ document.addEventListener("DOMContentLoaded", () => {
       titleCell.fill = {
         type: 'pattern',
         pattern: 'solid',
-        fgColor: { argb: 'FF00A9BE' } // Kolor Elis
+        fgColor: { argb: 'FF00A9BE' }
       };
       titleCell.alignment = { 
         vertical: 'middle', 
@@ -956,7 +983,6 @@ document.addEventListener("DOMContentLoaded", () => {
         fgColor: { argb: 'FFF0F0F0' }
       };
 
-      // Pusta linia
       worksheet.addRow([]);
 
       // === PODSUMOWANIE ===
@@ -983,7 +1009,6 @@ document.addEventListener("DOMContentLoaded", () => {
         row.getCell(2).alignment = { horizontal: 'left' };
       });
 
-      // Pusta linia
       worksheet.addRow([]);
 
       // === NAGŁÓWEK TABELI ===
@@ -998,14 +1023,13 @@ document.addEventListener("DOMContentLoaded", () => {
       headerRow.fill = {
         type: 'pattern',
         pattern: 'solid',
-        fgColor: { argb: 'FF0D1117' } // Ciemny kolor
+        fgColor: { argb: 'FF0D1117' }
       };
       headerRow.alignment = { 
         vertical: 'middle', 
         horizontal: 'center' 
       };
       
-      // Obramowanie nagłówka
       headerRow.eachCell((cell) => {
         cell.border = {
           top: { style: 'thin', color: { argb: 'FF000000' } },
@@ -1027,7 +1051,6 @@ document.addEventListener("DOMContentLoaded", () => {
         row.height = 22;
         row.font = { name: 'Calibri', size: 10 };
         
-        // Zebra striping (co drugi wiersz)
         if (index % 2 === 0) {
           row.fill = {
             type: 'pattern',
@@ -1036,16 +1059,13 @@ document.addEventListener("DOMContentLoaded", () => {
           };
         }
         
-        // Wyrównanie
         row.getCell(1).alignment = { vertical: 'middle', horizontal: 'left' };
         row.getCell(2).alignment = { vertical: 'middle', horizontal: 'left' };
         row.getCell(3).alignment = { vertical: 'middle', horizontal: 'center' };
         row.getCell(4).alignment = { vertical: 'middle', horizontal: 'center' };
         
-        // Pogrubienie ilości
         row.getCell(4).font = { name: 'Calibri', size: 10, bold: true };
         
-        // Obramowanie
         row.eachCell((cell) => {
           cell.border = {
             top: { style: 'thin', color: { argb: 'FFD1D5DB' } },
@@ -1057,7 +1077,7 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
       // === SUMA NA DOLE ===
-      worksheet.addRow([]); // Pusta linia
+      worksheet.addRow([]);
       const totalRow = worksheet.addRow(['', '', 'SUMA CAŁKOWITA:', totalQuantity]);
       totalRow.height = 28;
       totalRow.getCell(3).font = { 
@@ -1093,10 +1113,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // === SZEROKOŚCI KOLUMN ===
       worksheet.columns = [
-        { width: 40 },  // Nazwa
-        { width: 25 },  // Lokalizacja
-        { width: 18 },  // Rozmiar
-        { width: 15 }   // Ilość
+        { width: 40 },
+        { width: 25 },
+        { width: 18 },
+        { width: 15 }
       ];
 
       // === GENEROWANIE PLIKU ===
@@ -1176,7 +1196,7 @@ document.addEventListener("DOMContentLoaded", () => {
       </table>
       
       <div class="print-mats-footer">
-        <p>Elis - System Zarządzania Matami | Wygenerowano automatycznie</p>
+        <p>Dokument wygenerowany automatycznie przez system Elis</p>
       </div>
     `;
     
@@ -1192,6 +1212,231 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 100);
   });
   
+  // === KREATOR PODZIAŁU MAT ===
+
+  // Przełączanie między trybami
+  document.querySelectorAll('input[name="advancedMode"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+      const mode = e.target.value;
+      if (mode === 'single') {
+        singleModeSection.style.display = 'block';
+        distributeModeSection.style.display = 'none';
+      } else {
+        singleModeSection.style.display = 'none';
+        distributeModeSection.style.display = 'block';
+        distributeStep1.style.display = 'block';
+        distributeStep2.style.display = 'none';
+        
+        // Reset podsumowania przy wejściu w tryb podziału
+        const summarySection = document.getElementById('distributeSummary');
+        if (summarySection) {
+          summarySection.style.display = 'none';
+        }
+      }
+      updateFormState();
+    });
+  });
+
+  // Rozpocznij podział
+  startDistributeBtn.addEventListener('click', () => {
+    if (!appState.distributeMat) {
+      showToast("Wybierz matę!", "error");
+      return;
+    }
+    const total = Number(distributeTotalQty.value);
+    if (total < 1 || total > 100) {
+      showToast("Ilość musi być od 1 do 100!", "error");
+      return;
+    }
+    
+    // RESET - ukryj podsumowanie z poprzedniego podziału
+    const summarySection = document.getElementById('distributeSummary');
+    if (summarySection) {
+      summarySection.style.display = 'none';
+    }
+    
+    distributeData = { mat: appState.distributeMat, total };
+    distributeClients = [];
+    
+    distributeMatName.textContent = appState.distributeMat;
+    distributeTotal.textContent = total;
+    distributeRemaining.textContent = total;
+    distributeAssigned.textContent = '0';
+    distributeLeft.textContent = total;
+    distributeProgressFill.style.width = '0%';
+    
+    distributeClientInput.value = '';
+    distributeClientQty.value = '1';
+    distributeClientsList.innerHTML = '<p style="text-align: center; color: var(--muted); font-size: 14px; margin: 12px 0 0 0;">Dodaj pierwszego klienta</p>';
+    
+    distributeStep1.style.display = 'none';
+    distributeStep2.style.display = 'block';
+    confirmDistributeBtn.disabled = true;
+  });
+
+  // Dodaj klienta do podziału
+  addDistributeClientBtn.addEventListener('click', () => {
+    const client = distributeClientInput.value.trim();
+    const qty = Number(distributeClientQty.value);
+    
+    if (!client) {
+      showToast("Podaj nazwę klienta!", "error");
+      return;
+    }
+    
+    const assigned = distributeClients.reduce((sum, c) => sum + c.qty, 0);
+    const remaining = distributeData.total - assigned;
+    
+    if (qty < 1) {
+      showToast("Ilość musi być większa niż 0!", "error");
+      return;
+    }
+    
+    if (qty > remaining) {
+      showToast(`Możesz przydzielić maksymalnie ${remaining} szt.!`, "error");
+      return;
+    }
+    
+    distributeClients.push({ client, qty });
+    renderDistributeClients();
+    updateDistributeProgress();
+    
+    distributeClientInput.value = '';
+    distributeClientQty.value = Math.min(1, remaining - qty);
+    distributeClientInput.focus();
+  });
+
+  // Renderuj listę klientów
+  function renderDistributeClients() {
+    if (distributeClients.length === 0) {
+      distributeClientsList.innerHTML = `
+        <div class="distribute-empty-state">
+          <span style="font-size: 32px; opacity: 0.3;">📋</span>
+          <p>Nie dodano jeszcze żadnych klientów</p>
+        </div>`;
+      return;
+    }
+    
+    distributeClientsList.innerHTML = distributeClients.map((c, index) => 
+      `<div class="distribute-client-card">
+        <div class="distribute-client-info">
+          <div class="distribute-client-name">${c.client}</div>
+          <div class="distribute-client-qty">Przydzielono: <strong>${c.qty}</strong> szt.</div>
+        </div>
+        <button class="distribute-client-remove btn-danger" data-index="${index}">
+          Usuń
+        </button>
+      </div>`
+    ).join('');
+  }
+
+  // Aktualizuj progress bar, liczniki i podsumowanie
+  function updateDistributeProgress() {
+    const assigned = distributeClients.reduce((sum, c) => sum + c.qty, 0);
+    const remaining = distributeData.total - assigned;
+    const percentage = (assigned / distributeData.total) * 100;
+    
+    distributeAssigned.textContent = assigned;
+    distributeLeft.textContent = remaining;
+    distributeRemaining.textContent = remaining;
+    distributeProgressFill.style.width = `${percentage}%`;
+    
+    const isComplete = remaining === 0;
+    confirmDistributeBtn.disabled = !isComplete;
+    
+    // Pokaż/ukryj podsumowanie
+    const summarySection = document.getElementById('distributeSummary');
+    if (isComplete && distributeClients.length > 0) {
+      summarySection.style.display = 'block';
+      
+      // Wypełnij podsumowanie
+      document.getElementById('distributeSummaryMat').textContent = distributeData.mat;
+      document.getElementById('distributeSummaryCount').textContent = distributeClients.length;
+      
+      const summaryList = document.getElementById('distributeSummaryList');
+      summaryList.innerHTML = distributeClients.map(c => 
+        `<div class="distribute-summary-item">
+          <span class="distribute-summary-item-name">${c.client}</span>
+          <span class="distribute-summary-item-qty">×${c.qty}</span>
+        </div>`
+      ).join('');
+      
+      confirmDistributeBtn.innerHTML = '<span style="font-size: 16px; margin-right: 6px;">✓</span> Zatwierdź podział';
+    } else {
+      summarySection.style.display = 'none';
+      confirmDistributeBtn.innerHTML = `<span style="font-size: 16px; margin-right: 6px;">⏳</span> Rozdziel wszystkie (brakuje ${remaining})`;
+    }
+  }
+
+  // Usuń klienta z listy
+  distributeClientsList.addEventListener('click', (e) => {
+    const btn = e.target.closest('.btn-danger[data-index]');
+    if (btn) {
+      const index = Number(btn.dataset.index);
+      distributeClients.splice(index, 1);
+      renderDistributeClients();
+      updateDistributeProgress();
+    }
+  });
+
+  // Anuluj podział
+  cancelDistributeBtn.addEventListener('click', () => {
+    distributeStep1.style.display = 'block';
+    distributeStep2.style.display = 'none';
+    distributeClients = [];
+    
+    // Reset podsumowania
+    const summarySection = document.getElementById('distributeSummary');
+    if (summarySection) {
+      summarySection.style.display = 'none';
+    }
+  });
+
+  // Zatwierdź podział - dodaj do listy zamienników
+  confirmDistributeBtn.addEventListener('click', () => {
+    const assigned = distributeClients.reduce((sum, c) => sum + c.qty, 0);
+    if (assigned !== distributeData.total) {
+      showToast("Musisz przydzielić wszystkie maty!", "error");
+      return;
+    }
+    
+    // Dodaj każdego klienta do listy zamienników
+    distributeClients.forEach(c => {
+      tempAlternatives.push({
+        alt: distributeData.mat,
+        qty: c.qty,
+        client: c.client
+      });
+    });
+    
+    // Pokaż ile klientów dodano
+    const clientCount = distributeClients.length;
+    showToast(`✅ Dodano ${clientCount} ${clientCount === 1 ? 'klienta' : clientCount < 5 ? 'klientów' : 'klientów'} do listy!`);
+    
+    // Reset kreatora podziału
+    distributeStep1.style.display = 'block';
+    distributeStep2.style.display = 'none';
+    distributeClients = [];
+    const distributeMatSelectWrapper = document.getElementById('distributeMatSelectWrapper');
+    distributeMatSelectWrapper.reset('— wybierz matę —');
+    distributeTotalQty.value = '1';
+    
+    // PRZEŁĄCZ z powrotem na tryb pojedynczy, żeby pokazać listę
+    const singleRadio = document.querySelector('input[name="advancedMode"][value="single"]');
+    singleRadio.checked = true;
+    singleModeSection.style.display = 'block';
+    distributeModeSection.style.display = 'none';
+    
+    // Renderuj listę zamienników (będą widoczne dodani klienci)
+    renderTempAltList();
+    updateFormState();
+    
+    // Scroll do listy zamienników, żeby było widać że coś dodano
+    setTimeout(() => {
+      tempMultiAltList.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 100);
+  });
+
   // ==================== INICJALIZACJA ====================
   function init() {
     createCustomSelect(routeSelectWrapper, routesByDay, "— wybierz trasę —", "route", true);
@@ -1200,6 +1445,8 @@ document.addEventListener("DOMContentLoaded", () => {
     createCustomSelect(multiAltSelectWrapper, mats, "— wybierz zamiennik —", "multiAltMat");
     createCustomSelect(editMultiAltSelectWrapper, mats, "— wybierz zamiennik —", "editMultiAltMat");
     createCustomSelect(additionMatSelectWrapper, mats, "— wybierz matę —", "additionMat");
+    const distributeMatSelectWrapper = document.getElementById('distributeMatSelectWrapper');
+    createCustomSelect(distributeMatSelectWrapper, mats, "— wybierz matę —", "distributeMat");
     
     renderChanges();
     updateFormState();
