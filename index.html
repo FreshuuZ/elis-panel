@@ -196,14 +196,23 @@
         <section class="card">
           <div class="card-header">
             <h2>🔍 Wyszukiwarka Mat Logo</h2>
-            <button id="printMatsBtn" class="btn-print-mats" aria-label="Drukuj listę mat">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="6 9 6 2 18 2 18 9"></polyline>
-                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-                <rect x="6" y="14" width="12" height="8"></rect>
-              </svg>
-              <span>Drukuj</span>
-            </button>
+            <div class="mats-actions-buttons">
+              <button id="exportExcelBtn" class="btn-export-excel" aria-label="Eksportuj do Excel">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                </svg>
+                <span>Excel</span>
+              </button>
+              <button id="printMatsBtn" class="btn-print-mats" aria-label="Drukuj listę mat">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                  <rect x="6" y="14" width="12" height="8"></rect>
+                </svg>
+                <span>Drukuj</span>
+              </button>
+            </div>
           </div>
           <div class="search-box">
             <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -326,6 +335,7 @@
   
   <div id="select-portal"></div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
   <script src="logoData.js"></script>
   <script src="script.js"></script>
 </body>
