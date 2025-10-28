@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Centrum — Elis</title>
+  <title>Elis ServiceHub — Centrum Główne</title>
   <link rel="stylesheet" href="style.css">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0d1117">
@@ -23,8 +23,8 @@
         </svg>
       </button>
       <div class="brand">
-        <img src="icons/icon-192.png" alt="Elis" class="brand-logo">
-        <span class="brand-title" id="headerTitle">Centrum Główne</span>
+        <img src="icons/icon-192.png" alt="Elis ServiceHub" class="brand-logo">
+        <span class="brand-title" id="headerTitle">Elis ServiceHub</span>
       </div>
     </div>
     <button id="themeToggle" class="theme-toggle" aria-label="Zmień motyw">
@@ -38,7 +38,7 @@
     <!-- WIDOK: CENTRUM GŁÓWNE -->
     <div id="homeView" class="view active">
       <main class="home-main">
-        <h1 class="home-welcome">Witaj w Systemie Elis</h1>
+        <h1 class="home-welcome">Witaj w Systemie Elis ServiceHub</h1>
         <p class="home-subtitle">Wybierz moduł, z którego chcesz skorzystać</p>
         
         <div class="home-grid">
@@ -67,8 +67,21 @@
               </svg>
             </div>
             <div class="home-tile-content">
-              <h2>Lista Mat Logo</h2>
+              <h2>Lista Mat</h2>
               <p>Inwentaryzacja i zarządzanie matami</p>
+            </div>
+          </button>
+
+          <button class="home-tile" data-navigate="washing">
+            <div class="home-tile-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M12 6v6l4 2"></path>
+              </svg>
+            </div>
+            <div class="home-tile-content">
+              <h2>Pranie Mat</h2>
+              <p>Zarządzanie praniem mat</p>
             </div>
           </button>
         </div>
@@ -367,6 +380,70 @@
       </main>
     </div>
 
+    <!-- WIDOK: PRANIE MAT -->
+    <div id="washingView" class="view">
+      <main class="app-main">
+        
+        <!-- Formularz dodawania -->
+        <section class="card">
+          <h2>🧼 Dodaj matę do prania</h2>
+          <div class="washing-form">
+            <div id="washingMatSelectWrapper" class="custom-select-wrapper"></div>
+            
+            <!-- Info o ilości dostępnej -->
+            <div id="washingQuantityInfo" class="washing-quantity-info" style="display: none;">
+              <div class="washing-available-badge">
+                <span class="washing-available-label">Dostępne:</span>
+                <span id="washingAvailableQty" class="washing-available-qty">0</span>
+                <span class="washing-available-unit">szt.</span>
+              </div>
+            </div>
+            
+            <!-- Wybór ilości (pokazuje się gdy quantity > 1) -->
+            <div id="washingQuantitySelector" class="washing-quantity-selector" style="display: none;">
+              <label class="washing-qty-label">Ile sztuk dać do prania?</label>
+              <div class="qty-row">
+                <button id="washingQtyDec" class="btn-secondary" aria-label="Zmniejsz">−</button>
+                <input type="number" id="washingQty" min="1" max="1" value="1" inputmode="numeric">
+                <button id="washingQtyInc" class="btn-secondary" aria-label="Zwiększ">+</button>
+              </div>
+            </div>
+            
+            <button id="addToWashingBtn" class="btn-primary" disabled>
+              Wrzuć do prania
+            </button>
+          </div>
+        </section>
+
+        <!-- Info o zmianie -->
+        <div id="currentShiftInfo" class="shift-info-card"></div>
+
+        <!-- Aktywne prania -->
+        <section>
+          <div class="card-header" style="margin-bottom: 16px;">
+            <h2 class="section-title" style="margin: 0;">🌀 Aktywnie w praniu</h2>
+          </div>
+          
+          <!-- WYSZUKIWARKA -->
+          <div class="card" style="padding: 16px; margin-bottom: 16px;">
+            <div class="search-box">
+              <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <path d="m21 21-4.35-4.35"></path>
+              </svg>
+              <input type="text" id="washingSearch" placeholder="Szukaj w praniu..." class="search-input">
+            </div>
+            <div class="washing-stats">
+              <span id="washingCount">W praniu: 0 mat</span>
+              <span id="washingFiltered" style="display:none;"></span>
+            </div>
+          </div>
+          
+          <div id="activeWashingList" class="list"></div>
+        </section>
+
+      </main>
+    </div>
   </div>
 
   <footer class="app-footer">
@@ -462,6 +539,38 @@
     </div>
   </div>
 
+  <!-- Modale Prania -->
+  <div id="editWashingModal" class="modal">
+    <div class="modal-content">
+      <h3>Edytuj ilość w praniu</h3>
+      <p id="editWashingMatName" style="text-align: center; font-weight: 600; margin-bottom: 16px; color: var(--primary);"></p>
+      <div class="washing-edit-info">
+        <span class="washing-edit-label">Aktualna ilość:</span>
+        <span id="editWashingCurrentQty" class="washing-edit-current">1 szt.</span>
+      </div>
+      <div class="qty-row" style="margin-top: 16px;">
+        <button id="editWashingQtyDec" class="btn-secondary">−</button>
+        <input type="number" id="editWashingQtyInput" min="1" max="100" inputmode="numeric">
+        <button id="editWashingQtyInc" class="btn-secondary">+</button>
+      </div>
+      <div class="modal-actions">
+        <button id="editWashingCancel" class="btn-secondary">Anuluj</button>
+        <button id="editWashingSave" class="btn-primary">Zapisz</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="deleteWashingModal" class="modal">
+    <div class="modal-content">
+      <h3>Usuń z prania</h3>
+      <p id="deleteWashingText"></p>
+      <div class="modal-actions">
+        <button id="deleteWashingCancel" class="btn-secondary">Anuluj</button>
+        <button id="deleteWashingConfirm" class="btn-danger">Usuń</button>
+      </div>
+    </div>
+  </div>
+
   <div id="print-container">
     <div id="print-output"></div>
   </div>
@@ -469,6 +578,16 @@
   <div id="select-portal"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+  <!-- Supabase SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  
+  <!-- Konfiguracja Supabase -->
+  <script>
+    const SUPABASE_URL = 'https://sdvlxgizrypjyssccupy.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNkdmx4Z2l6cnlwanlzc2NjdXB5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE2NzA4MjYsImV4cCI6MjA3NzI0NjgyNn0._St2quW9Kc0Shpd-naSp2o01HUxSoSy6k4S29ORe8yM';
+    window.supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  </script>
+  
   <script src="logoData.js"></script>
   <script src="script.js"></script>
 </body>
