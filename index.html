@@ -35,7 +35,7 @@
 
   <div id="app">
     
-    <!-- WIDOK: CENTRUM GŁÓWNE -->
+    <!-- ==================== WIDOK: CENTRUM GŁÓWNE ==================== -->
     <div id="homeView" class="view active">
       <main class="home-main">
         <h1 class="home-welcome">Witaj w Systemie Elis ServiceHub</h1>
@@ -75,20 +75,57 @@
           <button class="home-tile" data-navigate="washing">
             <div class="home-tile-icon">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <path d="M12 6v6l4 2"></path>
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <circle cx="12" cy="13" r="5"></circle>
+                <circle cx="8" cy="6" r="0.5" fill="currentColor"></circle>
+                <circle cx="11" cy="6" r="0.5" fill="currentColor"></circle>
               </svg>
             </div>
             <div class="home-tile-content">
-              <h2>Pranie Mat</h2>
-              <p>Zarządzanie praniem mat</p>
+              <h2>Maty w Praniu</h2>
+              <p>Aktywne prania i zarządzanie kolejką</p>
+            </div>
+          </button>
+
+          <button class="home-tile" data-navigate="archive">
+            <div class="home-tile-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="21 8 21 21 3 21 3 8"></polyline>
+                <rect x="1" y="3" width="22" height="5"></rect>
+                <line x1="10" y1="12" x2="14" y2="12"></line>
+              </svg>
+            </div>
+            <div class="home-tile-content">
+              <h2>Archiwum Prań</h2>
+              <p>Historia i raporty zakończonych prań</p>
             </div>
           </button>
         </div>
+        <!-- ==================== LISTA PALET W TRASACH ==================== -->
+        <section class="pallets-section-wrapper">
+          <div class="pallets-section-header">
+            <h2>📦 Liczba palet w trasach</h2>
+            <p class="pallets-section-subtitle">Zarządzaj ilością palet dla poszczególnych tras</p>
+          </div>
+          
+          <div class="pallets-control-card">
+            <div class="pallets-add-zone">
+              <div id="palletRouteSelectWrapper" class="custom-select-wrapper"></div>
+              <button id="addPalletRouteBtn" class="btn-add-pallet" disabled>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 5v14m-7-7h14"/>
+                </svg>
+                <span>Dodaj trasę</span>
+              </button>
+            </div>
+            
+            <div id="palletsList" class="pallets-list"></div>
+          </div>
+        </section>
       </main>
     </div>
 
-    <!-- WIDOK: PANEL TRAS -->
+    <!-- ==================== WIDOK: PANEL TRAS ==================== -->
     <div id="panelView" class="view">
       <main class="app-main">
         <section id="routeCard" class="card">
@@ -336,7 +373,7 @@
       </main>
     </div>
 
-    <!-- WIDOK: LISTA MAT LOGO -->
+    <!-- ==================== WIDOK: LISTA MAT LOGO ==================== -->
     <div id="matsView" class="view">
       <main class="app-main">
         <section class="card">
@@ -380,7 +417,7 @@
       </main>
     </div>
 
-    <!-- WIDOK: PRANIE MAT -->
+    <!-- ==================== WIDOK: MATY W PRANIU ==================== -->
     <div id="washingView" class="view">
       <main class="app-main">
         
@@ -444,6 +481,116 @@
 
       </main>
     </div>
+
+    <!-- ==================== WIDOK: ARCHIWUM PRAŃ ==================== -->
+    <div id="archiveView" class="view">
+      <main class="app-main">
+        
+        <!-- Filtry i wyszukiwarka -->
+        <section class="card">
+          <div class="card-header">
+            <h2>🔍 Wyszukiwanie w archiwum</h2>
+          </div>
+          <div class="card-body">
+            <!-- 🔥 ZMIENIONY WRAPPER - dodano przycisk przypomnienia -->
+            <div class="archive-controls" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
+              <div class="search-box" style="flex: 1; min-width: 250px; margin: 0;">
+                <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <path d="m21 21-4.35-4.35"></path>
+                </svg>
+                <input 
+                  type="search" 
+                  id="archiveSearch" 
+                  class="search-input" 
+                  placeholder="Szukaj po nazwie, lokalizacji, rozmiarze, zmianie..."
+                >
+              </div>
+              <!-- 🔥 NOWY PRZYCISK -->
+              <button id="setReminderBtn" class="reminder-btn">
+                🔔 Ustaw przypomnienie
+              </button>
+            </div>
+            
+            <!-- Filtry dat -->
+            <div class="archive-date-filters">
+              <div class="date-filter-group">
+                <label for="archiveDateFrom">Od daty:</label>
+                <input type="date" id="archiveDateFrom" class="date-input">
+              </div>
+              <div class="date-filter-group">
+                <label for="archiveDateTo">Do daty:</label>
+                <input type="date" id="archiveDateTo" class="date-input">
+              </div>
+              <button id="archiveDateReset" class="btn-secondary">Wyczyść filtry</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Statystyki archiwum -->
+        <div class="stats-row">
+          <div class="stat-card">
+            <div class="stat-value" id="archiveTotalEntries">0</div>
+            <div class="stat-label">Wpisów w archiwum</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="archiveTotalMats">0</div>
+            <div class="stat-label">Suma wypranych mat</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="archiveDateRange">-</div>
+            <div class="stat-label">Zakres dat</div>
+          </div>
+        </div>
+
+        <!-- Akcje eksportu -->
+        <section class="card">
+          <div class="card-header">
+            <h2>📊 Eksport danych</h2>
+          </div>
+          <div class="card-body">
+            <div class="export-buttons">
+              <button id="exportArchiveExcel" class="btn-primary">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                Eksportuj do Excel
+              </button>
+              <button id="printArchive" class="btn-secondary">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                  <rect x="6" y="14" width="12" height="8"></rect>
+                </svg>
+                Drukuj raport
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Lista archiwalnych wpisów -->
+        <section class="card">
+          <div class="card-header space-between">
+            <h2>📦 Archiwalne wpisy</h2>
+            <div class="header-info">
+              <span id="archiveCount" class="count-badge">Ładowanie...</span>
+              <span id="archiveFiltered" class="count-badge" style="display: none;"></span>
+            </div>
+          </div>
+          <div class="card-body" style="padding: 0;">
+            <div id="archiveList" class="archive-list">
+              <div class="empty-state">
+                <div class="empty-state-text">Ładowanie archiwum...</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+
   </div>
 
   <footer class="app-footer">
@@ -452,7 +599,7 @@
 
   <div id="toast" class="toast"></div>
 
-  <!-- Modale Panel Tras -->
+  <!-- ==================== MODALE PANEL TRAS ==================== -->
   <div id="editSimpleModal" class="modal">
     <div class="modal-content">
       <h3>Edytuj zmianę</h3>
@@ -522,7 +669,6 @@
     </div>
   </div>
 
-  <!-- Modal Edycji Dołożenia -->
   <div id="editAdditionModal" class="modal">
     <div class="modal-content">
       <h3>Edytuj dołożenie</h3>
@@ -539,7 +685,7 @@
     </div>
   </div>
 
-  <!-- Modale Prania -->
+  <!-- ==================== MODALE PRANIA ==================== -->
   <div id="editWashingModal" class="modal">
     <div class="modal-content">
       <h3>Edytuj ilość w praniu</h3>
@@ -578,17 +724,15 @@
   <div id="select-portal"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
-  <!-- Supabase SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   
-  <!-- Konfiguracja Supabase -->
   <script>
     const SUPABASE_URL = 'https://sdvlxgizrypjyssccupy.supabase.co';
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNkdmx4Z2l6cnlwanlzc2NjdXB5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE2NzA4MjYsImV4cCI6MjA3NzI0NjgyNn0._St2quW9Kc0Shpd-naSp2o01HUxSoSy6k4S29ORe8yM';
     window.supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   </script>
   
-  <script src="logoData.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
