@@ -1,14 +1,17 @@
 document.addEventListener("DOMContentLoaded", () => {
   
   // ==================== GLOBAL STATE & CACHE ====================
-  let allLogoMats = []; // Cache dla mat logo z Supabase
+  let allLogoMats = [];
+  let allWashingItems = [];
+  let allArchiveItems = [];
   
   // ==================== ROUTING SYSTEM ====================
   const views = {
     home: document.getElementById('homeView'),
     panel: document.getElementById('panelView'),
     mats: document.getElementById('matsView'),
-    washing: document.getElementById('washingView')
+    washing: document.getElementById('washingView'),
+    archive: document.getElementById('archiveView')
   };
   
   const headerTitle = document.getElementById('headerTitle');
@@ -23,6 +26,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (viewName === 'home') {
       headerTitle.textContent = 'Elis ServiceHub';
       backBtn.style.display = 'none';
+      // 🔥 NOWE: Aktualizuj badge przy powrocie do home
+      updateArchiveBadge();
     } else if (viewName === 'panel') {
       headerTitle.textContent = 'Panel Tras i Zmian';
       backBtn.style.display = 'flex';
@@ -34,14 +39,18 @@ document.addEventListener("DOMContentLoaded", () => {
           renderMats(mats, matsSearch.value);
       })();
     } else if (viewName === 'washing') {
-      headerTitle.textContent = 'Pranie Mat Logo';
+      headerTitle.textContent = 'System Prania Mat';
       backBtn.style.display = 'flex';
       loadWashingData();
+    } else if (viewName === 'archive') {
+      headerTitle.textContent = 'Archiwum Prań';
+      backBtn.style.display = 'flex';
+      loadArchiveData();
     }
     
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
-  
+
   backBtn.addEventListener('click', () => navigateTo('home'));
   
   document.querySelectorAll('[data-navigate]').forEach(btn => {
@@ -71,6 +80,37 @@ document.addEventListener("DOMContentLoaded", () => {
     setTimeout(() => toast.classList.remove("show"), 3000);
   }
   
+    // ==================== PDF GENERATOR ====================
+  async function generatePDF(elementId, filename) {
+    const element = document.getElementById(elementId);
+    
+    const opt = {
+      margin: [10, 10, 10, 10],
+      filename: filename,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { 
+        scale: 2,
+        useCORS: true,
+        letterRendering: true,
+        logging: false
+      },
+      jsPDF: { 
+        unit: 'mm', 
+        format: 'a4', 
+        orientation: 'portrait' 
+      },
+      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+    };
+    
+    try {
+      await html2pdf().set(opt).from(element).save();
+      showToast("✅ PDF wygenerowany!");
+    } catch (error) {
+      console.error("Błąd generowania PDF:", error);
+      showToast("❌ Błąd generowania PDF", "error");
+    }
+  }
+
   // ==================== PORTAL SELECT SYSTEM ====================
   const selectPortal = document.getElementById('select-portal');
   let activeSelect = null;
@@ -147,8 +187,13 @@ document.addEventListener("DOMContentLoaded", () => {
       let found = false;
       const processOption = (opt) => {
           const li = document.createElement("li");
-          li.textContent = opt; li.dataset.value = opt; li.setAttribute('role', 'option');
-          if (opt === appState[stateKey]) { li.classList.add("selected"); li.setAttribute('aria-selected', 'true'); }
+          li.textContent = opt; 
+          li.dataset.value = opt; 
+          li.setAttribute('role', 'option');
+          if (opt === appState[stateKey]) { 
+            li.classList.add("selected"); 
+            li.setAttribute('aria-selected', 'true'); 
+          }
           optionsList.appendChild(li);
       };
 
@@ -242,6 +287,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let editingWashingItem = null;
   let deletingWashingItem = null;
+
+  // ==================== ARCHIWUM - ELEMENTY DOM ====================
+  const archiveSearch = document.getElementById('archiveSearch');
+  const archiveList = document.getElementById('archiveList');
+  const archiveCount = document.getElementById('archiveCount');
+  const archiveFiltered = document.getElementById('archiveFiltered');
+  const exportArchiveBtn = document.getElementById('exportArchiveBtn');
 
   // ==================== PANEL TRAS - ELEMENTY DOM ====================
   const routeCard = document.getElementById("routeCard");
@@ -350,9 +402,15 @@ document.addEventListener("DOMContentLoaded", () => {
   let tempAlternatives = [];
   let selectedAction = null;
   let appState = {
-      route: '', baseMat: '', altMat: '',
-      multiAltMat: '', editMultiAltMat: '', additionMat: '', distributeMat: '',
-      washingMat: ''
+    route: '', 
+    baseMat: '', 
+    altMat: '',
+    multiAltMat: '', 
+    editMultiAltMat: '', 
+    additionMat: '', 
+    distributeMat: '',
+    washingMat: '',
+    palletRoute: ''
   };
 
   const routesByDay = {
@@ -690,10 +748,47 @@ document.addEventListener("DOMContentLoaded", () => {
         if (routeChanges.length === 0) return;
         const printDate = new Date().toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' });
         
+                // 🆕 SPRAWDŹ CZY TRASA MA PALETY
+        const palletCount = getPalletsForRoute(route);
+        let palletNotice = '';
+        if (palletCount) {
+          let palletWord, verbWord;
+          const lastDigit = palletCount % 10;
+          const lastTwoDigits = palletCount % 100;
+          
+          if (palletCount === 1) {
+            palletWord = 'PALETA';
+            verbWord = 'JEST';
+          } else if (lastTwoDigits >= 12 && lastTwoDigits <= 14) {
+            // 12-14 to zawsze "palet" (także 112, 113, 114 itd.)
+            palletWord = 'PALET';
+            verbWord = 'JEST';
+          } else if (lastDigit >= 2 && lastDigit <= 4) {
+            // 2-4, 22-24, 32-34 itd.
+            palletWord = 'PALETY';
+            verbWord = 'SĄ';
+          } else {
+            // 5-21, 25-31 itd.
+            palletWord = 'PALET';
+            verbWord = 'JEST';
+          }
+          
+          palletNotice = `<div class="print-pallet-notice">🚚 W TRASIE ${verbWord} ${palletCount} ${palletWord}</div>`;
+        }  
+    
         const replacements = routeChanges.filter(c => c.type !== 'addition');
         const additions = routeChanges.filter(c => c.type === 'addition');
         
-        let printHTML = `<div class="print-header"><img src="icons/icon-192.png" alt="Elis Logo"><div class="title-block"><h1>Raport Zmian Mat</h1><p>Trasa ${route} &nbsp;|&nbsp; Data: ${printDate}</p></div></div>`;
+        let printHTML = `
+          <div class="print-header">
+            <img src="icons/icon-192.png" alt="Elis Logo">
+            <div class="title-block">
+              <h1>Raport Zmian Mat</h1>
+              <p>Trasa ${route} &nbsp;|&nbsp; Data: ${printDate}</p>
+            </div>
+          </div>
+          ${palletNotice}
+        `;
         
         if (replacements.length > 0) {
           printHTML += `<h2>Zamienniki (${replacements.length})</h2>`;
@@ -1334,19 +1429,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const now = new Date();
     const hours = now.getHours();
     const minutes = now.getMinutes();
-    
-    // Przelicz na minuty od początku dnia
     const totalMinutes = hours * 60 + minutes;
     
-    // 6:00 - 14:00 (360 - 840 minut)
     if (totalMinutes >= 360 && totalMinutes < 840) {
       return '1 zmiana';
-    } 
-    // 14:00 - 22:00 (840 - 1320 minut)
-    else if (totalMinutes >= 840 && totalMinutes < 1320) {
+    } else if (totalMinutes >= 840 && totalMinutes < 1320) {
       return '2 zmiana';
-    } 
-    else {
+    } else {
       return null;
     }
   }
@@ -1364,7 +1453,6 @@ document.addEventListener("DOMContentLoaded", () => {
       const isFirstShift = currentShift === '1 zmiana';
       const endHour = isFirstShift ? '14:00' : '22:00';
       
-      // Oblicz pozostały czas
       const endTime = new Date();
       if (isFirstShift) {
         endTime.setHours(14, 0, 0, 0);
@@ -1417,48 +1505,60 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Zwraca całkowitą ilość mat (niezależnie od prania)
   function getTotalQuantity(matName) {
     const matInDb = allLogoMats.find(m => m.name === matName);
     return matInDb ? matInDb.quantity : 0;
+  }
+
+  function getAvailableQuantity(matName) {
+    const totalQty = getTotalQuantity(matName);
+    const inWashing = allWashingItems
+      .filter(item => item.mat_name === matName)
+      .reduce((sum, item) => sum + (item.quantity || 0), 0);
+    return Math.max(0, totalQty - inWashing);
   }
 
   async function loadWashingData() {
     updateShiftInfo();
     setInterval(updateShiftInfo, 60000);
     
+    await checkAndArchiveOldWashing();
+    
     const mats = await fetchAndCacheLogoMats();
     const matNames = mats.map(m => m.name).filter((v, i, a) => a.indexOf(v) === i).sort();
     washingMatSelectWrapper.updateOptions(matNames);
     
-    updateWashingFormState();
-
     const activeItems = await fetchActiveWashing();
     allWashingItems = activeItems;
     renderWashingList(activeItems, '');
+    
+    updateWashingFormState();
   }
 
   function updateWashingFormState() {
     const matSelected = !!appState.washingMat;
     
     if (matSelected) {
-      const totalQty = getTotalQuantity(appState.washingMat);
+      const availableQty = getAvailableQuantity(appState.washingMat);
       
       washingQuantityInfo.style.display = 'flex';
-      washingAvailableQty.textContent = totalQty;
+      washingAvailableQty.textContent = `${availableQty} szt.`;
       
-      if (totalQty > 1) {
+      if (availableQty > 1) {
         washingQuantitySelector.style.display = 'block';
-        washingQty.max = totalQty;
-        washingQty.value = Math.min(washingQty.value, totalQty);
-      } else {
+        washingQty.max = availableQty;
+        washingQty.value = Math.min(Number(washingQty.value), availableQty);
+      } else if (availableQty === 1) {
         washingQuantitySelector.style.display = 'none';
         washingQty.value = 1;
+      } else {
+        washingQuantitySelector.style.display = 'none';
+        washingQty.value = 0;
       }
       
-      addToWashingBtn.disabled = totalQty < 1;
-      if (totalQty < 1) {
-        addToWashingBtn.textContent = 'Brak mat';
+      addToWashingBtn.disabled = availableQty < 1;
+      if (availableQty < 1) {
+        addToWashingBtn.textContent = 'Brak dostępnych mat';
       } else {
         addToWashingBtn.textContent = 'Wrzuć do prania';
       }
@@ -1470,18 +1570,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Cache dla wszystkich prań (do wyszukiwania)
-  let allWashingItems = [];
-
-  // Event listener dla wyszukiwarki prania
-  if (washingSearch) {
-    washingSearch.addEventListener('input', (e) => {
-      renderWashingList(allWashingItems, e.target.value);
-    });
-  }
-
   function renderWashingList(items, filter = '') {
-    // Filtrowanie
     const filtered = items.filter(item => {
       const search = filter.toLowerCase();
       return (item.mat_name?.toLowerCase() || '').includes(search) ||
@@ -1490,21 +1579,19 @@ document.addEventListener("DOMContentLoaded", () => {
              (item.shift?.toLowerCase() || '').includes(search);
     });
 
-    // Statystyki (jeśli istnieją elementy)
     if (washingCount) {
       const totalQty = items.reduce((sum, item) => sum + (item.quantity || 1), 0);
-      washingCount.textContent = `W praniu: ${items.length} mat (${totalQty} szt.)`;
+      washingCount.textContent = `W praniu: ${items.length} pozycji (${totalQty} szt.)`;
       
       if (filter && washingFiltered) {
         washingFiltered.style.display = 'inline';
         const filteredQty = filtered.reduce((sum, item) => sum + (item.quantity || 1), 0);
-        washingFiltered.textContent = `Znaleziono: ${filtered.length} mat (${filteredQty} szt.)`;
+        washingFiltered.textContent = `Znaleziono: ${filtered.length} pozycji (${filteredQty} szt.)`;
       } else if (washingFiltered) {
         washingFiltered.style.display = 'none';
       }
     }
 
-    // Jeśli pusta lista
     if (filtered.length === 0) {
       activeWashingList.innerHTML = `<div class="empty-state">
         <svg class="empty-state-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -1516,7 +1603,6 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // Renderowanie
     activeWashingList.innerHTML = filtered.map(item => {
       const startDate = new Date(item.started_at);
       const startTime = startDate.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
@@ -1564,7 +1650,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }).join('');
   }
 
-  // Event listeners dla formularza
   washingMatSelectWrapper.addEventListener("change", () => {
     updateWashingFormState();
   });
@@ -1578,12 +1663,448 @@ document.addEventListener("DOMContentLoaded", () => {
     washingQty.value = Math.min(max, Number(washingQty.value) + 1);
   });
 
+  // ==================== ARCHIWUM PRAŃ - FUNKCJE ====================
+
+  // 🔥 NOWA FUNKCJA: Sprawdza czy są prania do usunięcia w ciągu 7 dni
+  async function checkUpcomingDeletions() {
+    try {
+      const { data, error } = await window.supabase
+        .from('washing_archive')
+        .select('*');
+      
+      if (error) throw error;
+      if (!data || data.length === 0) return { total: 0, critical: 0, warning: 0 };
+      
+      const now = new Date();
+      let critical = 0; // <= 3 dni
+      let warning = 0;  // 4-7 dni
+      
+      data.forEach(item => {
+        // ✅ UŻYJ delete_at Z BAZY JEŚLI ISTNIEJE!
+        let deleteDate;
+        if (item.delete_at) {
+          deleteDate = new Date(item.delete_at);
+        } else {
+          // Fallback gdyby nie było w bazie
+          const archivedDate = new Date(item.archived_at);
+          deleteDate = new Date(archivedDate);
+          deleteDate.setDate(deleteDate.getDate() + 14);
+        }
+        
+        const diffTime = deleteDate - now;
+        const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (daysLeft <= 3 && daysLeft >= 0) critical++;
+        else if (daysLeft <= 7 && daysLeft > 3) warning++;
+      });
+      
+      console.log('📊 Archiwum stats:', { total: data.length, critical, warning }); // DEBUG
+      
+      return { total: data.length, critical, warning };
+    } catch (error) {
+      console.error('Błąd sprawdzania usunięć:', error);
+      return { total: 0, critical: 0, warning: 0 };
+    }
+  }
+
+  // 🔥 NOWA FUNKCJA: Aktualizuje badge na kafelku archiwum
+  async function updateArchiveBadge() {
+    const archiveNavBtn = document.querySelector('[data-navigate="archive"]');
+    if (!archiveNavBtn) {
+      console.warn('⚠️ Nie znaleziono przycisku archiwum!');
+      return;
+    }
+    
+    const stats = await checkUpcomingDeletions();
+    console.log('🎯 Aktualizuję badge, stats:', stats); // DEBUG
+    
+    // Usuń stary badge jeśli istnieje
+    const oldBadge = archiveNavBtn.querySelector('.archive-warning-badge');
+    if (oldBadge) oldBadge.remove();
+    
+    // Dodaj nowy badge jeśli są ostrzeżenia
+    if (stats.critical > 0 || stats.warning > 0) {
+      const badge = document.createElement('div');
+      badge.className = 'archive-warning-badge';
+      
+      if (stats.critical > 0) {
+        badge.classList.add('critical');
+        badge.innerHTML = `⚠️ ${stats.critical} ${stats.critical === 1 ? 'wpis' : 'wpisy'} do usunięcia!`;
+      } else {
+        badge.classList.add('warning');
+        badge.innerHTML = `⏰ ${stats.warning} ${stats.warning === 1 ? 'wpis' : 'wpisy'} wkrótce usuniętych`;
+      }
+      
+      archiveNavBtn.appendChild(badge);
+      console.log('✅ Badge dodany!', badge); // DEBUG
+    } else {
+      console.log('ℹ️ Brak ostrzeżeń - badge nie dodany');
+    }
+  }
+
+  // 🔥 NOWA FUNKCJA: Prosi o pozwolenie na powiadomienia
+  async function requestNotificationPermission() {
+    if (!('Notification' in window)) {
+      showToast('Twoja przeglądarka nie wspiera powiadomień', 'error');
+      return false;
+    }
+    
+    if (Notification.permission === 'granted') {
+      return true;
+    }
+    
+    if (Notification.permission !== 'denied') {
+      const permission = await Notification.requestPermission();
+      return permission === 'granted';
+    }
+    
+    return false;
+  }
+
+  // 🔥 NOWA FUNKCJA: Ustawia przypomnienie
+  async function scheduleArchiveReminder() {
+    const hasPermission = await requestNotificationPermission();
+    if (!hasPermission) {
+      showToast('Odmówiono dostępu do powiadomień', 'error');
+      return;
+    }
+    
+    const stats = await checkUpcomingDeletions();
+    
+    if (stats.critical === 0 && stats.warning === 0) {
+      showToast('Brak prań do usunięcia w najbliższym czasie', 'info');
+      return;
+    }
+    
+    // Zapisz w localStorage timestamp przypomnienia
+    const reminderTime = new Date();
+    reminderTime.setHours(9, 0, 0, 0); // Jutro o 9:00
+    reminderTime.setDate(reminderTime.getDate() + 1);
+    
+    localStorage.setItem('archiveReminder', reminderTime.toISOString());
+    localStorage.setItem('archiveReminderStats', JSON.stringify(stats));
+    
+    showToast(`✅ Przypomnienie ustawione na jutro o 9:00`, 'success');
+    
+    // Jeśli są krytyczne, pokaż natychmiastowe powiadomienie
+    if (stats.critical > 0) {
+      new Notification('⚠️ Elis - Pilne!', {
+        body: `${stats.critical} ${stats.critical === 1 ? 'pranie zostanie usunięte' : 'prania zostaną usunięte'} w ciągu 3 dni!`,
+        icon: 'icons/icon-192.png',
+        badge: 'icons/icon-192.png',
+        requireInteraction: true
+      });
+    }
+  }
+
+  // 🔥 NOWA FUNKCJA: Sprawdza czy trzeba wyświetlić przypomnienie
+  function checkScheduledReminder() {
+    const reminderTime = localStorage.getItem('archiveReminder');
+    if (!reminderTime) return;
+    
+    const now = new Date();
+    const scheduled = new Date(reminderTime);
+    
+    if (now >= scheduled) {
+      const stats = JSON.parse(localStorage.getItem('archiveReminderStats') || '{}');
+      
+      if (Notification.permission === 'granted') {
+        new Notification('🔔 Elis - Przypomnienie', {
+          body: `Masz ${stats.critical || 0} krytycznych i ${stats.warning || 0} ostrzeżeń w archiwum prań`,
+          icon: 'icons/icon-192.png',
+          badge: 'icons/icon-192.png'
+        });
+      }
+      
+      localStorage.removeItem('archiveReminder');
+      localStorage.removeItem('archiveReminderStats');
+    }
+  }
+
+  async function fetchArchiveData(filters = {}) {
+    try {
+      let query = window.supabase
+        .from('washing_archive')
+        .select('*')
+        .order('archived_at', { ascending: false });
+      
+      if (filters.dateFrom) {
+        query = query.gte('archived_at', filters.dateFrom + 'T00:00:00');
+      }
+      if (filters.dateTo) {
+        query = query.lte('archived_at', filters.dateTo + 'T23:59:59');
+      }
+      
+      const { data, error } = await query;
+      if (error) throw error;
+      
+      // 🔥 POPRAWKA: Użyj danych z bazy JEŚLI ISTNIEJĄ, oblicz tylko gdy brak
+      const enrichedData = (data || []).map(item => {
+        const archivedDate = new Date(item.archived_at);
+        
+        // ✅ JEŚLI delete_at jest w bazie - użyj go!
+        let deleteDate;
+        if (item.delete_at) {
+          deleteDate = new Date(item.delete_at);
+        } else {
+          // Oblicz tylko gdy nie ma w bazie
+          deleteDate = new Date(archivedDate);
+          deleteDate.setDate(deleteDate.getDate() + 14);
+        }
+        
+        const now = new Date();
+        const diffTime = deleteDate - now;
+        const daysLeft = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+        
+        // Oblicz czas prania w godzinach
+        const startedDate = new Date(item.started_at);
+        const durationMs = archivedDate - startedDate;
+        const durationHours = Math.round(durationMs / (1000 * 60 * 60));
+        
+        return {
+          ...item,
+          delete_at: deleteDate.toISOString(),
+          days_until_deletion: daysLeft,
+          duration_hours: item.duration_hours || durationHours
+        };
+      });
+      
+      return enrichedData;
+    } catch (error) {
+      console.error('Błąd pobierania archiwum:', error);
+      showToast('Błąd pobierania archiwum: ' + error.message, 'error');
+      return [];
+    }
+  }
+
+  async function loadArchiveData() {
+    archiveList.innerHTML = '<div class="empty-state"><div class="empty-state-text">Ładowanie archiwum...</div></div>';
+    
+    const items = await fetchArchiveData();
+    allArchiveItems = items;
+    renderArchiveList(items, '');
+    
+    // 🔥 NOWE: Sprawdź przypomnienia
+    checkScheduledReminder();
+    
+    // 🔥 NOWE: Podepnij przycisk przypomnienia
+    const reminderBtn = document.getElementById('setReminderBtn');
+    if (reminderBtn) {
+      reminderBtn.addEventListener('click', scheduleArchiveReminder);
+    }
+    
+    const archiveDateFrom = document.getElementById('archiveDateFrom');
+    const archiveDateTo = document.getElementById('archiveDateTo');
+    const archiveDateReset = document.getElementById('archiveDateReset');
+    
+    if (archiveSearch) {
+      // Usuń stare listenery (jeśli są)
+      const newArchiveSearch = archiveSearch.cloneNode(true);
+      archiveSearch.parentNode.replaceChild(newArchiveSearch, archiveSearch);
+      
+      newArchiveSearch.addEventListener('input', async (e) => {
+        const filters = {
+          dateFrom: archiveDateFrom?.value,
+          dateTo: archiveDateTo?.value
+        };
+        const data = await fetchArchiveData(filters);
+        renderArchiveList(data, e.target.value);
+      });
+    }
+    
+    if (archiveDateFrom || archiveDateTo) {
+      [archiveDateFrom, archiveDateTo].forEach(input => {
+        if (input) {
+          input.addEventListener('change', async () => {
+            const filters = {
+              dateFrom: archiveDateFrom?.value,
+              dateTo: archiveDateTo?.value
+            };
+            const data = await fetchArchiveData(filters);
+            const searchValue = document.getElementById('archiveSearch')?.value || '';
+            renderArchiveList(data, searchValue);
+          });
+        }
+      });
+    }
+    
+    if (archiveDateReset) {
+      archiveDateReset.addEventListener('click', async () => {
+        if (archiveDateFrom) archiveDateFrom.value = '';
+        if (archiveDateTo) archiveDateTo.value = '';
+        const data = await fetchArchiveData();
+        const searchValue = document.getElementById('archiveSearch')?.value || '';
+        renderArchiveList(data, searchValue);
+      });
+    }
+  }
+
+  function renderArchiveList(items, filter = '') {
+    const filtered = items.filter(item => {
+      const search = filter.toLowerCase();
+      return (item.mat_name?.toLowerCase() || '').includes(search) ||
+            (item.mat_location?.toLowerCase() || '').includes(search) ||
+            (item.mat_size?.toLowerCase() || '').includes(search) ||
+            (item.shift?.toLowerCase() || '').includes(search);
+    });
+    
+    const totalMats = items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+    archiveCount.textContent = `${items.length} wpisów (${totalMats} mat)`;
+    
+    if (filter) {
+      archiveFiltered.style.display = 'inline';
+      const filteredMats = filtered.reduce((sum, item) => sum + (item.quantity || 0), 0);
+      archiveFiltered.textContent = `Znaleziono: ${filtered.length} (${filteredMats} mat)`;
+    } else {
+      archiveFiltered.style.display = 'none';
+    }
+    
+    if (filtered.length === 0) {
+      archiveList.innerHTML = `
+        <div class="empty-state">
+          <svg class="empty-state-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="11" cy="11" r="8"></circle>
+            <path d="m21 21-4.35-4.35"></path>
+          </svg>
+          <div class="empty-state-text">${filter ? 'Nie znaleziono wpisów' : 'Archiwum jest puste'}</div>
+        </div>
+      `;
+      return;
+    }
+    
+    // 🔥 POPRAWKA: Przenosimy deklaracje zmiennych DO WNĘTRZA map()
+    // W renderArchiveList, zmień część z duration_hours na:
+    archiveList.innerHTML = filtered.map(item => {
+      const startDate = new Date(item.started_at);
+      const archiveDate = new Date(item.archived_at);
+      const deleteDate = new Date(item.delete_at);
+      const daysLeft = item.days_until_deletion;
+
+      // ✅ OBLICZ DNI PRANIA (zamiast godzin)
+      const diffMs = archiveDate - startDate;
+      const durationDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      const durationText = durationDays === 1 ? '1 dzień' : `${durationDays} dni`;
+
+      let countdownClass = 'archive-countdown-ok';
+      let countdownIcon = '📅';
+      if (daysLeft <= 3) {
+        countdownClass = 'archive-countdown-warning';
+        countdownIcon = '⚠️';
+      } else if (daysLeft <= 7) {
+        countdownClass = 'archive-countdown-notice';
+        countdownIcon = '⏰';
+      }
+
+      const totalDays = 14;
+      const elapsedDays = totalDays - daysLeft;
+      const progressPercent = (elapsedDays / totalDays) * 100;
+
+      let progressColor = 'linear-gradient(90deg, #10b981, #059669)';
+      if (daysLeft <= 3) {
+        progressColor = 'linear-gradient(90deg, #f87171, #ef4444)';
+      } else if (daysLeft <= 7) {
+        progressColor = 'linear-gradient(90deg, #fbbf24, #f59e0b)';
+      }
+      
+      return `
+        <div class="archive-item">
+          <div class="archive-item-header">
+            <div class="archive-item-name">
+              ${item.mat_name}
+              ${item.quantity > 1 ? `<span class="archive-item-qty-badge">×${item.quantity}</span>` : ''}
+            </div>
+            <div class="archive-item-shift">${item.shift || '-'}</div>
+          </div>
+          
+          <div class="archive-item-details">
+            ${item.mat_location ? `<div class="archive-item-detail"><span>📍</span><strong>${item.mat_location}</strong></div>` : ''}
+            ${item.mat_size ? `<div class="archive-item-detail"><span>📏</span><span>${item.mat_size}</span></div>` : ''}
+            <div class="archive-item-detail"><span>⏱️</span><span>Prane: ${durationText} temu}</span></div>
+          </div>
+          
+          <div class="archive-item-dates">
+            <div class="archive-date-info">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+              </svg>
+              <span>
+                <span class="archive-date-label">Rozpoczęto:</span>
+                ${startDate.toLocaleDateString('pl-PL')} ${startDate.toLocaleTimeString('pl-PL', {hour: '2-digit', minute: '2-digit'})}
+              </span>
+            </div>
+            <div class="archive-date-info">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="21 8 21 21 3 21 3 8"></polyline>
+                <rect x="1" y="3" width="22" height="5"></rect>
+              </svg>
+              <span>
+                <span class="archive-date-label">Zarchiwizowano:</span>
+                ${archiveDate.toLocaleDateString('pl-PL')} ${archiveDate.toLocaleTimeString('pl-PL', {hour: '2-digit', minute: '2-digit'})}
+              </span>
+            </div>
+          </div>
+          
+          <div class="archive-time-progress">
+            <div class="archive-time-progress-bar">
+              <div class="archive-time-progress-fill" style="width: ${progressPercent}%; background: ${progressColor}"></div>
+            </div>
+            <div class="archive-time-progress-labels">
+              <span class="archive-time-elapsed">${elapsedDays} dni minęło</span>
+              <span class="archive-time-left">${daysLeft} dni zostało</span>
+            </div>
+          </div>
+
+          <div class="archive-countdown ${countdownClass}">
+            <span class="archive-countdown-icon">${countdownIcon}</span>
+            <span class="archive-countdown-text">
+              Automatyczne usunięcie za: <strong>${daysLeft} ${daysLeft === 1 ? 'dzień' : 'dni'}</strong>
+              <span class="archive-countdown-date">(${deleteDate.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' })})</span>
+            </span>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    updateArchiveStats(items);
+  }
+
+  function updateArchiveStats(items) {
+    if (items.length === 0) {
+      document.getElementById('archiveTotalEntries').textContent = '0';
+      document.getElementById('archiveTotalMats').textContent = '0';
+      document.getElementById('archiveDateRange').textContent = '-';
+      return;
+    }
+    
+    const totalMats = items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+    const dates = items.map(item => new Date(item.archived_at)).sort((a, b) => a - b);
+    const oldest = dates[0];
+    const newest = dates[dates.length - 1];
+    
+    document.getElementById('archiveTotalEntries').textContent = items.length;
+    document.getElementById('archiveTotalMats').textContent = totalMats;
+    
+    if (oldest.toDateString() === newest.toDateString()) {
+      document.getElementById('archiveDateRange').textContent = oldest.toLocaleDateString('pl-PL', { day: '2-digit', month: 'short' });
+    } else {
+      document.getElementById('archiveDateRange').textContent = 
+        `${oldest.toLocaleDateString('pl-PL', { day: '2-digit', month: 'short' })} - ${newest.toLocaleDateString('pl-PL', { day: '2-digit', month: 'short' })}`;
+    }
+  }
+
+  if (washingSearch) {
+    washingSearch.addEventListener('input', (e) => {
+      renderWashingList(allWashingItems, e.target.value);
+    });
+  }
+
   addToWashingBtn.addEventListener("click", async () => {
     if (!appState.washingMat) return;
 
     const currentShift = getCurrentShift();
     if (!currentShift) {
-      showToast("Można dodawać maty do prania tylko podczas zmian (6-14 i 14-22:00).", "error");
+      showToast("Można dodawać maty do prania tylko podczas zmian (6-14 i 14-22).", "error");
       return;
     }
 
@@ -1594,10 +2115,15 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const qtyToWash = Number(washingQty.value);
-    const totalQty = getTotalQuantity(appState.washingMat);
+    const availableQty = getAvailableQuantity(appState.washingMat);
 
-    if (qtyToWash > totalQty) {
-      showToast(`Maksymalnie ${totalQty} szt. (całkowita ilość)`, "error");
+    if (qtyToWash > availableQty) {
+      showToast(`Maksymalnie ${availableQty} szt. dostępnych`, "error");
+      return;
+    }
+
+    if (qtyToWash < 1) {
+      showToast("Ilość musi być większa niż 0!", "error");
       return;
     }
 
@@ -1613,7 +2139,6 @@ document.addEventListener("DOMContentLoaded", () => {
       addToWashingBtn.disabled = true;
       addToWashingBtn.textContent = 'Dodawanie...';
 
-      // Dodaj do washing_queue (logo_mats pozostaje bez zmian!)
       const { error: insertError } = await window.supabase
         .from('washing_queue')
         .insert([matToAdd]);
@@ -1624,11 +2149,11 @@ document.addEventListener("DOMContentLoaded", () => {
       
       washingMatSelectWrapper.reset('— wybierz matę logo —');
       washingQty.value = 1;
-      updateWashingFormState();
       
       const activeItems = await fetchActiveWashing();
       allWashingItems = activeItems;
       renderWashingList(activeItems, washingSearch?.value || '');
+      updateWashingFormState();
 
     } catch (error) {
       console.error("Błąd dodawania do prania:", error);
@@ -1639,7 +2164,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Event listeners dla akcji na liście
   activeWashingList.addEventListener('click', async (e) => {
     const action = e.target.closest('[data-action]')?.dataset.action;
     const washingItem = e.target.closest('[data-washing-id]');
@@ -1672,15 +2196,17 @@ document.addEventListener("DOMContentLoaded", () => {
     editingWashingItem = item;
     editWashingMatName.textContent = item.mat_name;
     
-    // Pobierz całkowitą ilość
+    const inWashingWithoutThis = allWashingItems
+      .filter(i => i.mat_name === item.mat_name && i.id !== item.id)
+      .reduce((sum, i) => sum + (i.quantity || 0), 0);
     const totalQty = getTotalQuantity(item.mat_name);
+    const availableQty = totalQty - inWashingWithoutThis;
     
-    // Pokaż info
-    editWashingCurrentQty.textContent = `${item.quantity} szt. (max: ${totalQty})`;
+    editWashingCurrentQty.textContent = `Dostępne: ${availableQty} szt.`;
     
     editWashingQtyInput.value = item.quantity;
     editWashingQtyInput.min = 1;
-    editWashingQtyInput.max = totalQty;
+    editWashingQtyInput.max = availableQty;
     
     openModal(editWashingModal);
   }
@@ -1692,16 +2218,15 @@ document.addEventListener("DOMContentLoaded", () => {
     openModal(deleteWashingModal);
   }
 
-  // Edycja - przyciski +/-
   editWashingQtyDec.addEventListener('click', () => {
     editWashingQtyInput.value = Math.max(1, Number(editWashingQtyInput.value) - 1);
   });
 
   editWashingQtyInc.addEventListener('click', () => {
-    editWashingQtyInput.value = Math.min(100, Number(editWashingQtyInput.value) + 1);
+    const max = Number(editWashingQtyInput.max);
+    editWashingQtyInput.value = Math.min(max, Number(editWashingQtyInput.value) + 1);
   });
 
-  // Edycja - zapis
   editWashingSave.addEventListener('click', async () => {
     if (!editingWashingItem) return;
     
@@ -1712,16 +2237,13 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     
-    // Sprawdź czy nie przekracza całkowitej ilości mat
-    const totalQuantity = getTotalQuantity(editingWashingItem.mat_name);
-
-    if (newQty > totalQuantity) {
-      showToast(`Maksymalnie ${totalQuantity} szt. (całkowita ilość tej maty)`, 'error');
+    const max = Number(editWashingQtyInput.max);
+    if (newQty > max) {
+      showToast(`Maksymalnie ${max} szt. dostępnych`, 'error');
       return;
     }
     
     try {
-      // Aktualizuj TYLKO washing_queue (logo_mats pozostaje bez zmian!)
       const { error: updateError } = await window.supabase
         .from('washing_queue')
         .update({ quantity: newQty })
@@ -1732,7 +2254,6 @@ document.addEventListener("DOMContentLoaded", () => {
       showToast('✅ Zaktualizowano ilość!');
       closeModal(editWashingModal);
       
-      // Odśwież listę prania
       const activeItems = await fetchActiveWashing();
       allWashingItems = activeItems;
       renderWashingList(activeItems, washingSearch?.value || '');
@@ -1744,12 +2265,10 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Usuwanie
   deleteWashingConfirm.addEventListener('click', async () => {
     if (!deletingWashingItem) return;
     
     try {
-      // Usuń TYLKO z washing_queue (logo_mats pozostaje bez zmian!)
       const { error: deleteError } = await window.supabase
         .from('washing_queue')
         .delete()
@@ -1760,7 +2279,6 @@ document.addEventListener("DOMContentLoaded", () => {
       showToast('🗑️ Usunięto z prania!', 'error');
       closeModal(deleteWashingModal);
       
-      // Odśwież listę prania
       const activeItems = await fetchActiveWashing();
       allWashingItems = activeItems;
       renderWashingList(activeItems, washingSearch?.value || '');
@@ -1772,11 +2290,543 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Anulowania
   editWashingCancel.addEventListener('click', () => closeModal(editWashingModal));
   deleteWashingCancel.addEventListener('click', () => closeModal(deleteWashingModal));
 
-  // ==================== INICJALIZACJA ====================
+  // ==================== ARCHIWIZACJA ====================
+  
+  async function checkAndArchiveOldWashing() {
+    try {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      
+      const { data: washingItems, error: fetchError } = await window.supabase
+        .from('washing_queue')
+        .select('*');
+      
+      if (fetchError) throw fetchError;
+      if (!washingItems || washingItems.length === 0) return;
+      
+      const itemsToArchive = washingItems.filter(item => {
+        const itemDate = new Date(item.started_at);
+        const itemDay = new Date(itemDate.getFullYear(), itemDate.getMonth(), itemDate.getDate());
+        return itemDay < today;
+      });
+      
+      if (itemsToArchive.length === 0) return;
+      
+      const archiveData = itemsToArchive.map(item => ({
+        ...item,
+        archived_at: new Date().toISOString()
+      }));
+      
+      const { error: insertError } = await window.supabase
+        .from('washing_archive')
+        .insert(archiveData);
+      
+      if (insertError) throw insertError;
+      
+      const idsToDelete = itemsToArchive.map(item => item.id);
+      const { error: deleteError } = await window.supabase
+        .from('washing_queue')
+        .delete()
+        .in('id', idsToDelete);
+      
+      if (deleteError) throw deleteError;
+      
+      console.log(`✅ Zarchiwizowano ${itemsToArchive.length} starych prań`);
+      
+    } catch (error) {
+      console.error('Błąd archiwizacji:', error);
+    }
+  }
+
+  // ==================== DRUKOWANIE I EXPORT ARCHIWUM ====================
+
+  const printArchiveBtn = document.getElementById('printArchive');
+  const exportArchiveExcelBtn = document.getElementById('exportArchiveExcel');
+
+  if (printArchiveBtn) {
+    printArchiveBtn.addEventListener('click', () => {
+      if (allArchiveItems.length === 0) {
+        showToast("Brak danych w archiwum do wydrukowania.", "error");
+        return;
+      }
+      
+      const printDate = new Date().toLocaleDateString('pl-PL', { 
+        day: '2-digit', 
+        month: '2-digit', 
+        year: 'numeric', 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
+      
+      const totalMats = allArchiveItems.reduce((sum, item) => sum + (item.quantity || 1), 0);
+      const sortedItems = [...allArchiveItems].sort((a, b) => {
+        return new Date(b.archived_at) - new Date(a.archived_at);
+      });
+      
+      // Grupuj po dacie archiwizacji
+      const groupedByDate = {};
+      sortedItems.forEach(item => {
+        const archDate = new Date(item.archived_at);
+        const dateKey = archDate.toLocaleDateString('pl-PL', { 
+          day: '2-digit', 
+          month: '2-digit', 
+          year: 'numeric' 
+        });
+        if (!groupedByDate[dateKey]) groupedByDate[dateKey] = [];
+        groupedByDate[dateKey].push(item);
+      });
+      
+      let printHTML = `
+        <div class="print-header">
+          <img src="icons/icon-192.png" alt="Elis Logo">
+          <div class="title-block">
+            <h1>Archiwum Prań Mat</h1>
+            <p>Data wydruku: ${printDate}</p>
+          </div>
+        </div>
+        
+        <div class="print-archive-summary">
+          <div class="print-summary-row">
+            <span class="print-summary-label">Łączna liczba wpisów:</span>
+            <span class="print-summary-value">${allArchiveItems.length}</span>
+          </div>
+          <div class="print-summary-row">
+            <span class="print-summary-label">Suma wypranych mat:</span>
+            <span class="print-summary-value">${totalMats} szt.</span>
+          </div>
+        </div>
+      `;
+      
+      // Renderuj grupy po datach
+      Object.keys(groupedByDate).forEach(dateKey => {
+        const dayItems = groupedByDate[dateKey];
+        const dayQty = dayItems.reduce((sum, item) => sum + (item.quantity || 1), 0);
+        
+        printHTML += `
+          <div class="print-archive-date-section">
+            <h2 class="print-archive-date-header">
+              📅 ${dateKey} 
+              <span class="print-archive-date-badge">${dayItems.length} ${dayItems.length === 1 ? 'wpis' : 'wpisów'} (${dayQty} szt.)</span>
+            </h2>
+            <table class="print-archive-table">
+              <thead>
+                <tr>
+                  <th>Mata</th>
+                  <th>Lokalizacja</th>
+                  <th>Rozmiar</th>
+                  <th>Ilość</th>
+                  <th>Zmiana</th>
+                  <th>Prane (dni temu)</th>
+                </tr>
+              </thead>
+              <tbody>
+        `;
+        
+        dayItems.forEach(item => {
+          // Oblicz dni prania
+          const startDate = new Date(item.started_at);
+          const archDate = new Date(item.archived_at);
+          const diffMs = archDate - startDate;
+          const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+          const daysText = days === 1 ? '1 dzień' : `${days} dni`;
+          
+          printHTML += `
+            <tr>
+              <td><strong>${item.mat_name}</strong></td>
+              <td>${item.mat_location || '—'}</td>
+              <td>${item.mat_size || '—'}</td>
+              <td class="text-center"><strong>${item.quantity || 1}</strong></td>
+              <td class="text-center">${item.shift || '—'}</td>
+              <td class="text-center">${daysText}</td>
+            </tr>
+          `;
+        });
+        
+        printHTML += `
+              </tbody>
+            </table>
+          </div>
+        `;
+      });
+      
+      printHTML += `
+        <div class="print-archive-footer">
+          <p><strong>Elis ServiceHub</strong> - System Zarządzania Matami</p>
+          <p style="margin-top: 8px; font-size: 9pt; color: #6b7280;">
+            Raport zawiera kompletną historię prań mat z podziałem na daty archiwizacji
+          </p>
+        </div>
+      `;
+      
+      printOutput.innerHTML = printHTML;
+      
+      setTimeout(() => { 
+        try { 
+          window.print(); 
+        } catch (error) { 
+          console.error("Błąd drukowania:", error); 
+          showToast("Błąd podczas otwierania okna drukowania.", "error"); 
+        } 
+      }, 100);
+    });
+  }
+
+  // ========== EXPORT ARCHIWUM DO EXCELA ==========
+  if (exportArchiveExcelBtn) {
+    exportArchiveExcelBtn.addEventListener('click', async () => {
+      if (allArchiveItems.length === 0) {
+        showToast("Brak danych w archiwum do wyeksportowania.", "error");
+        return;
+      }
+      if (typeof ExcelJS === 'undefined') {
+        showToast("Biblioteka Excel nie jest załadowana", "error");
+        return;
+      }
+
+      try {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Archiwum Prań', { 
+          pageSetup: { 
+            paperSize: 9, 
+            orientation: 'landscape', 
+            fitToPage: true, 
+            fitToWidth: 1, 
+            fitToHeight: 0 
+          } 
+        });
+        
+        workbook.creator = 'Elis ServiceHub';
+        workbook.created = new Date();
+        workbook.company = 'Elis';
+        
+        const currentDate = new Date().toLocaleDateString('pl-PL', { 
+          day: '2-digit', 
+          month: '2-digit', 
+          year: 'numeric', 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        });
+
+        // NAGŁÓWEK
+        worksheet.mergeCells('A1:G1');
+        const titleCell = worksheet.getCell('A1');
+        titleCell.value = 'ELIS - ARCHIWUM PRAŃ MAT';
+        titleCell.font = { name: 'Calibri', size: 20, bold: true, color: { argb: 'FFFFFFFF' } };
+        titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF00A9BE' } };
+        titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+        worksheet.getRow(1).height = 40;
+
+        worksheet.mergeCells('A2:G2');
+        const dateCell = worksheet.getCell('A2');
+        dateCell.value = `Data wygenerowania: ${currentDate}`;
+        dateCell.font = { name: 'Calibri', size: 11, italic: true };
+        dateCell.alignment = { horizontal: 'center' };
+        dateCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F0F0' } };
+        worksheet.addRow([]);
+
+        // PODSUMOWANIE
+        const totalMats = allArchiveItems.reduce((sum, item) => sum + (item.quantity || 1), 0);
+        const summaryRow1 = worksheet.addRow(['PODSUMOWANIE', '', '', '', '', '', '']);
+        worksheet.mergeCells(`A${summaryRow1.number}:G${summaryRow1.number}`);
+        summaryRow1.getCell(1).font = { name: 'Calibri', size: 13, bold: true };
+        summaryRow1.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE3E9F0' } };
+        summaryRow1.height = 28;
+
+        const statsRow1 = worksheet.addRow(['Liczba wpisów:', allArchiveItems.length, '', '', '', '', '']);
+        const statsRow2 = worksheet.addRow(['Suma wypranych mat:', totalMats, '', '', '', '', '']);
+        
+        [statsRow1, statsRow2].forEach(row => {
+          row.getCell(1).font = { name: 'Calibri', size: 11, bold: true };
+          row.getCell(2).font = { name: 'Calibri', size: 11, color: { argb: 'FF00A9BE' } };
+          row.getCell(2).alignment = { horizontal: 'left' };
+          row.height = 22;
+        });
+        
+        worksheet.addRow([]);
+
+        // NAGŁÓWKI KOLUMN
+        const headerRow = worksheet.addRow([
+          'Nazwa maty', 
+          'Lokalizacja', 
+          'Rozmiar', 
+          'Ilość', 
+          'Zmiana', 
+          'Data archiwizacji',
+          'Prane (dni temu)'
+        ]);
+        
+        headerRow.height = 32;
+        headerRow.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+        headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0D1117' } };
+        headerRow.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+        headerRow.eachCell((cell) => { 
+          cell.border = { 
+            top: { style: 'thin', color: { argb: 'FF000000' } }, 
+            left: { style: 'thin', color: { argb: 'FF000000' } }, 
+            bottom: { style: 'medium', color: { argb: 'FF000000' } }, 
+            right: { style: 'thin', color: { argb: 'FF000000' } } 
+          }; 
+        });
+
+        // DANE
+        const sortedItems = [...allArchiveItems].sort((a, b) => {
+          return new Date(b.archived_at) - new Date(a.archived_at);
+        });
+
+        sortedItems.forEach((item, index) => {
+          const archDate = new Date(item.archived_at);
+          const archDateStr = archDate.toLocaleDateString('pl-PL', { 
+            day: '2-digit', 
+            month: '2-digit', 
+            year: 'numeric' 
+          });
+          
+          // Oblicz dni prania
+          const startDate = new Date(item.started_at);
+          const diffMs = archDate - startDate;
+          const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+          
+          const row = worksheet.addRow([
+            item.mat_name,
+            item.mat_location || 'Nie określono',
+            item.mat_size || 'Nie określono',
+            item.quantity || 1,
+            item.shift || '-',
+            archDateStr,
+            days
+          ]);
+          
+          row.height = 24;
+          row.font = { name: 'Calibri', size: 10 };
+          
+          if (index % 2 === 0) { 
+            row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9FAFB' } }; 
+          }
+          
+          row.getCell(1).alignment = { vertical: 'middle', horizontal: 'left' };
+          row.getCell(2).alignment = { vertical: 'middle', horizontal: 'left' };
+          row.getCell(3).alignment = { vertical: 'middle', horizontal: 'center' };
+          row.getCell(4).alignment = { vertical: 'middle', horizontal: 'center' };
+          row.getCell(4).font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF00A9BE' } };
+          row.getCell(5).alignment = { vertical: 'middle', horizontal: 'center' };
+          row.getCell(6).alignment = { vertical: 'middle', horizontal: 'center' };
+          row.getCell(7).alignment = { vertical: 'middle', horizontal: 'center' };
+          row.getCell(7).font = { name: 'Calibri', size: 10, bold: true };
+          
+          row.eachCell((cell) => { 
+            cell.border = { 
+              top: { style: 'thin', color: { argb: 'FFD1D5DB' } }, 
+              left: { style: 'thin', color: { argb: 'FFD1D5DB' } }, 
+              bottom: { style: 'thin', color: { argb: 'FFD1D5DB' } }, 
+              right: { style: 'thin', color: { argb: 'FFD1D5DB' } } 
+            }; 
+          });
+        });
+
+        // SZEROKOŚCI KOLUMN
+        worksheet.columns = [ 
+          { width: 38 }, 
+          { width: 25 }, 
+          { width: 18 }, 
+          { width: 10 }, 
+          { width: 15 },
+          { width: 18 },
+          { width: 18 }
+        ];
+        
+        // STOPKA
+        worksheet.addRow([]);
+        const footerRow = worksheet.addRow(['Dokument wygenerowany automatycznie przez system Elis ServiceHub', '', '', '', '', '', '']);
+        worksheet.mergeCells(`A${footerRow.number}:G${footerRow.number}`);
+        footerRow.getCell(1).font = { name: 'Calibri', size: 9, italic: true, color: { argb: 'FF6B7280' } };
+        footerRow.getCell(1).alignment = { horizontal: 'center' };
+
+        // ZAPIS I POBIERANIE
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const fileName = `Elis_Archiwum_Pran_${new Date().toISOString().split('T')[0]}.xlsx`;
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        link.click();
+        window.URL.revokeObjectURL(url);
+        
+        showToast("✅ Wyeksportowano archiwum do Excel!");
+        
+      } catch (error) {
+        console.error('Błąd eksportu archiwum:', error);
+        showToast("Błąd podczas eksportu: " + error.message, "error");
+      }
+    });
+  }
+
+  // ==================== SYSTEM PALET W TRASACH ====================
+
+  let palletRoutes = JSON.parse(localStorage.getItem('palletRoutes') || '[]');
+
+  const palletRouteSelectWrapper = document.getElementById('palletRouteSelectWrapper');
+  const addPalletRouteBtn = document.getElementById('addPalletRouteBtn');
+  const palletsList = document.getElementById('palletsList');
+
+  function savePalletRoutes() {
+    localStorage.setItem('palletRoutes', JSON.stringify(palletRoutes));
+  }
+
+  function renderPalletsList() {
+    if (palletRoutes.length === 0) {
+      palletsList.innerHTML = `
+        <div class="pallets-empty">
+          <div class="pallets-empty-icon">📦</div>
+          <div class="pallets-empty-text">
+            Brak tras z paletami.<br>
+            Wybierz trasę z listy i dodaj ją przyciskiem po prawej.
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    const sorted = [...palletRoutes].sort((a, b) => {
+      const numA = parseInt(a.route);
+      const numB = parseInt(b.route);
+      return numA - numB;
+    });
+
+    palletsList.innerHTML = sorted.map((item) => {
+      const originalIndex = palletRoutes.findIndex(r => r.route === item.route);
+      return `
+        <div class="pallet-item">
+          <div class="pallet-route-badge">Trasa ${item.route}</div>
+          <div class="pallet-quantity-zone">
+            <div class="pallet-quantity-display">
+              <span class="pallet-quantity-label">Liczba palet</span>
+              <div class="pallet-quantity-number">${item.pallets}</div>
+            </div>
+          </div>
+          <div class="pallet-controls">
+            <button class="pallet-btn pallet-btn-minus" data-action="decrease" data-index="${originalIndex}" aria-label="Zmniejsz">−</button>
+            <button class="pallet-btn pallet-btn-plus" data-action="increase" data-index="${originalIndex}" aria-label="Zwiększ">+</button>
+            <button class="pallet-btn pallet-btn-delete" data-action="delete" data-index="${originalIndex}" aria-label="Usuń trasę">🗑️</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function getPalletsForRoute(routeNumber) {
+    const found = palletRoutes.find(r => r.route === routeNumber);
+    return found ? found.pallets : null;
+  }
+
+  function updatePalletAddButton() {
+    const routeSelected = !!appState.palletRoute;
+    const routeExists = palletRoutes.some(r => r.route === appState.palletRoute);
+    addPalletRouteBtn.disabled = !routeSelected || routeExists;
+  }
+
+  function initPalletSystem() {
+    console.log('🔧 Próba inicjalizacji systemu palet...');
+    console.log('📦 routesByDay:', routesByDay);
+    console.log('📦 palletRouteSelectWrapper:', palletRouteSelectWrapper);
+    console.log('📦 addPalletRouteBtn:', addPalletRouteBtn);
+    console.log('📦 palletsList:', palletsList);
+    
+    if (!palletRouteSelectWrapper || !addPalletRouteBtn || !palletsList) {
+      console.error('❌ Elementy systemu palet nie znalezione!');
+      return;
+    }
+    
+    // Wszystkie trasy z routesByDay jako płaska lista
+    const allRoutes = Object.values(routesByDay)
+      .flat()
+      .filter((v, i, a) => a.indexOf(v) === i)
+      .map(String) // ⬅️ WAŻNE: konwertuj na stringi
+      .sort((a, b) => Number(a) - Number(b));
+    
+    console.log('✅ Trasy do wyboru:', allRoutes);
+    console.log('✅ Liczba tras:', allRoutes.length);
+    
+    if (allRoutes.length === 0) {
+      console.error('❌ Brak tras do wyświetlenia!');
+      return;
+    }
+    
+    // ⬅️ WAŻNE: Twórz select DOPIERO gdy mamy trasy
+    createCustomSelect(palletRouteSelectWrapper, allRoutes, "— wybierz trasę —", "palletRoute");
+    
+    console.log('✅ Custom select utworzony');
+    
+    palletRouteSelectWrapper.addEventListener('change', () => {
+      console.log('📦 Wybrano trasę:', appState.palletRoute);
+      updatePalletAddButton();
+    });
+
+    addPalletRouteBtn.addEventListener('click', () => {
+      const route = appState.palletRoute;
+      console.log('📦 Kliknięto przycisk dodaj, trasa:', route);
+      
+      if (!route) {
+        showToast("Wybierz trasę!", "error");
+        return;
+      }
+      
+      if (palletRoutes.some(r => r.route === route)) {
+        showToast("Ta trasa jest już na liście!", "error");
+        return;
+      }
+      
+      palletRoutes.push({ route, pallets: 1 });
+      savePalletRoutes();
+      renderPalletsList();
+      palletRouteSelectWrapper.reset('— wybierz trasę —');
+      updatePalletAddButton();
+      showToast(`✅ Dodano trasę ${route}`);
+      
+      setTimeout(() => {
+        palletsList.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 100);
+    });
+
+    palletsList.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      
+      const action = btn.dataset.action;
+      const index = Number(btn.dataset.index);
+      const item = palletRoutes[index];
+      
+      if (action === 'increase') {
+        item.pallets = Math.min(99, item.pallets + 1);
+        savePalletRoutes();
+        renderPalletsList();
+        showToast(`📦 Trasa ${item.route}: ${item.pallets} ${item.pallets === 1 ? 'paleta' : item.pallets < 5 ? 'palety' : 'palet'}`);
+      } else if (action === 'decrease') {
+        if (item.pallets > 1) {
+          item.pallets = Math.max(1, item.pallets - 1);
+          savePalletRoutes();
+          renderPalletsList();
+          showToast(`📦 Trasa ${item.route}: ${item.pallets} ${item.pallets === 1 ? 'paleta' : item.pallets < 5 ? 'palety' : 'palet'}`);
+        }
+      } else if (action === 'delete') {
+        const routeNum = item.route;
+        palletRoutes.splice(index, 1);
+        savePalletRoutes();
+        renderPalletsList();
+        showToast(`🗑️ Usunięto trasę ${routeNum}`, "error");
+      }
+    });
+
+    renderPalletsList();
+    updatePalletAddButton();
+    
+    console.log('✅ System palet w pełni zainicjalizowany!');
+  }
+
+// ==================== INICJALIZACJA ====================
   async function init() {
     const logoMatsPromise = fetchAndCacheLogoMats();
     
@@ -1796,10 +2846,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const logoMatsData = await logoMatsPromise;
     const logoMatNames = logoMatsData.map(m => m.name).filter((v, i, a) => a.indexOf(v) === i).sort();
     washingMatSelectWrapper.updateOptions(logoMatNames);
+    
+    // 🔥 NOWE: Aktualizuj badge archiwum przy starcie
+    updateArchiveBadge();
+    
+    // 🔥 NOWE: Sprawdź przypomnienia
+    checkScheduledReminder();
+    
+    // 🔥 NOWE: Odświeżaj badge co 5 minut
+    setInterval(updateArchiveBadge, 5 * 60 * 1000);
         
     // ==================== REALTIME SUBSCRIPTIONS ====================
 
-    // Subskrypcja na zmiany w washing_queue
     const washingChannel = window.supabase
       .channel('washing-updates')
       .on('postgres_changes', { 
@@ -1812,11 +2870,11 @@ document.addEventListener("DOMContentLoaded", () => {
           const activeItems = await fetchActiveWashing();
           allWashingItems = activeItems;
           renderWashingList(activeItems, washingSearch?.value || '');
+          updateWashingFormState();
         }
       })
       .subscribe();
 
-    // Subskrypcja na zmiany w logo_mats
     const matsChannel = window.supabase
       .channel('mats-updates')
       .on('postgres_changes', { 
@@ -1837,8 +2895,12 @@ document.addEventListener("DOMContentLoaded", () => {
       })
       .subscribe();
 
+    // Inicjalizuj system palet
+    initPalletSystem();
+
     navigateTo('home');
   }
-  
+
   init();
+
 });
