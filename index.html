@@ -35,95 +35,74 @@
 
   <div id="app">
     
-    <!-- ==================== WIDOK: CENTRUM GŁÓWNE ==================== -->
-    <div id="homeView" class="view active">
-      <main class="home-main">
-        <h1 class="home-welcome">Witaj w Systemie Elis ServiceHub</h1>
-        <p class="home-subtitle">Wybierz moduł, z którego chcesz skorzystać</p>
-        
-        <div class="home-grid">
-          <button class="home-tile" data-navigate="panel">
-            <div class="home-tile-icon">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-                <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-                <line x1="12" y1="22.08" x2="12" y2="12"></line>
-              </svg>
-            </div>
-            <div class="home-tile-content">
-              <h2>Panel Tras i Zmian</h2>
-              <p>Zarządzaj trasami i zmianami mat</p>
-            </div>
-          </button>
-
-          <button class="home-tile" data-navigate="mats">
-            <div class="home-tile-icon">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <polyline points="14 2 14 8 20 8"></polyline>
-                <line x1="16" y1="13" x2="8" y2="13"></line>
-                <line x1="16" y1="17" x2="8" y2="17"></line>
-                <polyline points="10 9 9 9 8 9"></polyline>
-              </svg>
-            </div>
-            <div class="home-tile-content">
-              <h2>Lista Mat</h2>
-              <p>Inwentaryzacja i zarządzanie matami</p>
-            </div>
-          </button>
-
-          <button class="home-tile" data-navigate="washing">
-            <div class="home-tile-icon">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                <circle cx="12" cy="13" r="5"></circle>
-                <circle cx="8" cy="6" r="0.5" fill="currentColor"></circle>
-                <circle cx="11" cy="6" r="0.5" fill="currentColor"></circle>
-              </svg>
-            </div>
-            <div class="home-tile-content">
-              <h2>Maty w Praniu</h2>
-              <p>Aktywne prania i zarządzanie kolejką</p>
-            </div>
-          </button>
-
-          <button class="home-tile" data-navigate="archive">
-            <div class="home-tile-icon">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="21 8 21 21 3 21 3 8"></polyline>
-                <rect x="1" y="3" width="22" height="5"></rect>
-                <line x1="10" y1="12" x2="14" y2="12"></line>
-              </svg>
-            </div>
-            <div class="home-tile-content">
-              <h2>Archiwum Prań</h2>
-              <p>Historia i raporty zakończonych prań</p>
-            </div>
-          </button>
-        </div>
-        <!-- ==================== LISTA PALET W TRASACH ==================== -->
-        <section class="pallets-section-wrapper">
-          <div class="pallets-section-header">
-            <h2>📦 Liczba palet w trasach</h2>
-            <p class="pallets-section-subtitle">Zarządzaj ilością palet dla poszczególnych tras</p>
+  <!-- ==================== WIDOK: CENTRUM GŁÓWNE ==================== -->
+  <div id="homeView" class="view active">
+    <main class="home-main">
+      <h1 class="home-welcome">Witaj w Systemie Elis ServiceHub</h1>
+      <p class="home-subtitle">Wybierz moduł, z którego chcesz skorzystać</p>
+      
+      <div class="home-grid">
+        <button class="home-tile" data-navigate="panel">
+          <div class="home-tile-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+              <line x1="12" y1="22.08" x2="12" y2="12"></line>
+            </svg>
           </div>
-          
-          <div class="pallets-control-card">
-            <div class="pallets-add-zone">
-              <div id="palletRouteSelectWrapper" class="custom-select-wrapper"></div>
-              <button id="addPalletRouteBtn" class="btn-add-pallet" disabled>
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 5v14m-7-7h14"/>
-                </svg>
-                <span>Dodaj trasę</span>
-              </button>
-            </div>
-            
-            <div id="palletsList" class="pallets-list"></div>
+          <div class="home-tile-content">
+            <h2>Panel Tras i Zmian</h2>
+            <p>Zarządzaj trasami i zmianami mat</p>
           </div>
-        </section>
-      </main>
-    </div>
+        </button>
+
+        <button class="home-tile" data-navigate="mats">
+          <div class="home-tile-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+          </div>
+          <div class="home-tile-content">
+            <h2>Lista Mat</h2>
+            <p>Inwentaryzacja i zarządzanie matami</p>
+          </div>
+        </button>
+
+        <button class="home-tile" data-navigate="washing">
+          <div class="home-tile-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <circle cx="12" cy="13" r="5"></circle>
+              <circle cx="8" cy="6" r="0.5" fill="currentColor"></circle>
+              <circle cx="11" cy="6" r="0.5" fill="currentColor"></circle>
+            </svg>
+          </div>
+          <div class="home-tile-content">
+            <h2>Maty w Praniu</h2>
+            <p>Aktywne prania i zarządzanie kolejką</p>
+          </div>
+        </button>
+
+        <button class="home-tile" data-navigate="archive">
+          <div class="home-tile-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="21 8 21 21 3 21 3 8"></polyline>
+              <rect x="1" y="3" width="22" height="5"></rect>
+              <line x1="10" y1="12" x2="14" y2="12"></line>
+            </svg>
+          </div>
+          <div class="home-tile-content">
+            <h2>Archiwum Prań</h2>
+            <p>Historia i raporty zakończonych prań</p>
+          </div>
+        </button>
+      </div>  <!-- 🔥 ZAMYKA home-grid -->
+    </main>  <!-- 🔥 ZAMYKA home-main -->
+  </div>  <!-- 🔥 ZAMYKA homeView -->
 
     <!-- ==================== WIDOK: PANEL TRAS ==================== -->
     <div id="panelView" class="view">
@@ -131,8 +110,20 @@
         <section id="routeCard" class="card">
           <h2>🚚 Wybierz trasę</h2>
           <div id="routeSelectWrapper" class="custom-select-wrapper"></div>
+          
+          <!-- 🆕 LICZNIK PALET POD TRASĄ -->
+          <div id="palletCountSection" class="pallet-count-section" style="display: none;">
+            <label class="pallet-count-label">📦 Liczba palet w trasie</label>
+            <div class="pallet-count-controls">
+              <button id="palletCountDec" class="btn-secondary" aria-label="Zmniejsz">−</button>
+              <div class="pallet-count-display">
+                <span id="palletCountValue">0</span>
+                <span class="pallet-count-unit">palet</span>
+              </div>
+              <button id="palletCountInc" class="btn-secondary" aria-label="Zwiększ">+</button>
+            </div>
+          </div>
         </section>
-
         <!-- Karta wyboru akcji -->
         <section id="actionCard" class="card form-section-disabled">
           <h2>🔀 Wybierz typ operacji</h2>
@@ -426,16 +417,7 @@
           <h2>🧼 Dodaj matę do prania</h2>
           <div class="washing-form">
             <div id="washingMatSelectWrapper" class="custom-select-wrapper"></div>
-            
-            <!-- Info o ilości dostępnej -->
-            <div id="washingQuantityInfo" class="washing-quantity-info" style="display: none;">
-              <div class="washing-available-badge">
-                <span class="washing-available-label">Dostępne:</span>
-                <span id="washingAvailableQty" class="washing-available-qty">0</span>
-                <span class="washing-available-unit">szt.</span>
-              </div>
-            </div>
-            
+                        
             <!-- Wybór ilości (pokazuje się gdy quantity > 1) -->
             <div id="washingQuantitySelector" class="washing-quantity-selector" style="display: none;">
               <label class="washing-qty-label">Ile sztuk dać do prania?</label>
@@ -690,10 +672,6 @@
     <div class="modal-content">
       <h3>Edytuj ilość w praniu</h3>
       <p id="editWashingMatName" style="text-align: center; font-weight: 600; margin-bottom: 16px; color: var(--primary);"></p>
-      <div class="washing-edit-info">
-        <span class="washing-edit-label">Aktualna ilość:</span>
-        <span id="editWashingCurrentQty" class="washing-edit-current">1 szt.</span>
-      </div>
       <div class="qty-row" style="margin-top: 16px;">
         <button id="editWashingQtyDec" class="btn-secondary">−</button>
         <input type="number" id="editWashingQtyInput" min="1" max="100" inputmode="numeric">
