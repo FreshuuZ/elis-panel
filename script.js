@@ -273,7 +273,6 @@ document.addEventListener("DOMContentLoaded", () => {
   // Modals
   const editWashingModal = document.getElementById('editWashingModal');
   const editWashingMatName = document.getElementById('editWashingMatName');
-  const editWashingCurrentQty = document.getElementById('editWashingCurrentQty');
   const editWashingQtyInput = document.getElementById('editWashingQtyInput');
   const editWashingQtyDec = document.getElementById('editWashingQtyDec');
   const editWashingQtyInc = document.getElementById('editWashingQtyInc');
@@ -593,8 +592,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const persist = () => localStorage.setItem("changes", JSON.stringify(changes));
   const removeChange = (index) => { changes.splice(index, 1); persist(); };
-  const removeRouteGroup = (route) => { changes = changes.filter(c => c.route !== route); persist(); };
-
+  const removeRouteGroup = (route) => { 
+    changes = changes.filter(c => c.route !== route); 
+    
+    // 🔥 NOWE: Wyzeruj palety dla usuwanej trasy
+    if (palletRoutes[route]) {
+      delete palletRoutes[route];
+      savePalletRoutes();
+      console.log(`✅ Wyzerowano palety dla trasy ${route}`);
+    }
+    
+    persist(); 
+  };
   const openModal = (modal) => modal.style.display = "flex";
   const closeModal = (modal) => modal.style.display = "none";
 
@@ -686,9 +695,39 @@ document.addEventListener("DOMContentLoaded", () => {
 
   deleteConfirm.addEventListener("click", () => { 
     if (itemToDelete.index === null) return; 
-    const { index, element } = itemToDelete; 
+    const { index, element } = itemToDelete;
+    
+    // 🔥 Zapamiętaj trasę przed usunięciem
+    const deletedRoute = changes[index]?.route;
+    
     element.classList.add("is-hiding"); 
-    setTimeout(() => { removeChange(index); renderChanges(); showToast("🗑️ Usunięto", "error"); }, 300); 
+    
+    setTimeout(() => { 
+      removeChange(index); 
+      
+      // 🔥 NOWE: Sprawdź czy to była ostatnia zmiana dla tej trasy
+      if (deletedRoute) {
+        const routeStillExists = changes.some(c => c.route === deletedRoute);
+        
+        if (!routeStillExists) {
+          // Trasa całkowicie zniknęła - wyzeruj palety
+          if (palletRoutes[deletedRoute]) {
+            delete palletRoutes[deletedRoute];
+            savePalletRoutes();
+            console.log(`✅ Wyzerowano palety dla trasy ${deletedRoute} (ostatnia zmiana usunięta)`);
+          }
+          
+          // Jeśli to była aktualnie wybrana trasa, odśwież licznik
+          if (appState.route === deletedRoute) {
+            updatePalletDisplay();
+          }
+        }
+      }
+      
+      renderChanges(); 
+      showToast("🗑️ Usunięto", "error"); 
+    }, 300); 
+    
     closeModal(deleteModal); 
   });
 
@@ -702,6 +741,11 @@ document.addEventListener("DOMContentLoaded", () => {
     setTimeout(() => {
       removeRouteGroup(route);
       element.remove();
+      
+      // 🔥 NOWE: Jeśli usuwana trasa to obecnie wybrana, odśwież licznik
+      if (appState.route === route) {
+        updatePalletDisplay(); // Odświeży licznik (pokaże 0)
+      }
       
       if (changes.length === 0) {
         changesList.innerHTML = `
@@ -717,7 +761,7 @@ document.addEventListener("DOMContentLoaded", () => {
         `;
       }
       
-      showToast("🗑️ Usunięto trasę", "error");
+      showToast("🗑️ Usunięto trasę i wyzerowano palety", "error");
       routeGroupToDelete = { route: null, element: null }; 
     }, 400); 
   });
@@ -748,34 +792,30 @@ document.addEventListener("DOMContentLoaded", () => {
         if (routeChanges.length === 0) return;
         const printDate = new Date().toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' });
         
-                // 🆕 SPRAWDŹ CZY TRASA MA PALETY
+        // 🆕 SPRAWDŹ CZY TRASA MA PALETY
         const palletCount = getPalletsForRoute(route);
         let palletNotice = '';
         if (palletCount) {
-          let palletWord, verbWord;
+          let palletWord;
           const lastDigit = palletCount % 10;
           const lastTwoDigits = palletCount % 100;
           
           if (palletCount === 1) {
-            palletWord = 'PALETA';
-            verbWord = 'JEST';
+            palletWord = 'PALETY'; // z 1 PALETY (dopełniacz)
           } else if (lastTwoDigits >= 12 && lastTwoDigits <= 14) {
-            // 12-14 to zawsze "palet" (także 112, 113, 114 itd.)
+            // 12-14, 112-114 itd. -> z 12 PALET
             palletWord = 'PALET';
-            verbWord = 'JEST';
           } else if (lastDigit >= 2 && lastDigit <= 4) {
-            // 2-4, 22-24, 32-34 itd.
-            palletWord = 'PALETY';
-            verbWord = 'SĄ';
-          } else {
-            // 5-21, 25-31 itd.
+            // 2-4, 22-24, 32-34 itd. -> z 2 PALET, z 3 PALET
             palletWord = 'PALET';
-            verbWord = 'JEST';
+          } else {
+            // 5-11, 15-21, 25-31 itd. -> z 5 PALET
+            palletWord = 'PALET';
           }
           
-          palletNotice = `<div class="print-pallet-notice">🚚 W TRASIE ${verbWord} ${palletCount} ${palletWord}</div>`;
-        }  
-    
+          palletNotice = `<div class="print-pallet-notice">🚚 TRASA SKŁADA SIĘ Z ${palletCount} ${palletWord}</div>`;
+        }
+ 
         const replacements = routeChanges.filter(c => c.type !== 'addition');
         const additions = routeChanges.filter(c => c.type === 'addition');
         
@@ -867,6 +907,7 @@ document.addEventListener("DOMContentLoaded", () => {
     altMatSelectWrapper.reset('— wybierz zamiennik —');
     additionMatSelectWrapper.reset('— wybierz matę —');
     updateFormState(); 
+    updatePalletDisplay();
   });
   
   baseMatSelectWrapper.addEventListener("change", () => { 
@@ -995,6 +1036,56 @@ document.addEventListener("DOMContentLoaded", () => {
   
   // ==================== LISTA MAT LOGO (SUPABASE) ====================
   const matsSearch = document.getElementById('matsSearch');
+
+  // 🔥 DODAJ CAŁĄ TĘ FUNKCJĘ:
+  function formatLocation(location) {
+    if (!location) return '';
+    
+    // Specjalne lokacje (bez numerów regałów)
+    const specialLocations = ['PALETA', 'REGAŁ', 'MAGAZYN', 'KASA', 'SPEC', 'NIEZNANE', 'POD-MAŁYMI-ŻABKAMI', 'BIURO', 'NOWY'];
+    if (specialLocations.some(special => location.toUpperCase().includes(special))) {
+      return `📦 ${location}`;
+    }
+    
+    // Sprawdź czy to format REGAŁ-RZĄD-RURY (np. "2-1-7,,12" lub "A-1")
+    const parts = location.split('-');
+    
+    if (parts.length >= 3) {
+      // Format: REGAŁ-RZĄD-RURY
+      const shelf = parts[0];
+      const row = parts[1];
+      const pipes = parts.slice(2).join('-'); // reszta to rury
+      
+      // Parsuj rury
+      let pipeText = '';
+      if (pipes.includes(',,')) {
+        // Format zakresu: "7,,12" → "7-12"
+        const rangeParts = pipes.split(',,').filter(p => p);
+        if (rangeParts.length === 2) {
+          pipeText = `${rangeParts[0]}-${rangeParts[1]}`;
+        } else if (rangeParts.length === 1) {
+          pipeText = rangeParts[0];
+        } else {
+          pipeText = pipes.replace(/,,/g, '-');
+        }
+      } else if (pipes.includes(',')) {
+        // Format listy: "3,4,5" → "3, 4, 5"
+        pipeText = pipes.replace(/,/g, ', ');
+      } else {
+        pipeText = pipes;
+      }
+      
+      return `📍 Regał ${shelf} → Rząd ${row} → Rura ${pipeText}`;
+      
+    } else if (parts.length === 2) {
+      // Format: REGAŁ-RZĄD (np. "A-1")
+      return `📍 Regał ${parts[0]} / Rząd ${parts[1]}`;
+    }
+    
+    // Fallback - zwróć oryginalną lokację
+    return `📍 ${location}`;
+  }
+
   const matsList = document.getElementById('matsList');
   const matsCount = document.getElementById('matsCount');
   const matsFiltered = document.getElementById('matsFiltered');
@@ -1028,6 +1119,56 @@ document.addEventListener("DOMContentLoaded", () => {
       return [];
     }
   }
+
+  // 🆕 FUNKCJA FORMATUJĄCA LOKACJĘ
+  function formatLocation(location) {
+    if (!location) return '';
+    
+    // Specjalne lokacje (bez numerów regałów)
+    const specialLocations = ['PALETA', 'REGAŁ', 'MAGAZYN', 'KASA', 'SPEC', 'NIEZNANE', 'POD-MAŁYMI-ŻABKAMI', 'BIURO', 'NOWY'];
+    if (specialLocations.some(special => location.toUpperCase().includes(special))) {
+      return `📦 ${location}`;
+    }
+    
+    // Sprawdź czy to format REGAŁ-RZĄD-RURY (np. "2-1-7,,12" lub "A-1")
+    const parts = location.split('-');
+    
+    if (parts.length >= 3) {
+      // Format: REGAŁ-RZĄD-RURY
+      const shelf = parts[0];
+      const row = parts[1];
+      const pipes = parts.slice(2).join('-'); // reszta to rury
+      
+      // Parsuj rury
+      let pipeText = '';
+      if (pipes.includes(',,')) {
+        // Format zakresu: "7,,12" → "7-12"
+        const rangeParts = pipes.split(',,').filter(p => p);
+        if (rangeParts.length === 2) {
+          pipeText = `${rangeParts[0]}-${rangeParts[1]}`;
+        } else if (rangeParts.length === 1) {
+          pipeText = rangeParts[0];
+        } else {
+          pipeText = pipes.replace(/,,/g, '-');
+        }
+      } else if (pipes.includes(',')) {
+        // Format listy: "3,4,5" → "3, 4, 5"
+        pipeText = pipes.replace(/,/g, ', ');
+      } else {
+        pipeText = pipes;
+      }
+      
+      return `📍 Regał ${shelf} → Rząd ${row} → Rura ${pipeText}`;
+      
+    } else if (parts.length === 2) {
+      // Format: REGAŁ-RZĄD (np. "A-1")
+      return `📍 Regał ${parts[0]} / Rząd ${parts[1]}`;
+    }
+    
+    // Fallback - zwróć oryginalną lokację
+    return `📍 ${location}`;
+  }
+
 
   function renderMats(matsData, filter = '') {
     const filtered = matsData.filter(mat => {
@@ -1065,7 +1206,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <div class="mat-info">
             <div class="mat-name">${mat.name}</div>
             <div class="mat-details">
-              ${mat.location ? `<div class="mat-detail-item">📍 <strong>${mat.location}</strong></div>` : ''}
+              ${mat.location ? `<div class="mat-detail-item"><strong>${formatLocation(mat.location)}</strong></div>` : ''}
               ${mat.size ? `<div class="mat-detail-item">📏 ${mat.size}</div>` : ''}
             </div>
           </div>
@@ -1538,32 +1679,27 @@ document.addEventListener("DOMContentLoaded", () => {
   function updateWashingFormState() {
     const matSelected = !!appState.washingMat;
     
+    // 🔥 Pobierz elementy lokalnie (bezpieczniej)
+    const washingQuantitySelector = document.getElementById('washingQuantitySelector');
+    const washingQty = document.getElementById('washingQty');
+    const addToWashingBtn = document.getElementById('addToWashingBtn');
+    
+    // Sprawdź czy elementy istnieją
+    if (!washingQuantitySelector || !washingQty || !addToWashingBtn) {
+      console.warn('⚠️ Elementy prania nie znalezione');
+      return;
+    }
+    
     if (matSelected) {
-      const availableQty = getAvailableQuantity(appState.washingMat);
+      // ✅ ZAWSZE POKAŻ SELEKTOR ILOŚCI
+      washingQuantitySelector.style.display = 'block';
+      washingQty.max = 100;
+      washingQty.value = Math.min(Number(washingQty.value) || 1, 100);
       
-      washingQuantityInfo.style.display = 'flex';
-      washingAvailableQty.textContent = `${availableQty} szt.`;
-      
-      if (availableQty > 1) {
-        washingQuantitySelector.style.display = 'block';
-        washingQty.max = availableQty;
-        washingQty.value = Math.min(Number(washingQty.value), availableQty);
-      } else if (availableQty === 1) {
-        washingQuantitySelector.style.display = 'none';
-        washingQty.value = 1;
-      } else {
-        washingQuantitySelector.style.display = 'none';
-        washingQty.value = 0;
-      }
-      
-      addToWashingBtn.disabled = availableQty < 1;
-      if (availableQty < 1) {
-        addToWashingBtn.textContent = 'Brak dostępnych mat';
-      } else {
-        addToWashingBtn.textContent = 'Wrzuć do prania';
-      }
+      // ✅ PRZYCISK ZAWSZE AKTYWNY
+      addToWashingBtn.disabled = false;
+      addToWashingBtn.textContent = 'Wrzuć do prania';
     } else {
-      washingQuantityInfo.style.display = 'none';
       washingQuantitySelector.style.display = 'none';
       addToWashingBtn.disabled = true;
       addToWashingBtn.textContent = 'Wrzuć do prania';
@@ -1619,8 +1755,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <div class="washing-item-details">
             ${item.mat_location ? `
               <div class="washing-item-detail">
-                <span>📍</span>
-                <strong>${item.mat_location}</strong>
+                <strong>${formatLocation(item.mat_location)}</strong>
               </div>
             ` : ''}
             ${item.mat_size ? `
@@ -2115,37 +2250,63 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const qtyToWash = Number(washingQty.value);
-    const availableQty = getAvailableQuantity(appState.washingMat);
 
-    if (qtyToWash > availableQty) {
-      showToast(`Maksymalnie ${availableQty} szt. dostępnych`, "error");
+    if (qtyToWash < 1 || qtyToWash > 100) {
+      showToast("Ilość musi być od 1 do 100!", "error");
       return;
     }
-
-    if (qtyToWash < 1) {
-      showToast("Ilość musi być większa niż 0!", "error");
-      return;
-    }
-
-    const matToAdd = {
-      mat_name: matDetails.name,
-      mat_location: matDetails.location,
-      mat_size: matDetails.size,
-      quantity: qtyToWash,
-      shift: currentShift
-    };
 
     try {
       addToWashingBtn.disabled = true;
       addToWashingBtn.textContent = 'Dodawanie...';
 
-      const { error: insertError } = await window.supabase
+      // 🔥 NOWE: Sprawdź czy mata była dodana w ciągu ostatnich 5 minut
+      const fiveMinutesAgo = new Date();
+      fiveMinutesAgo.setMinutes(fiveMinutesAgo.getMinutes() - 5);
+      
+      const { data: recentMats, error: fetchError } = await window.supabase
         .from('washing_queue')
-        .insert([matToAdd]);
+        .select('*')
+        .eq('mat_name', matDetails.name)
+        .eq('shift', currentShift)
+        .gte('started_at', fiveMinutesAgo.toISOString())
+        .order('started_at', { ascending: false })
+        .limit(1);
+      
+      if (fetchError) throw fetchError;
 
-      if (insertError) throw insertError;
+      // 🔥 Jeśli znaleziono matę w ciągu 5 min - ZWIĘKSZ ILOŚĆ
+      if (recentMats && recentMats.length > 0) {
+        const existingMat = recentMats[0];
+        const newQuantity = existingMat.quantity + qtyToWash;
+        
+        const { error: updateError } = await window.supabase
+          .from('washing_queue')
+          .update({ quantity: newQuantity })
+          .eq('id', existingMat.id);
+        
+        if (updateError) throw updateError;
+        
+        showToast(`✅ Zwiększono ilość! Razem: ${newQuantity} × ${matDetails.name}`);
+        
+      } else {
+        // 🔥 Jeśli NIE znaleziono - DODAJ NOWY WPIS
+        const matToAdd = {
+          mat_name: matDetails.name,
+          mat_location: matDetails.location,
+          mat_size: matDetails.size,
+          quantity: qtyToWash,
+          shift: currentShift
+        };
+        
+        const { error: insertError } = await window.supabase
+          .from('washing_queue')
+          .insert([matToAdd]);
 
-      showToast(`✅ Dodano ${qtyToWash} × ${matToAdd.mat_name} do prania!`);
+        if (insertError) throw insertError;
+
+        showToast(`✅ Dodano ${qtyToWash} × ${matDetails.name} do prania!`);
+      }
       
       washingMatSelectWrapper.reset('— wybierz matę logo —');
       washingQty.value = 1;
@@ -2176,19 +2337,26 @@ document.addEventListener("DOMContentLoaded", () => {
       const { data, error } = await window.supabase
         .from('washing_queue')
         .select('*')
-        .eq('id', washingId)
-        .single();
+        .eq('id', washingId);  // 🔥 USUNIĘTO .single()
       
       if (error) throw error;
       
+      // 🔥 NOWE: Sprawdź czy znaleziono dane
+      if (!data || data.length === 0) {
+        showToast('Nie znaleziono maty w praniu', 'error');
+        return;
+      }
+      
+      const item = data[0];  // 🔥 Weź pierwszy element z tablicy
+      
       if (action === 'edit-washing') {
-        openEditWashingModal(data);
+        openEditWashingModal(item);  // 🔥 Użyj 'item' zamiast 'data'
       } else if (action === 'delete-washing') {
-        openDeleteWashingModal(data);
+        openDeleteWashingModal(item);  // 🔥 Użyj 'item'
       }
     } catch (error) {
       console.error('Błąd pobierania danych prania:', error);
-      showToast('Błąd pobierania danych.', 'error');
+      showToast('Błąd pobierania danych: ' + error.message, 'error');
     }
   });
 
@@ -2196,17 +2364,9 @@ document.addEventListener("DOMContentLoaded", () => {
     editingWashingItem = item;
     editWashingMatName.textContent = item.mat_name;
     
-    const inWashingWithoutThis = allWashingItems
-      .filter(i => i.mat_name === item.mat_name && i.id !== item.id)
-      .reduce((sum, i) => sum + (i.quantity || 0), 0);
-    const totalQty = getTotalQuantity(item.mat_name);
-    const availableQty = totalQty - inWashingWithoutThis;
-    
-    editWashingCurrentQty.textContent = `Dostępne: ${availableQty} szt.`;
-    
     editWashingQtyInput.value = item.quantity;
     editWashingQtyInput.min = 1;
-    editWashingQtyInput.max = availableQty;
+    editWashingQtyInput.max = 100;
     
     openModal(editWashingModal);
   }
@@ -2232,17 +2392,11 @@ document.addEventListener("DOMContentLoaded", () => {
     
     const newQty = Number(editWashingQtyInput.value);
     
-    if (newQty < 1) {
-      showToast('Ilość musi być większa niż 0!', 'error');
+    if (newQty < 1 || newQty > 100) {
+      showToast('Ilość musi być od 1 do 100!', 'error');
       return;
     }
-    
-    const max = Number(editWashingQtyInput.max);
-    if (newQty > max) {
-      showToast(`Maksymalnie ${max} szt. dostępnych`, 'error');
-      return;
-    }
-    
+
     try {
       const { error: updateError } = await window.supabase
         .from('washing_queue')
@@ -2666,164 +2820,73 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ==================== SYSTEM PALET W TRASACH ====================
 
-  let palletRoutes = JSON.parse(localStorage.getItem('palletRoutes') || '[]');
+  let palletRoutes = JSON.parse(localStorage.getItem('palletRoutes') || '{}'); // Zmienione na obiekt!
 
-  const palletRouteSelectWrapper = document.getElementById('palletRouteSelectWrapper');
-  const addPalletRouteBtn = document.getElementById('addPalletRouteBtn');
-  const palletsList = document.getElementById('palletsList');
+  function updatePalletDisplay() {
+    const palletCountSection = document.getElementById('palletCountSection'); // ← pobiera lokalnie
+    const palletCountValue = document.getElementById('palletCountValue'); // ← pobiera lokalnie
+  }
+
+  function initPalletSystem() {
+    const palletCountDec = document.getElementById('palletCountDec'); // ← pobiera lokalnie
+    const palletCountInc = document.getElementById('palletCountInc'); // ← pobiera lokalnie
+  }
 
   function savePalletRoutes() {
     localStorage.setItem('palletRoutes', JSON.stringify(palletRoutes));
   }
 
-  function renderPalletsList() {
-    if (palletRoutes.length === 0) {
-      palletsList.innerHTML = `
-        <div class="pallets-empty">
-          <div class="pallets-empty-icon">📦</div>
-          <div class="pallets-empty-text">
-            Brak tras z paletami.<br>
-            Wybierz trasę z listy i dodaj ją przyciskiem po prawej.
-          </div>
-        </div>
-      `;
+  function getPalletsForRoute(route) {
+    return palletRoutes[route] || 0;
+  }
+
+  function updatePalletDisplay() {
+    if (!palletCountSection) return; // 🔥 ZABEZPIECZENIE
+    
+    if (!appState.route) {
+      palletCountSection.style.display = 'none';
       return;
     }
-
-    const sorted = [...palletRoutes].sort((a, b) => {
-      const numA = parseInt(a.route);
-      const numB = parseInt(b.route);
-      return numA - numB;
-    });
-
-    palletsList.innerHTML = sorted.map((item) => {
-      const originalIndex = palletRoutes.findIndex(r => r.route === item.route);
-      return `
-        <div class="pallet-item">
-          <div class="pallet-route-badge">Trasa ${item.route}</div>
-          <div class="pallet-quantity-zone">
-            <div class="pallet-quantity-display">
-              <span class="pallet-quantity-label">Liczba palet</span>
-              <div class="pallet-quantity-number">${item.pallets}</div>
-            </div>
-          </div>
-          <div class="pallet-controls">
-            <button class="pallet-btn pallet-btn-minus" data-action="decrease" data-index="${originalIndex}" aria-label="Zmniejsz">−</button>
-            <button class="pallet-btn pallet-btn-plus" data-action="increase" data-index="${originalIndex}" aria-label="Zwiększ">+</button>
-            <button class="pallet-btn pallet-btn-delete" data-action="delete" data-index="${originalIndex}" aria-label="Usuń trasę">🗑️</button>
-          </div>
-        </div>
-      `;
-    }).join('');
+    
+    const count = getPalletsForRoute(appState.route);
+    if (palletCountValue) palletCountValue.textContent = count;
+    palletCountSection.style.display = 'block';
   }
 
-  function getPalletsForRoute(routeNumber) {
-    const found = palletRoutes.find(r => r.route === routeNumber);
-    return found ? found.pallets : null;
-  }
-
-  function updatePalletAddButton() {
-    const routeSelected = !!appState.palletRoute;
-    const routeExists = palletRoutes.some(r => r.route === appState.palletRoute);
-    addPalletRouteBtn.disabled = !routeSelected || routeExists;
+  function changePalletCount(delta) {
+    if (!appState.route) return;
+    
+    const currentCount = getPalletsForRoute(appState.route);
+    const newCount = Math.max(0, Math.min(99, currentCount + delta));
+    
+    if (newCount === 0) {
+      delete palletRoutes[appState.route];
+    } else {
+      palletRoutes[appState.route] = newCount;
+    }
+    
+    savePalletRoutes();
+    updatePalletDisplay();
+    
+    // Toast feedback
+    if (newCount === 0) {
+      showToast(`📦 Usunięto palety z trasy ${appState.route}`, 'error');
+    } else {
+      const word = newCount === 1 ? 'paleta' : (newCount < 5 ? 'palety' : 'palet');
+      showToast(`📦 Trasa ${appState.route}: ${newCount} ${word}`);
+    }
   }
 
   function initPalletSystem() {
-    console.log('🔧 Próba inicjalizacji systemu palet...');
-    console.log('📦 routesByDay:', routesByDay);
-    console.log('📦 palletRouteSelectWrapper:', palletRouteSelectWrapper);
-    console.log('📦 addPalletRouteBtn:', addPalletRouteBtn);
-    console.log('📦 palletsList:', palletsList);
-    
-    if (!palletRouteSelectWrapper || !addPalletRouteBtn || !palletsList) {
-      console.error('❌ Elementy systemu palet nie znalezione!');
+    if (!palletCountDec || !palletCountInc) {
+      console.warn('⚠️ Elementy systemu palet nie znalezione');
       return;
     }
     
-    // Wszystkie trasy z routesByDay jako płaska lista
-    const allRoutes = Object.values(routesByDay)
-      .flat()
-      .filter((v, i, a) => a.indexOf(v) === i)
-      .map(String) // ⬅️ WAŻNE: konwertuj na stringi
-      .sort((a, b) => Number(a) - Number(b));
+    palletCountDec.addEventListener('click', () => changePalletCount(-1));
+    palletCountInc.addEventListener('click', () => changePalletCount(1));
     
-    console.log('✅ Trasy do wyboru:', allRoutes);
-    console.log('✅ Liczba tras:', allRoutes.length);
-    
-    if (allRoutes.length === 0) {
-      console.error('❌ Brak tras do wyświetlenia!');
-      return;
-    }
-    
-    // ⬅️ WAŻNE: Twórz select DOPIERO gdy mamy trasy
-    createCustomSelect(palletRouteSelectWrapper, allRoutes, "— wybierz trasę —", "palletRoute");
-    
-    console.log('✅ Custom select utworzony');
-    
-    palletRouteSelectWrapper.addEventListener('change', () => {
-      console.log('📦 Wybrano trasę:', appState.palletRoute);
-      updatePalletAddButton();
-    });
-
-    addPalletRouteBtn.addEventListener('click', () => {
-      const route = appState.palletRoute;
-      console.log('📦 Kliknięto przycisk dodaj, trasa:', route);
-      
-      if (!route) {
-        showToast("Wybierz trasę!", "error");
-        return;
-      }
-      
-      if (palletRoutes.some(r => r.route === route)) {
-        showToast("Ta trasa jest już na liście!", "error");
-        return;
-      }
-      
-      palletRoutes.push({ route, pallets: 1 });
-      savePalletRoutes();
-      renderPalletsList();
-      palletRouteSelectWrapper.reset('— wybierz trasę —');
-      updatePalletAddButton();
-      showToast(`✅ Dodano trasę ${route}`);
-      
-      setTimeout(() => {
-        palletsList.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      }, 100);
-    });
-
-    palletsList.addEventListener('click', (e) => {
-      const btn = e.target.closest('[data-action]');
-      if (!btn) return;
-      
-      const action = btn.dataset.action;
-      const index = Number(btn.dataset.index);
-      const item = palletRoutes[index];
-      
-      if (action === 'increase') {
-        item.pallets = Math.min(99, item.pallets + 1);
-        savePalletRoutes();
-        renderPalletsList();
-        showToast(`📦 Trasa ${item.route}: ${item.pallets} ${item.pallets === 1 ? 'paleta' : item.pallets < 5 ? 'palety' : 'palet'}`);
-      } else if (action === 'decrease') {
-        if (item.pallets > 1) {
-          item.pallets = Math.max(1, item.pallets - 1);
-          savePalletRoutes();
-          renderPalletsList();
-          showToast(`📦 Trasa ${item.route}: ${item.pallets} ${item.pallets === 1 ? 'paleta' : item.pallets < 5 ? 'palety' : 'palet'}`);
-        }
-      } else if (action === 'delete') {
-        const routeNum = item.route;
-        palletRoutes.splice(index, 1);
-        savePalletRoutes();
-        renderPalletsList();
-        showToast(`🗑️ Usunięto trasę ${routeNum}`, "error");
-      }
-    });
-
-    renderPalletsList();
-    updatePalletAddButton();
-    
-    console.log('✅ System palet w pełni zainicjalizowany!');
+    console.log('✅ System palet zainicjalizowany (inline)');
   }
 
 // ==================== INICJALIZACJA ====================
