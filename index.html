@@ -96,13 +96,13 @@
             </svg>
           </div>
           <div class="home-tile-content">
-            <h2>Archiwum Prań</h2>
-            <p>Historia i raporty zakończonych prań</p>
+            <h2>Archiwum</h2>
+            <p>Historia i raporty</p>
           </div>
         </button>
-      </div>  <!-- 🔥 ZAMYKA home-grid -->
-    </main>  <!-- 🔥 ZAMYKA home-main -->
-  </div>  <!-- 🔥 ZAMYKA homeView -->
+      </div>
+    </main>
+  </div>
 
     <!-- ==================== WIDOK: PANEL TRAS ==================== -->
     <div id="panelView" class="view">
@@ -464,113 +464,210 @@
       </main>
     </div>
 
-    <!-- ==================== WIDOK: ARCHIWUM PRAŃ ==================== -->
+    <!-- ==================== ARCHIWUM - PRZEDSIONEK ==================== -->
     <div id="archiveView" class="view">
-      <main class="app-main">
+      <div class="app-main">
+        <div class="home-welcome">Archiwum</div>
+        <div class="home-subtitle">Wybierz typ archiwum do przeglądania</div>
         
-        <!-- Filtry i wyszukiwarka -->
-        <section class="card">
-          <div class="card-header">
-            <h2>🔍 Wyszukiwanie w archiwum</h2>
-          </div>
-          <div class="card-body">
-            <!-- 🔥 ZMIENIONY WRAPPER - dodano przycisk przypomnienia -->
-            <div class="archive-controls" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
-              <div class="search-box" style="flex: 1; min-width: 250px; margin: 0;">
-                <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <circle cx="11" cy="11" r="8"></circle>
-                  <path d="m21 21-4.35-4.35"></path>
-                </svg>
-                <input 
-                  type="search" 
-                  id="archiveSearch" 
-                  class="search-input" 
-                  placeholder="Szukaj po nazwie, lokalizacji, rozmiarze, zmianie..."
-                >
-              </div>
-              <!-- 🔥 NOWY PRZYCISK -->
-              <button id="setReminderBtn" class="reminder-btn">
-                🔔 Ustaw przypomnienie
-              </button>
+        <div class="home-grid" style="max-width: 900px;">
+          <!-- Kafelek 1: Archiwum Zamienników -->
+          <div class="home-tile" data-navigate="archive-replacements">
+            <div class="home-tile-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="12" y1="18" x2="12" y2="12"/>
+                <line x1="9" y1="15" x2="15" y2="15"/>
+              </svg>
             </div>
-            
-            <!-- Filtry dat -->
-            <div class="archive-date-filters">
-              <div class="date-filter-group">
-                <label for="archiveDateFrom">Od daty:</label>
-                <input type="date" id="archiveDateFrom" class="date-input">
-              </div>
-              <div class="date-filter-group">
-                <label for="archiveDateTo">Do daty:</label>
-                <input type="date" id="archiveDateTo" class="date-input">
-              </div>
-              <button id="archiveDateReset" class="btn-secondary">Wyczyść filtry</button>
+            <div class="home-tile-content">
+              <h2>Archiwum Zamienników</h2>
+              <p>Historia wydrukowanych tras i zmian mat</p>
             </div>
           </div>
-        </section>
 
-        <!-- Statystyki archiwum -->
-        <div class="stats-row">
-          <div class="stat-card">
-            <div class="stat-value" id="archiveTotalEntries">0</div>
-            <div class="stat-label">Wpisów w archiwum</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value" id="archiveTotalMats">0</div>
-            <div class="stat-label">Suma wypranych mat</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value" id="archiveDateRange">-</div>
-            <div class="stat-label">Zakres dat</div>
+          <!-- Kafelek 2: Archiwum Prań -->
+          <div class="home-tile" data-navigate="archive-washing">
+            <div class="home-tile-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 6v6l4 2"/>
+              </svg>
+            </div>
+            <div class="home-tile-content">
+              <h2>Archiwum Prań Mat Logo</h2>
+              <p>Historia wypranych mat logo</p>
+            </div>
           </div>
         </div>
+      </div>
+    </div>
 
-        <!-- Akcje eksportu -->
-        <section class="card">
+    <!-- ==================== ARCHIWUM ZAMIENNIKÓW ==================== -->
+    <div id="archiveReplacementsView" class="view">
+      <div class="app-main">
+        <div class="card">
           <div class="card-header">
-            <h2>📊 Eksport danych</h2>
+            <h2>🗂️ Archiwum Zamienników</h2>
+            <div class="archive-controls">
+              <button class="btn-secondary reminder-btn" id="setReplacementsReminderBtn">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;margin-right:6px;">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                </svg>
+                Ustaw przypomnienie
+              </button>
+            </div>
           </div>
-          <div class="card-body">
+
+          <!-- Statystyki -->
+          <div class="stats-row" style="margin-bottom: 24px;">
+            <div class="stat-card">
+              <div class="stat-value" id="archiveReplacementsCount">0</div>
+              <div class="stat-label">Tras w archiwum</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="archiveReplacementsPallets">0</div>
+              <div class="stat-label">Suma palet</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="archiveReplacementsChanges">0</div>
+              <div class="stat-label">Wszystkich zmian</div>
+            </div>
+          </div>
+
+          <!-- Wyszukiwarka -->
+          <div class="search-box">
+            <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <path d="m21 21-4.35-4.35"></path>
+            </svg>
+            <input type="search" class="search-input" id="archiveReplacementsSearch" placeholder="Szukaj po trasie lub macie...">
+          </div>
+
+          <!-- 🔥 POPRAWKA: Wrapper z licznikiem i przyciskami -->
+          <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 20px;">
+            <div class="mats-stats" style="margin: 0;">
+              <span id="archiveReplacementsTotal">Ładowanie...</span>
+              <span id="archiveReplacementsFiltered" style="display: none;"></span>
+            </div>
+            
+            <!-- 🔥 PRZYCISKI EKSPORTU -->
             <div class="export-buttons">
-              <button id="exportArchiveExcel" class="btn-primary">
+              <button class="btn-export-excel" id="exportReplacementsExcel">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                  <polyline points="7 10 12 15 17 10"></polyline>
-                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="16" y1="13" x2="8" y2="13"/>
+                  <line x1="16" y1="17" x2="8" y2="17"/>
+                  <polyline points="10 9 9 9 8 9"/>
                 </svg>
                 Eksportuj do Excel
               </button>
-              <button id="printArchive" class="btn-secondary">
+              <button class="btn-print-mats" id="printReplacementsArchive">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="6 9 6 2 18 2 18 9"></polyline>
-                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-                  <rect x="6" y="14" width="12" height="8"></rect>
+                  <polyline points="6 9 6 2 18 2 18 9"/>
+                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+                  <rect x="6" y="14" width="12" height="8"/>
                 </svg>
                 Drukuj raport
               </button>
             </div>
           </div>
-        </section>
+        </div>
 
-        <!-- Lista archiwalnych wpisów -->
-        <section class="card">
-          <div class="card-header space-between">
-            <h2>📦 Archiwalne wpisy</h2>
-            <div class="header-info">
-              <span id="archiveCount" class="count-badge">Ładowanie...</span>
-              <span id="archiveFiltered" class="count-badge" style="display: none;"></span>
+        <!-- Lista tras -->
+        <div id="archiveReplacementsList"></div>
+      </div>
+    </div>
+
+    <!-- ==================== ARCHIWUM PRAŃ MAT ==================== -->
+    <div id="archiveWashingView" class="view">
+      <div class="app-main">
+        <div class="card">
+          <div class="card-header">
+            <h2>🧼 Archiwum Prań Mat Logo</h2>
+            <div class="archive-controls">
+              <button class="btn-secondary reminder-btn" id="setReminderBtn">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;margin-right:6px;">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                </svg>
+                Ustaw przypomnienie
+              </button>
             </div>
           </div>
-          <div class="card-body" style="padding: 0;">
-            <div id="archiveList" class="archive-list">
-              <div class="empty-state">
-                <div class="empty-state-text">Ładowanie archiwum...</div>
-              </div>
+
+          <div class="stats-row">
+            <div class="stat-card">
+              <div class="stat-value" id="archiveTotalEntries">0</div>
+              <div class="stat-label">Wpisów</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="archiveTotalMats">0</div>
+              <div class="stat-label">Mat wypranych</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="archiveDateRange">-</div>
+              <div class="stat-label">Zakres dat</div>
             </div>
           </div>
-        </section>
 
-      </main>
+          <div class="archive-date-filters">
+            <div class="date-filter-group">
+              <label for="archiveDateFrom">Data od:</label>
+              <input type="date" id="archiveDateFrom" class="date-input">
+            </div>
+            <div class="date-filter-group">
+              <label for="archiveDateTo">Data do:</label>
+              <input type="date" id="archiveDateTo" class="date-input">
+            </div>
+            <button class="btn-secondary" id="archiveDateReset" style="align-self: flex-end; min-height: 44px;">
+              Resetuj filtry
+            </button>
+          </div>
+
+          <div class="search-box">
+            <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <path d="m21 21-4.35-4.35"></path>
+            </svg>
+            <input type="search" class="search-input" id="archiveSearch" placeholder="Szukaj mat w archiwum...">
+          </div>
+
+          <!-- 🔥 POPRAWKA: Wrapper z licznikiem i przyciskami (USUNIĘTY DUPLIKAT) -->
+          <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 20px;">
+            <div class="mats-stats" style="margin: 0;">
+              <span id="archiveCount">0 wpisów</span>
+              <span id="archiveFiltered" style="display: none;"></span>
+            </div>
+            
+            <div class="export-buttons">
+              <button class="btn-export-excel" id="exportArchiveExcel">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="16" y1="13" x2="8" y2="13"/>
+                  <line x1="16" y1="17" x2="8" y2="17"/>
+                  <polyline points="10 9 9 9 8 9"/>
+                </svg>
+                Eksportuj do Excel
+              </button>
+              <button class="btn-print-mats" id="printArchive">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="6 9 6 2 18 2 18 9"/>
+                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+                  <rect x="6" y="14" width="12" height="8"/>
+                </svg>
+                Drukuj archiwum
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div id="archiveList"></div>
+      </div>
     </div>
 
   </div>
