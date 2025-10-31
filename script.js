@@ -4,19 +4,30 @@ document.addEventListener("DOMContentLoaded", () => {
   let allLogoMats = [];
   let allWashingItems = [];
   let allArchiveItems = [];
-  
+  let allReplacementsArchive = [];
   // ==================== ROUTING SYSTEM ====================
   const views = {
     home: document.getElementById('homeView'),
     panel: document.getElementById('panelView'),
     mats: document.getElementById('matsView'),
     washing: document.getElementById('washingView'),
-    archive: document.getElementById('archiveView')
+    archive: document.getElementById('archiveView'), // Przedsionek
+    'archive-replacements': document.getElementById('archiveReplacementsView'), // NOWE
+    'archive-washing': document.getElementById('archiveWashingView') // NOWE (zmienione z archiveView)
   };
   
   const headerTitle = document.getElementById('headerTitle');
   const backBtn = document.getElementById('backBtn');
   let currentView = 'home';
+  const viewParents = {
+    'home': null,
+    'panel': 'home',
+    'mats': 'home',
+    'washing': 'home',
+    'archive': 'home',
+    'archive-replacements': 'archive',
+    'archive-washing': 'archive'
+  };
   
   function navigateTo(viewName) {
     Object.values(views).forEach(v => v?.classList.remove('active'));
@@ -26,7 +37,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (viewName === 'home') {
       headerTitle.textContent = 'Elis ServiceHub';
       backBtn.style.display = 'none';
-      // 🔥 NOWE: Aktualizuj badge przy powrocie do home
       updateArchiveBadge();
     } else if (viewName === 'panel') {
       headerTitle.textContent = 'Panel Tras i Zmian';
@@ -43,7 +53,17 @@ document.addEventListener("DOMContentLoaded", () => {
       backBtn.style.display = 'flex';
       loadWashingData();
     } else if (viewName === 'archive') {
-      headerTitle.textContent = 'Archiwum Prań';
+      // 🔥 NOWE: Przedsionek archiwum
+      headerTitle.textContent = 'Archiwum';
+      backBtn.style.display = 'flex';
+    } else if (viewName === 'archive-replacements') {
+      // 🔥 NOWE: Archiwum zamienników
+      headerTitle.textContent = 'Archiwum Zamienników';
+      backBtn.style.display = 'flex';
+      loadReplacementsArchive();
+    } else if (viewName === 'archive-washing') {
+      // 🔥 ZMIENIONE: Archiwum prań
+      headerTitle.textContent = 'Archiwum Prań Mat';
       backBtn.style.display = 'flex';
       loadArchiveData();
     }
@@ -51,7 +71,10 @@ document.addEventListener("DOMContentLoaded", () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  backBtn.addEventListener('click', () => navigateTo('home'));
+  backBtn.addEventListener('click', () => {
+    const parentView = viewParents[currentView] || 'home';
+    navigateTo(parentView);
+  });
   
   document.querySelectorAll('[data-navigate]').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -790,9 +813,10 @@ document.addEventListener("DOMContentLoaded", () => {
         const route = groupElement.dataset.route;
         const routeChanges = changes.filter(c => c.route === route);
         if (routeChanges.length === 0) return;
+        
         const printDate = new Date().toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' });
         
-        // 🆕 SPRAWDŹ CZY TRASA MA PALETY
+        // Sprawdź czy trasa ma palety
         const palletCount = getPalletsForRoute(route);
         let palletNotice = '';
         if (palletCount) {
@@ -801,21 +825,18 @@ document.addEventListener("DOMContentLoaded", () => {
           const lastTwoDigits = palletCount % 100;
           
           if (palletCount === 1) {
-            palletWord = 'PALETY'; // z 1 PALETY (dopełniacz)
+            palletWord = 'PALETY';
           } else if (lastTwoDigits >= 12 && lastTwoDigits <= 14) {
-            // 12-14, 112-114 itd. -> z 12 PALET
             palletWord = 'PALET';
           } else if (lastDigit >= 2 && lastDigit <= 4) {
-            // 2-4, 22-24, 32-34 itd. -> z 2 PALET, z 3 PALET
             palletWord = 'PALET';
           } else {
-            // 5-11, 15-21, 25-31 itd. -> z 5 PALET
             palletWord = 'PALET';
           }
           
           palletNotice = `<div class="print-pallet-notice">🚚 TRASA SKŁADA SIĘ Z ${palletCount} ${palletWord}</div>`;
         }
- 
+
         const replacements = routeChanges.filter(c => c.type !== 'addition');
         const additions = routeChanges.filter(c => c.type === 'addition');
         
@@ -849,7 +870,27 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         
         printOutput.innerHTML = printHTML;
-        setTimeout(() => { try { window.print(); } catch (error) { console.error("Błąd drukowania:", error); showToast("Błąd podczas otwierania okna drukowania.", "error"); } }, 100);
+        
+        // 🔥 NOWE: Archiwizuj trasę PRZED drukowaniem
+        (async () => {
+          const archived = await archiveRoute(route);
+          
+          if (archived) {
+            // ✅ Trasa zarchiwizowana - drukuj
+            setTimeout(() => { 
+              try { 
+                window.print(); 
+              } catch (error) { 
+                console.error("Błąd drukowania:", error); 
+                showToast("Błąd podczas otwierania okna drukowania.", "error"); 
+              } 
+            }, 100);
+          } else {
+            // ❌ Błąd archiwizacji - NIE drukuj
+            showToast("Nie można wydrukować - błąd archiwizacji", "error");
+          }
+        })();
+        
         break;
       case "copy-group":
         const routeToCopy = groupElement.dataset.route;
@@ -1036,56 +1077,6 @@ document.addEventListener("DOMContentLoaded", () => {
   
   // ==================== LISTA MAT LOGO (SUPABASE) ====================
   const matsSearch = document.getElementById('matsSearch');
-
-  // 🔥 DODAJ CAŁĄ TĘ FUNKCJĘ:
-  function formatLocation(location) {
-    if (!location) return '';
-    
-    // Specjalne lokacje (bez numerów regałów)
-    const specialLocations = ['PALETA', 'REGAŁ', 'MAGAZYN', 'KASA', 'SPEC', 'NIEZNANE', 'POD-MAŁYMI-ŻABKAMI', 'BIURO', 'NOWY'];
-    if (specialLocations.some(special => location.toUpperCase().includes(special))) {
-      return `📦 ${location}`;
-    }
-    
-    // Sprawdź czy to format REGAŁ-RZĄD-RURY (np. "2-1-7,,12" lub "A-1")
-    const parts = location.split('-');
-    
-    if (parts.length >= 3) {
-      // Format: REGAŁ-RZĄD-RURY
-      const shelf = parts[0];
-      const row = parts[1];
-      const pipes = parts.slice(2).join('-'); // reszta to rury
-      
-      // Parsuj rury
-      let pipeText = '';
-      if (pipes.includes(',,')) {
-        // Format zakresu: "7,,12" → "7-12"
-        const rangeParts = pipes.split(',,').filter(p => p);
-        if (rangeParts.length === 2) {
-          pipeText = `${rangeParts[0]}-${rangeParts[1]}`;
-        } else if (rangeParts.length === 1) {
-          pipeText = rangeParts[0];
-        } else {
-          pipeText = pipes.replace(/,,/g, '-');
-        }
-      } else if (pipes.includes(',')) {
-        // Format listy: "3,4,5" → "3, 4, 5"
-        pipeText = pipes.replace(/,/g, ', ');
-      } else {
-        pipeText = pipes;
-      }
-      
-      return `📍 Regał ${shelf} → Rząd ${row} → Rura ${pipeText}`;
-      
-    } else if (parts.length === 2) {
-      // Format: REGAŁ-RZĄD (np. "A-1")
-      return `📍 Regał ${parts[0]} / Rząd ${parts[1]}`;
-    }
-    
-    // Fallback - zwróć oryginalną lokację
-    return `📍 ${location}`;
-  }
-
   const matsList = document.getElementById('matsList');
   const matsCount = document.getElementById('matsCount');
   const matsFiltered = document.getElementById('matsFiltered');
@@ -1842,6 +1833,104 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  // 🔥 NOWA FUNKCJA: Sprawdza nadchodzące usunięcia w archiwum ZAMIENNIKÓW
+  async function checkReplacementsUpcomingDeletions() {
+    try {
+      const { data, error } = await window.supabase
+        .from('replacements_archive')
+        .select('*');
+      
+      if (error) throw error;
+      if (!data || data.length === 0) return { total: 0, critical: 0, warning: 0 };
+      
+      const now = new Date();
+      let critical = 0; // <= 3 dni
+      let warning = 0;  // 4-7 dni
+      
+      data.forEach(item => {
+        let deleteDate;
+        if (item.delete_at) {
+          deleteDate = new Date(item.delete_at);
+        } else {
+          const archivedDate = new Date(item.archived_at);
+          deleteDate = new Date(archivedDate);
+          deleteDate.setDate(deleteDate.getDate() + 14);
+        }
+        
+        const diffTime = deleteDate - now;
+        const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (daysLeft <= 3 && daysLeft >= 0) critical++;
+        else if (daysLeft <= 7 && daysLeft > 3) warning++;
+      });
+      
+      return { total: data.length, critical, warning };
+    } catch (error) {
+      console.error('Błąd sprawdzania usunięć zamienników:', error);
+      return { total: 0, critical: 0, warning: 0 };
+    }
+  }
+
+  // 🔥 NOWA FUNKCJA: Ustawia przypomnienie dla archiwum ZAMIENNIKÓW
+  async function scheduleReplacementsReminder() {
+    const hasPermission = await requestNotificationPermission();
+    if (!hasPermission) {
+      showToast('Odmówiono dostępu do powiadomień', 'error');
+      return;
+    }
+    
+    const stats = await checkReplacementsUpcomingDeletions();
+    
+    if (stats.critical === 0 && stats.warning === 0) {
+      showToast('Brak tras do usunięcia w najbliższym czasie', 'info');
+      return;
+    }
+    
+    // Zapisz w localStorage timestamp przypomnienia
+    const reminderTime = new Date();
+    reminderTime.setHours(9, 0, 0, 0); // Jutro o 9:00
+    reminderTime.setDate(reminderTime.getDate() + 1);
+    
+    localStorage.setItem('replacementsReminder', reminderTime.toISOString());
+    localStorage.setItem('replacementsReminderStats', JSON.stringify(stats));
+    
+    showToast(`✅ Przypomnienie ustawione na jutro o 9:00`, 'success');
+    
+    // Jeśli są krytyczne, pokaż natychmiastowe powiadomienie
+    if (stats.critical > 0) {
+      new Notification('⚠️ Elis - Pilne!', {
+        body: `${stats.critical} ${stats.critical === 1 ? 'trasa zostanie usunięta' : 'tras zostanie usuniętych'} w ciągu 3 dni!`,
+        icon: 'icons/icon-192.png',
+        badge: 'icons/icon-192.png',
+        requireInteraction: true
+      });
+    }
+  }
+
+  // 🔥 NOWA FUNKCJA: Sprawdza przypomnienia dla zamienników
+  function checkReplacementsScheduledReminder() {
+    const reminderTime = localStorage.getItem('replacementsReminder');
+    if (!reminderTime) return;
+    
+    const now = new Date();
+    const scheduled = new Date(reminderTime);
+    
+    if (now >= scheduled) {
+      const stats = JSON.parse(localStorage.getItem('replacementsReminderStats') || '{}');
+      
+      if (Notification.permission === 'granted') {
+        new Notification('🔔 Elis - Przypomnienie', {
+          body: `Masz ${stats.critical || 0} krytycznych i ${stats.warning || 0} ostrzeżeń w archiwum zamienników`,
+          icon: 'icons/icon-192.png',
+          badge: 'icons/icon-192.png'
+        });
+      }
+      
+      localStorage.removeItem('replacementsReminder');
+      localStorage.removeItem('replacementsReminderStats');
+    }
+  }
+  
   // 🔥 NOWA FUNKCJA: Aktualizuje badge na kafelku archiwum
   async function updateArchiveBadge() {
     const archiveNavBtn = document.querySelector('[data-navigate="archive"]');
@@ -1874,6 +1963,34 @@ document.addEventListener("DOMContentLoaded", () => {
       console.log('✅ Badge dodany!', badge); // DEBUG
     } else {
       console.log('ℹ️ Brak ostrzeżeń - badge nie dodany');
+    }
+  }
+
+  // 🔥 NOWA FUNKCJA: Aktualizuje badge na kafelku archiwum ZAMIENNIKÓW
+  async function updateReplacementsArchiveBadge() {
+    const archiveReplacementsNavBtn = document.querySelector('[data-navigate="archive-replacements"]');
+    if (!archiveReplacementsNavBtn) return;
+    
+    const stats = await checkReplacementsUpcomingDeletions();
+    
+    // Usuń stary badge jeśli istnieje
+    const oldBadge = archiveReplacementsNavBtn.querySelector('.archive-warning-badge');
+    if (oldBadge) oldBadge.remove();
+    
+    // Dodaj nowy badge jeśli są ostrzeżenia
+    if (stats.critical > 0 || stats.warning > 0) {
+      const badge = document.createElement('div');
+      badge.className = 'archive-warning-badge';
+      
+      if (stats.critical > 0) {
+        badge.classList.add('critical');
+        badge.innerHTML = `⚠️ ${stats.critical} ${stats.critical === 1 ? 'trasa' : 'tras'} do usunięcia!`;
+      } else {
+        badge.classList.add('warning');
+        badge.innerHTML = `⏰ ${stats.warning} ${stats.warning === 1 ? 'trasa' : 'tras'} wkrótce usuniętych`;
+      }
+      
+      archiveReplacementsNavBtn.appendChild(badge);
     }
   }
 
@@ -1973,16 +2090,19 @@ document.addEventListener("DOMContentLoaded", () => {
       const { data, error } = await query;
       if (error) throw error;
       
-      // 🔥 POPRAWKA: Użyj danych z bazy JEŚLI ISTNIEJĄ, oblicz tylko gdy brak
-      const enrichedData = (data || []).map(item => {
+      // 🔥 POPRAWKA: Sprawdź czy są dane
+      if (!data || data.length === 0) {
+        console.log('ℹ️ Archiwum puste lub brak danych w wybranym zakresie');
+        return [];
+      }
+      
+      const enrichedData = data.map(item => {
         const archivedDate = new Date(item.archived_at);
         
-        // ✅ JEŚLI delete_at jest w bazie - użyj go!
         let deleteDate;
         if (item.delete_at) {
           deleteDate = new Date(item.delete_at);
         } else {
-          // Oblicz tylko gdy nie ma w bazie
           deleteDate = new Date(archivedDate);
           deleteDate.setDate(deleteDate.getDate() + 14);
         }
@@ -1991,7 +2111,6 @@ document.addEventListener("DOMContentLoaded", () => {
         const diffTime = deleteDate - now;
         const daysLeft = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
         
-        // Oblicz czas prania w godzinach
         const startedDate = new Date(item.started_at);
         const durationMs = archivedDate - startedDate;
         const durationHours = Math.round(durationMs / (1000 * 60 * 60));
@@ -2004,10 +2123,21 @@ document.addEventListener("DOMContentLoaded", () => {
         };
       });
       
+      console.log(`✅ Załadowano ${enrichedData.length} wpisów z archiwum`); // 🔥 NOWE
       return enrichedData;
+      
     } catch (error) {
-      console.error('Błąd pobierania archiwum:', error);
-      showToast('Błąd pobierania archiwum: ' + error.message, 'error');
+      console.error('❌ Błąd pobierania archiwum:', error);
+      
+      // 🔥 POPRAWKA: Bardziej szczegółowy komunikat
+      if (error.message.includes('permission')) {
+        showToast('Brak uprawnień do archiwum. Skontaktuj się z administratorem.', 'error');
+      } else if (error.message.includes('network')) {
+        showToast('Błąd połączenia z bazą danych. Sprawdź internet.', 'error');
+      } else {
+        showToast('Błąd pobierania archiwum: ' + error.message, 'error');
+      }
+      
       return [];
     }
   }
@@ -2235,7 +2365,10 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   addToWashingBtn.addEventListener("click", async () => {
-    if (!appState.washingMat) return;
+    if (!appState.washingMat) {
+      showToast("Wybierz matę!", "error");
+      return;
+    }
 
     const currentShift = getCurrentShift();
     if (!currentShift) {
@@ -2245,7 +2378,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const matDetails = allLogoMats.find(m => m.name === appState.washingMat);
     if (!matDetails) {
-      showToast("Nie znaleziono szczegółów maty. Spróbuj odświeżyć.", "error");
+      showToast("Nie znaleziono szczegółów maty. Spróbuj odświeżyć listę mat.", "error");
       return;
     }
 
@@ -2253,6 +2386,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (qtyToWash < 1 || qtyToWash > 100) {
       showToast("Ilość musi być od 1 do 100!", "error");
+      return;
+    }
+    
+    // 🔥 NOWE: Sprawdź czy washingQty istnieje
+    if (!washingQty || isNaN(qtyToWash)) {
+      showToast("Błąd odczytu ilości. Odśwież stronę.", "error");
       return;
     }
 
@@ -2495,6 +2634,37 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  async function cleanOldReplacementsArchive() {
+    try {
+      const now = new Date();
+      
+      const { data: oldItems, error: fetchError } = await window.supabase
+        .from('replacements_archive')
+        .select('id, delete_at')
+        .lt('delete_at', now.toISOString());
+      
+      if (fetchError) throw fetchError;
+      if (!oldItems || oldItems.length === 0) {
+        console.log('ℹ️ Brak starych wpisów do usunięcia z archiwum zamienników');
+        return;
+      }
+      
+      const idsToDelete = oldItems.map(item => item.id);
+      
+      const { error: deleteError } = await window.supabase
+        .from('replacements_archive')
+        .delete()
+        .in('id', idsToDelete);
+      
+      if (deleteError) throw deleteError;
+      
+      console.log(`✅ Usunięto ${oldItems.length} starych wpisów z archiwum zamienników`);
+      
+    } catch (error) {
+      console.error('❌ Błąd czyszczenia archiwum zamienników:', error);
+    }
+  }
+
   // ==================== DRUKOWANIE I EXPORT ARCHIWUM ====================
 
   const printArchiveBtn = document.getElementById('printArchive');
@@ -2537,8 +2707,8 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="print-header">
           <img src="icons/icon-192.png" alt="Elis Logo">
           <div class="title-block">
-            <h1>Archiwum Prań Mat</h1>
-            <p>Data wydruku: ${printDate}</p>
+            <h1>Raport Archiwum Zamienników</h1>
+            <p>Wygenerowano: ${printDate}</p>
           </div>
         </div>
         
@@ -2889,6 +3059,929 @@ document.addEventListener("DOMContentLoaded", () => {
     console.log('✅ System palet zainicjalizowany (inline)');
   }
 
+  /**
+   * Zapisuje trasę do archiwum i usuwa z localStorage
+   */
+  async function archiveRoute(route) {
+    try {
+      // Pobierz zmiany dla tej trasy
+      const routeChanges = changes.filter(c => c.route === route);
+      
+      if (routeChanges.length === 0) {
+        showToast('Brak zmian do zarchiwizowania', 'error');
+        return false;
+      }
+      
+      // Pobierz ilość palet
+      const palletCount = getPalletsForRoute(route) || 0;
+      
+      // Przygotuj dane do archiwum
+      const archiveData = {
+        route: route,
+        changes: routeChanges, // JSONB w Supabase
+        pallet_count: palletCount
+        // archived_at i delete_at ustawia trigger w bazie
+      };
+      
+              // 🔥 WYZERUJ PALETY DLA TEJ TRASY
+      if (palletRoutes[route]) {
+        delete palletRoutes[route];
+        savePalletRoutes();
+        console.log(`✅ Wyzerowano palety dla trasy ${route}`);
+        
+        // 🔥 NOWE: Odśwież licznik palet jeśli to aktualnie wybrana trasa
+        if (appState.route === route) {
+          updatePalletDisplay();
+        }
+      }
+
+      console.log('📦 Archiwizuję trasę:', archiveData);
+      
+      // Zapisz do Supabase
+      const { data, error } = await window.supabase
+        .from('replacements_archive')
+        .insert([archiveData])
+        .select();
+      
+      if (error) throw error;
+      
+      console.log('✅ Trasa zarchiwizowana:', data);
+      
+      // 🔥 WYZERUJ PALETY DLA TEJ TRASY
+      if (palletRoutes[route]) {
+        delete palletRoutes[route];
+        savePalletRoutes();
+        console.log(`✅ Wyzerowano palety dla trasy ${route}`);
+      }
+      
+      // Usuń trasę z localStorage (changes)
+      removeRouteGroup(route);
+      
+      // Odśwież widok
+      renderChanges();
+      
+      showToast(`📁 Trasa ${route} zarchiwizowana!`, 'success');
+      return true;
+      
+    } catch (error) {
+      console.error('❌ Błąd archiwizacji trasy:', error);
+      showToast('Błąd archiwizacji: ' + error.message, 'error');
+      return false;
+    }
+  }
+
+  /**
+   * Pobiera archiwum zamienników z Supabase
+   */
+  async function fetchReplacementsArchive(filters = {}) {
+    try {
+      let query = window.supabase
+        .from('replacements_archive')
+        .select('*')
+        .order('archived_at', { ascending: false });
+      
+      // Opcjonalne filtry (na przyszłość)
+      if (filters.dateFrom) {
+        query = query.gte('archived_at', filters.dateFrom + 'T00:00:00');
+      }
+      if (filters.dateTo) {
+        query = query.lte('archived_at', filters.dateTo + 'T23:59:59');
+      }
+      if (filters.route) {
+        query = query.eq('route', filters.route);
+      }
+      
+      const { data, error } = await query;
+      if (error) throw error;
+      
+      if (!data || data.length === 0) {
+        console.log('ℹ️ Archiwum zamienników puste');
+        return [];
+      }
+      
+      // Wzbogać dane o dni do usunięcia
+      const enrichedData = data.map(item => {
+        const archivedDate = new Date(item.archived_at);
+        
+        let deleteDate;
+        if (item.delete_at) {
+          deleteDate = new Date(item.delete_at);
+        } else {
+          deleteDate = new Date(archivedDate);
+          deleteDate.setDate(deleteDate.getDate() + 14);
+        }
+        
+        const now = new Date();
+        const diffTime = deleteDate - now;
+        const daysLeft = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+        
+        return {
+          ...item,
+          delete_at: deleteDate.toISOString(),
+          days_until_deletion: daysLeft,
+          changes_count: Array.isArray(item.changes) ? item.changes.length : 0
+        };
+      });
+      
+      console.log(`✅ Załadowano ${enrichedData.length} tras z archiwum`);
+      return enrichedData;
+      
+    } catch (error) {
+      console.error('❌ Błąd pobierania archiwum zamienników:', error);
+      
+      if (error.message.includes('permission')) {
+        showToast('Brak uprawnień do archiwum. Skontaktuj się z administratorem.', 'error');
+      } else if (error.message.includes('network')) {
+        showToast('Błąd połączenia z bazą danych. Sprawdź internet.', 'error');
+      } else {
+        showToast('Błąd pobierania archiwum: ' + error.message, 'error');
+      }
+      
+      return [];
+    }
+  }
+
+  /**
+   * Ładuje i renderuje archiwum zamienników
+   */
+  async function loadReplacementsArchive() {
+    const archiveReplacementsList = document.getElementById('archiveReplacementsList');
+    const archiveReplacementsSearch = document.getElementById('archiveReplacementsSearch');
+    
+    if (!archiveReplacementsList) {
+      console.warn('⚠️ Element archiveReplacementsList nie znaleziony');
+      return;
+    }
+    
+    archiveReplacementsList.innerHTML = '<div class="empty-state"><div class="empty-state-text">Ładowanie archiwum...</div></div>';
+    
+    const items = await fetchReplacementsArchive();
+    allReplacementsArchive = items;
+    renderReplacementsArchive(items, '');
+    
+    // 🔥 NOWE: Sprawdź przypomnienia dla zamienników
+    checkReplacementsScheduledReminder();
+    
+    // 🔥 NOWE: Podepnij przycisk przypomnienia
+    const reminderBtn = document.getElementById('setReplacementsReminderBtn');
+    if (reminderBtn) {
+      // Usuń stare listenery
+      const newReminderBtn = reminderBtn.cloneNode(true);
+      reminderBtn.parentNode.replaceChild(newReminderBtn, reminderBtn);
+      newReminderBtn.addEventListener('click', scheduleReplacementsReminder);
+    }
+
+    // 🔥 NOWE: Podłącz przyciski
+    const printBtn = document.getElementById('printReplacementsArchive');
+    const excelBtn = document.getElementById('exportReplacementsExcel');
+    
+    if (printBtn) {
+      // Usuń stare listenery
+      const newPrintBtn = printBtn.cloneNode(true);
+      printBtn.parentNode.replaceChild(newPrintBtn, printBtn);
+      newPrintBtn.addEventListener('click', printReplacementsArchive);
+    }
+    
+    if (excelBtn) {
+      const newExcelBtn = excelBtn.cloneNode(true);
+      excelBtn.parentNode.replaceChild(newExcelBtn, excelBtn);
+      newExcelBtn.addEventListener('click', exportReplacementsToExcel);
+    }
+
+    // Podłącz wyszukiwarkę
+    if (archiveReplacementsSearch) {
+      // Usuń stare listenery
+      const newSearch = archiveReplacementsSearch.cloneNode(true);
+      archiveReplacementsSearch.parentNode.replaceChild(newSearch, archiveReplacementsSearch);
+      
+      newSearch.addEventListener('input', (e) => {
+        renderReplacementsArchive(allReplacementsArchive, e.target.value);
+      });
+    }
+  }
+
+  /**
+   * Renderuje listę archiwum zamienników
+   */
+  function renderReplacementsArchive(items, filter = '') {
+    const archiveReplacementsList = document.getElementById('archiveReplacementsList');
+    const archiveReplacementsTotal = document.getElementById('archiveReplacementsTotal');
+    const archiveReplacementsFiltered = document.getElementById('archiveReplacementsFiltered');
+    
+    if (!archiveReplacementsList) return;
+    
+    // Filtrowanie
+    const filtered = items.filter(item => {
+      const search = filter.toLowerCase();
+      const routeMatch = item.route?.toLowerCase().includes(search);
+      
+      // Szukaj w zmianach
+      const changesMatch = item.changes?.some(change => {
+        if (change.type === 'addition') {
+          return change.mat?.toLowerCase().includes(search);
+        }
+        return change.base?.toLowerCase().includes(search) || 
+              change.alt?.toLowerCase().includes(search) ||
+              change.alternatives?.some(alt => alt.alt?.toLowerCase().includes(search));
+      });
+      
+      return routeMatch || changesMatch;
+    });
+    
+    // Aktualizuj statystyki
+    updateReplacementsArchiveStats(items);
+    
+    // Licznik
+    const totalChanges = items.reduce((sum, item) => sum + (item.changes_count || 0), 0);
+    if (archiveReplacementsTotal) {
+      archiveReplacementsTotal.textContent = `${items.length} tras (${totalChanges} zmian)`;
+    }
+    
+    if (filter && archiveReplacementsFiltered) {
+      archiveReplacementsFiltered.style.display = 'inline';
+      const filteredChanges = filtered.reduce((sum, item) => sum + (item.changes_count || 0), 0);
+      archiveReplacementsFiltered.textContent = `Znaleziono: ${filtered.length} tras (${filteredChanges} zmian)`;
+    } else if (archiveReplacementsFiltered) {
+      archiveReplacementsFiltered.style.display = 'none';
+    }
+    
+    // Pusta lista
+    if (filtered.length === 0) {
+      archiveReplacementsList.innerHTML = `
+        <div class="empty-state">
+          <svg class="empty-state-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="11" cy="11" r="8"></circle>
+            <path d="m21 21-4.35-4.35"></path>
+          </svg>
+          <div class="empty-state-text">${filter ? 'Nie znaleziono tras spełniających kryteria.' : 'Archiwum zamienników jest puste.<br>Wydrukuj trasę, aby ją zarchiwizować.'}</div>
+        </div>
+      `;
+      return;
+    }
+    
+    // Renderuj trasy
+    archiveReplacementsList.innerHTML = filtered.map(item => {
+      const archiveDate = new Date(item.archived_at);
+      const dateStr = archiveDate.toLocaleDateString('pl-PL', { 
+        day: '2-digit', 
+        month: '2-digit', 
+        year: 'numeric' 
+      });
+      const timeStr = archiveDate.toLocaleTimeString('pl-PL', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
+      
+      const daysLeft = item.days_until_deletion;
+      let deleteWarning = '';
+      
+      if (daysLeft <= 3) {
+        deleteWarning = `<span style="color: #ef4444; font-weight: 600; margin-left: 12px;">⚠️ Usunięcie za ${daysLeft} ${daysLeft === 1 ? 'dzień' : 'dni'}!</span>`;
+      } else if (daysLeft <= 7) {
+        deleteWarning = `<span style="color: #f59e0b; font-weight: 600; margin-left: 12px;">⏰ Usunięcie za ${daysLeft} dni</span>`;
+      }
+      
+      // Renderuj zmiany
+      const changesHtml = (item.changes || []).map(change => {
+        if (change.type === 'addition') {
+          return `
+            <div class="archive-change-item addition">
+              <div class="archive-change-base">
+                <span style="color: var(--primary); font-size: 16px;">➕</span>
+                <strong>DOŁOŻENIE:</strong> ${change.mat}
+                <span class="badge">×${change.qty}</span>
+              </div>
+            </div>
+          `;
+        } else if (change.type === 'multi') {
+          const altsHtml = change.alternatives.map(alt => 
+            `<li>${alt.alt} <span class="badge">×${alt.qty}</span> ${alt.client ? `<span style="color: var(--muted); font-style: italic;">— ${alt.client}</span>` : ''}</li>`
+          ).join('');
+          
+          return `
+            <div class="archive-change-item">
+              <div class="archive-change-base">
+                ${change.base} <span class="badge">×${change.qtyBase}</span>
+              </div>
+              <ul class="archive-change-alts">${altsHtml}</ul>
+            </div>
+          `;
+        } else {
+          // simple
+          return `
+            <div class="archive-change-item">
+              <div class="archive-change-base">
+                ${change.base} <span class="badge">×${change.qty}</span>
+              </div>
+              <ul class="archive-change-alts">
+                <li>${change.alt} <span class="badge">×${change.qty}</span> ${change.client ? `<span style="color: var(--muted); font-style: italic;">— ${change.client}</span>` : ''}</li>
+              </ul>
+            </div>
+          `;
+        }
+      }).join('');
+      
+      return `
+        <div class="archive-route-item">
+          <div class="archive-route-header">
+            <div class="archive-route-title">Trasa ${item.route}</div>
+            <div class="archive-route-meta">
+              <div class="archive-route-badge">${item.changes_count} ${item.changes_count === 1 ? 'zmiana' : item.changes_count < 5 ? 'zmiany' : 'zmian'}</div>
+              ${item.pallet_count > 0 ? `<div class="archive-route-pallet">📦 ${item.pallet_count} ${item.pallet_count === 1 ? 'paleta' : item.pallet_count < 5 ? 'palety' : 'palet'}</div>` : ''}
+            </div>
+          </div>
+          
+          <div class="archive-route-changes">
+            ${changesHtml}
+          </div>
+          
+          <div class="archive-route-footer">
+            <div class="archive-route-date">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                <line x1="16" y1="2" x2="16" y2="6"/>
+                <line x1="8" y1="2" x2="8" y2="6"/>
+                <line x1="3" y1="10" x2="21" y2="10"/>
+              </svg>
+              <span>Zarchiwizowano: ${dateStr} o ${timeStr}</span>
+            </div>
+            <div>${deleteWarning}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  /**
+   * Aktualizuje statystyki archiwum zamienników
+   */
+  function updateReplacementsArchiveStats(items) {
+    const archiveReplacementsCount = document.getElementById('archiveReplacementsCount');
+    const archiveReplacementsPallets = document.getElementById('archiveReplacementsPallets');
+    const archiveReplacementsChanges = document.getElementById('archiveReplacementsChanges');
+    
+    if (!archiveReplacementsCount) return;
+    
+    const totalPallets = items.reduce((sum, item) => sum + (item.pallet_count || 0), 0);
+    const totalChanges = items.reduce((sum, item) => sum + (item.changes_count || 0), 0);
+    
+    archiveReplacementsCount.textContent = items.length;
+    archiveReplacementsPallets.textContent = totalPallets;
+    archiveReplacementsChanges.textContent = totalChanges;
+  }
+
+  // ==================== FUNKCJE POMOCNICZE DLA RAPORTÓW ====================
+
+  /**
+   * Zwraca poniedziałek danego tygodnia
+   */
+  function getMonday(date) {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    d.setDate(diff);
+    return d;
+  }
+
+  /**
+   * Zwraca niedzielę danego tygodnia
+   */
+  function getSunday(monday) {
+    const d = new Date(monday);
+    d.setDate(d.getDate() + 6);
+    d.setHours(23, 59, 59, 999);
+    return d;
+  }
+
+  /**
+   * Grupuje archiwum zamienników po tygodniach
+   */
+  function groupReplacementsByWeeks(items) {
+    const weeks = {};
+    
+    items.forEach(item => {
+      const date = new Date(item.archived_at);
+      const monday = getMonday(date);
+      const weekKey = monday.toISOString().split('T')[0]; // YYYY-MM-DD
+      
+      if (!weeks[weekKey]) {
+        weeks[weekKey] = {
+          start: monday,
+          end: getSunday(monday),
+          items: []
+        };
+      }
+      
+      weeks[weekKey].items.push(item);
+    });
+    
+    return weeks;
+  }
+
+  /**
+   * 🧠 INTELIGENTNA ANALIZA - najczęściej brakująca mata
+   * Zwraca JEDNĄ najczęściej brakującą matę (pomija gdy mata została na tej samej)
+   */
+  function analyzeMostMissingMats(items) {
+    const matCounts = {};
+    
+    items.forEach(item => {
+      if (!item.changes || !Array.isArray(item.changes)) return;
+      
+      item.changes.forEach(change => {
+        // Pomijamy dołożenia
+        if (change.type === 'addition') return;
+        
+        const baseMat = change.base;
+        
+        if (change.type === 'multi') {
+          // Tryb zaawansowany/rozdzielenie
+          // Liczymy tylko alternatywy RÓŻNE od bazy
+          change.alternatives.forEach(alt => {
+            if (alt.alt !== baseMat) {
+              matCounts[baseMat] = (matCounts[baseMat] || 0) + alt.qty;
+            }
+          });
+        } else {
+          // Tryb prosty
+          // Liczymy tylko jeśli zamiennik != baza
+          if (change.alt !== baseMat) {
+            matCounts[baseMat] = (matCounts[baseMat] || 0) + change.qty;
+          }
+        }
+      });
+    });
+    
+    // Znajdź najczęściej brakującą matę
+    let topMat = null;
+    let maxCount = 0;
+    
+    Object.entries(matCounts).forEach(([mat, count]) => {
+      if (count > maxCount) {
+        maxCount = count;
+        topMat = mat;
+      }
+    });
+    
+    // Zwróć JEDEN obiekt zamiast tablicy
+    return topMat ? { mat: topMat, count: maxCount } : null;
+  }
+
+  /**
+   * 📄 Drukowanie archiwum zamienników z podziałem na tygodnie
+   */
+  function printReplacementsArchive() {
+    if (allReplacementsArchive.length === 0) {
+      showToast("Brak danych w archiwum zamienników do wydrukowania.", "error");
+      return;
+    }
+    
+    const printDate = new Date().toLocaleDateString('pl-PL', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    
+    // 🧠 Analiza danych
+    const mostMissing = analyzeMostMissingMats(allReplacementsArchive);
+    const weeks = groupReplacementsByWeeks(allReplacementsArchive);
+    const totalPallets = allReplacementsArchive.reduce((sum, item) => sum + (item.pallet_count || 0), 0);
+    const totalChanges = allReplacementsArchive.reduce((sum, item) => sum + (item.changes_count || 0), 0);
+    
+    let printHTML = `
+      <div class="print-header">
+        <img src="icons/icon-192.png" alt="Elis Logo">
+        <div class="title-block">
+          <h1>Raport Archiwum Zamienników</h1>
+          <p>Wygenerowano: ${printDate}</p>
+        </div>
+      </div>
+      
+      <div class="print-archive-summary" style="page-break-after: avoid;">
+        <h3 style="margin: 0 0 12px; font-size: 13pt; color: #00a9be; border-bottom: 2px solid #00a9be; padding-bottom: 6px;">
+          📊 Kluczowe Statystyki
+        </h3>
+        
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px;">
+          <div class="print-summary-row" style="padding: 8px; background: #f8f9fa; border-radius: 6px; text-align: center;">
+            <div style="font-size: 9pt; color: #6b7280; margin-bottom: 4px;">Tras</div>
+            <div style="font-size: 18pt; font-weight: 700; color: #00a9be;">${allReplacementsArchive.length}</div>
+          </div>
+          <div class="print-summary-row" style="padding: 8px; background: #f8f9fa; border-radius: 6px; text-align: center;">
+            <div style="font-size: 9pt; color: #6b7280; margin-bottom: 4px;">Zmian</div>
+            <div style="font-size: 18pt; font-weight: 700; color: #00a9be;">${totalChanges}</div>
+          </div>
+          <div class="print-summary-row" style="padding: 8px; background: #f8f9fa; border-radius: 6px; text-align: center;">
+            <div style="font-size: 9pt; color: #6b7280; margin-bottom: 4px;">Palet</div>
+            <div style="font-size: 18pt; font-weight: 700; color: #00a9be;">${totalPallets}</div>
+          </div>
+          <div class="print-summary-row" style="padding: 8px; background: #f8f9fa; border-radius: 6px; text-align: center;">
+            <div style="font-size: 9pt; color: #6b7280; margin-bottom: 4px;">Tygodni</div>
+            <div style="font-size: 18pt; font-weight: 700; color: #00a9be;">${Object.keys(weeks).length}</div>
+          </div>
+        </div>
+    `;
+
+    // 🔥 NAJCZĘŚCIEJ BRAKUJĄCA MATA (kompaktowo)
+    if (mostMissing) {
+      const label = mostMissing.count === 1 ? 'zamiana' : mostMissing.count < 5 ? 'zamiany' : 'zamian';
+      printHTML += `
+        <div class="print-missing-mat-card">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 16pt;">⚠️</span>
+            <div>
+              <div style="font-size: 8pt; color: #92400e; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Najczęściej brakująca:</div>
+              <div style="font-size: 11pt; font-weight: 700; color: #1a1a1a; margin-top: 2px;">${mostMissing.mat}</div>
+            </div>
+          </div>
+          <div style="background: #fbbf24; color: white; padding: 6px 12px; border-radius: 6px; font-size: 10pt; font-weight: 700;">
+            ${mostMissing.count} ${label}
+          </div>
+        </div>
+        <p class="print-missing-mat-note">* Licznik uwzględnia tylko rzeczywiste zamiany</p>
+      `;
+    }
+
+    printHTML += `</div>`; // Koniec summary
+
+    // 📅 Podział na tygodnie
+    const weekKeys = Object.keys(weeks).sort().reverse(); // Najnowsze na górze
+    
+    weekKeys.forEach((weekKey, weekIndex) => {
+      const week = weeks[weekKey];
+      const startStr = week.start.toLocaleDateString('pl-PL', { 
+        day: '2-digit', 
+        month: 'long', 
+        year: 'numeric' 
+      });
+      const endStr = week.end.toLocaleDateString('pl-PL', { 
+        day: '2-digit', 
+        month: 'long',
+        year: 'numeric' 
+      });
+      
+      const weekPallets = week.items.reduce((sum, item) => sum + (item.pallet_count || 0), 0);
+      const weekChanges = week.items.reduce((sum, item) => sum + (item.changes_count || 0), 0);
+      
+      printHTML += `
+        <div class="print-archive-date-section">
+          <h2 class="print-archive-date-header" style="background: linear-gradient(135deg, #00a9be 0%, #008299 100%); color: white; padding: 12px 16px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <span>📅 Tydzień: ${startStr} – ${endStr}</span>
+            <span style="background: rgba(255,255,255,0.2); padding: 6px 12px; border-radius: 6px; font-size: 11pt;">
+              ${week.items.length} ${week.items.length === 1 ? 'trasa' : week.items.length < 5 ? 'trasy' : 'tras'} | ${weekChanges} zmian | ${weekPallets} palet
+            </span>
+          </h2>
+      `;
+      
+      // Grupuj trasy po dniach tygodnia
+      const dayGroups = {};
+      week.items.forEach(item => {
+        const dayKey = new Date(item.archived_at).toLocaleDateString('pl-PL', { 
+          weekday: 'long',
+          day: '2-digit',
+          month: '2-digit'
+        });
+        if (!dayGroups[dayKey]) dayGroups[dayKey] = [];
+        dayGroups[dayKey].push(item);
+      });
+      
+      // Renderuj dni
+      Object.keys(dayGroups).forEach(dayKey => {
+        const dayItems = dayGroups[dayKey];
+        
+        printHTML += `
+          <h3 style="font-size: 12pt; margin: 20px 0 12px; color: #00a9be; border-bottom: 2px solid #e3e9f0; padding-bottom: 6px;">
+            📆 ${dayKey}
+          </h3>
+        `;
+        
+        dayItems.forEach(item => {
+          const timeStr = new Date(item.archived_at).toLocaleTimeString('pl-PL', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          });
+          
+          printHTML += `
+            <div class="print-route-block" style="margin-bottom: 20px; padding: 12px; background: #fafafa; border-left: 4px solid #00a9be; border-radius: 6px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <h4 style="margin: 0; font-size: 11pt; color: #333;">
+                  🚚 Trasa ${item.route} <span style="color: #6b7280; font-weight: normal; font-size: 9pt;">(godz. ${timeStr})</span>
+                </h4>
+                ${item.pallet_count > 0 ? `
+                  <span style="background: #10b981; color: white; padding: 4px 10px; border-radius: 6px; font-size: 9pt; font-weight: 600;">
+                    📦 ${item.pallet_count} ${item.pallet_count === 1 ? 'paleta' : item.pallet_count < 5 ? 'palety' : 'palet'}
+                  </span>
+                ` : ''}
+              </div>
+          `;
+          
+          // Renderuj zmiany
+          (item.changes || []).forEach(change => {
+            if (change.type === 'addition') {
+              printHTML += `
+                <div class="print-change-item print-addition" style="margin-top: 8px;">
+                  <div class="base">+ ${change.mat} (×${change.qty})</div>
+                </div>
+              `;
+            } else if (change.type === 'multi') {
+              const alts = change.alternatives.map(alt => 
+                `<li>${alt.alt} (×${alt.qty})${alt.client ? ` <span class="client">— ${alt.client}</span>` : ''}</li>`
+              ).join('');
+              printHTML += `
+                <div class="print-change-item" style="margin-top: 8px;">
+                  <div class="base">${change.base} (×${change.qtyBase})</div>
+                  <ul class="multi-alt-list">${alts}</ul>
+                </div>
+              `;
+            } else {
+              printHTML += `
+                <div class="print-change-item" style="margin-top: 8px;">
+                  <div class="base">${change.base} (×${change.qty})</div>
+                  <div class="simple-alt">${change.alt} (×${change.qty})${change.client ? ` <span class="client">— ${change.client}</span>` : ''}</div>
+                </div>
+              `;
+            }
+          });
+          
+          printHTML += `</div>`; // Koniec trasy
+        });
+      });
+      
+      printHTML += `</div>`; // Koniec tygodnia
+    });
+    
+    printHTML += `
+      <div class="print-archive-footer">
+        <p><strong>Elis ServiceHub</strong> - System Zarządzania Matami Logo</p>
+        <p style="margin-top: 8px; font-size: 9pt; color: #6b7280;">
+          Raport zawiera kompletną historię zarchiwizowanych tras z podziałem na tygodnie i dni
+        </p>
+      </div>
+    `;
+    
+    printOutput.innerHTML = printHTML;
+    
+    setTimeout(() => {
+      try {
+        window.print();
+      } catch (error) {
+        console.error("Błąd drukowania:", error);
+        showToast("Błąd podczas otwierania okna drukowania.", "error");
+      }
+    }, 100);
+  }
+
+  /**
+   * 📊 Excel export archiwum zamienników
+   */
+  async function exportReplacementsToExcel() {
+    if (allReplacementsArchive.length === 0) {
+      showToast("Brak danych w archiwum zamienników do wyeksportowania.", "error");
+      return;
+    }
+    if (typeof ExcelJS === 'undefined') {
+      showToast("Biblioteka Excel nie jest załadowana", "error");
+      return;
+    }
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Archiwum Zamienników', {
+        pageSetup: {
+          paperSize: 9,
+          orientation: 'landscape',
+          fitToPage: true,
+          fitToWidth: 1,
+          fitToHeight: 0
+        }
+      });
+      
+      workbook.creator = 'Elis ServiceHub';
+      workbook.created = new Date();
+      workbook.company = 'Elis';
+      
+      const currentDate = new Date().toLocaleDateString('pl-PL', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
+      // Analiza
+      const mostMissing = analyzeMostMissingMats(allReplacementsArchive);
+      const weeks = groupReplacementsByWeeks(allReplacementsArchive);
+      const totalPallets = allReplacementsArchive.reduce((sum, item) => sum + (item.pallet_count || 0), 0);
+      const totalChanges = allReplacementsArchive.reduce((sum, item) => sum + (item.changes_count || 0), 0);
+
+      // === NAGŁÓWEK ===
+      worksheet.mergeCells('A1:G1');
+      const titleCell = worksheet.getCell('A1');
+      titleCell.value = 'ELIS - RAPORT ARCHIWUM ZAMIENNIKÓW';
+      titleCell.font = { name: 'Calibri', size: 22, bold: true, color: { argb: 'FFFFFFFF' } };
+      titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF00A9BE' } };
+      titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+      worksheet.getRow(1).height = 45;
+
+      worksheet.mergeCells('A2:G2');
+      const dateCell = worksheet.getCell('A2');
+      dateCell.value = `Wygenerowano: ${currentDate}`;
+      dateCell.font = { name: 'Calibri', size: 11, italic: true };
+      dateCell.alignment = { horizontal: 'center' };
+      dateCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F0F0' } };
+      worksheet.addRow([]);
+
+      // === STATYSTYKI ===
+      const summaryTitle = worksheet.addRow(['KLUCZOWE STATYSTYKI', '', '', '', '', '', '']);
+      worksheet.mergeCells(`A${summaryTitle.number}:G${summaryTitle.number}`);
+      summaryTitle.getCell(1).font = { name: 'Calibri', size: 14, bold: true, color: { argb: 'FF00A9BE' } };
+      summaryTitle.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE3E9F0' } };
+      summaryTitle.height = 30;
+      summaryTitle.getCell(1).alignment = { vertical: 'middle', horizontal: 'center' };
+
+      // 🔥 NAPRAWIONE - wartości NIE w merged cells
+      const statsRow1 = worksheet.addRow([
+        'Łączna liczba tras:', 
+        allReplacementsArchive.length, 
+        '',
+        'Wszystkich zmian:', 
+        totalChanges, 
+        '', 
+        ''
+      ]);
+
+      const statsRow2 = worksheet.addRow([
+        'Suma palet:', 
+        totalPallets, 
+        '',
+        'Liczba tygodni:', 
+        Object.keys(weeks).length, 
+        '', 
+        ''
+      ]);
+
+      [statsRow1, statsRow2].forEach(row => {
+        row.height = 26;
+        // Etykiety (kolumny A i D)
+        [1, 4].forEach(col => {
+          row.getCell(col).font = { name: 'Calibri', size: 11, bold: true };
+          row.getCell(col).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9FAFB' } };
+          row.getCell(col).alignment = { horizontal: 'left', vertical: 'middle' };
+        });
+        
+        // Wartości (kolumny B i E) - BEZ MERGE!
+        [2, 5].forEach(col => {
+          row.getCell(col).font = { name: 'Calibri', size: 13, bold: true, color: { argb: 'FF00A9BE' } };
+          row.getCell(col).alignment = { horizontal: 'left', vertical: 'middle' };
+        });
+      });
+
+      worksheet.addRow([]);
+
+      // 🔥 NAJCZĘŚCIEJ BRAKUJĄCA MATA
+      if (mostMissing) {
+        const label = mostMissing.count === 1 ? 'zamiana' : mostMissing.count < 5 ? 'zamiany' : 'zamian';
+        
+        const missingRow = worksheet.addRow([
+          `⚠️ Najczęściej brakująca: ${mostMissing.mat}`,  // 🔥 POPRAWIONE: Wszystko w jednej komórce
+          '', 
+          '', 
+          `${mostMissing.count} ${label}`,  // 🔥 SKRÓCONE
+          '', 
+          '', 
+          ''
+        ]);
+        
+        worksheet.mergeCells(`A${missingRow.number}:C${missingRow.number}`);  // 🔥 Merge A:C
+        worksheet.mergeCells(`D${missingRow.number}:G${missingRow.number}`);
+        
+        missingRow.height = 28;  // 🔥 Trochę niższy
+        
+        // 🔥 POPRAWIONE: Ustaw fill dla WSZYSTKICH komórek
+        for (let col = 1; col <= 7; col++) {
+          const cell = missingRow.getCell(col);
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFDE68A' } };
+          cell.alignment = { horizontal: 'left', vertical: 'middle' };
+        }
+        
+        // Stylowanie głównej komórki (A:C)
+        missingRow.getCell(1).font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FF92400E' } };
+        
+        // Stylowanie licznika (D:G)
+        missingRow.getCell(4).font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
+        missingRow.getCell(4).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF59E0B' } };
+        missingRow.getCell(4).alignment = { horizontal: 'center', vertical: 'middle' };
+      }
+
+      worksheet.addRow([]);  // 🔥 Pusty wiersz po statystykach
+
+      // === TYGODNIE ===
+      const weekKeys = Object.keys(weeks).sort().reverse();
+      
+      weekKeys.forEach(weekKey => {
+        const week = weeks[weekKey];
+        const startStr = week.start.toLocaleDateString('pl-PL');
+        const endStr = week.end.toLocaleDateString('pl-PL');
+        
+        const weekTitle = worksheet.addRow([`📅 Tydzień: ${startStr} - ${endStr}`, '', '', '', '', '', '']);
+        worksheet.mergeCells(`A${weekTitle.number}:G${weekTitle.number}`);
+        weekTitle.getCell(1).font = { name: 'Calibri', size: 13, bold: true, color: { argb: 'FFFFFFFF' } };
+        weekTitle.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF00A9BE' } };
+        weekTitle.height = 32;
+        weekTitle.getCell(1).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+        
+        // Tabela
+        const tableHeader = worksheet.addRow(['Trasa', 'Data i czas', '', 'Palety', 'Zmian', 'Szczegóły', '']);
+        worksheet.mergeCells(`F${tableHeader.number}:G${tableHeader.number}`);
+        tableHeader.height = 26;
+        tableHeader.font = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
+        tableHeader.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0D1117' } };
+        tableHeader.eachCell(cell => {
+          cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        });
+        
+        week.items.forEach((item, idx) => {
+          const archDate = new Date(item.archived_at);
+          const dateStr = archDate.toLocaleDateString('pl-PL', { 
+            weekday: 'short',
+            day: '2-digit',
+            month: '2-digit'
+          });
+          const timeStr = archDate.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+          
+          // Podsumowanie zmian
+          const changesText = (item.changes || []).map(c => {
+            if (c.type === 'addition') return `+ ${c.mat} (×${c.qty})`;
+            if (c.type === 'multi') return `${c.base} → ${c.alternatives.length} zamienników`;
+            return `${c.base} → ${c.alt}`;
+          }).join(' | ');
+          
+          const row = worksheet.addRow([
+            item.route,
+            `${dateStr} ${timeStr}`,
+            '', // separator
+            item.pallet_count || 0,
+            item.changes_count || 0,
+            changesText,
+            ''
+          ]);
+          worksheet.mergeCells(`F${row.number}:G${row.number}`);
+          row.height = 22;
+          row.getCell(1).font = { bold: true };
+          row.getCell(4).alignment = { horizontal: 'center' };
+          row.getCell(5).alignment = { horizontal: 'center' };
+          row.getCell(5).font = { bold: true, color: { argb: 'FF00A9BE' } };
+          
+          if (idx % 2 === 0) {
+            row.eachCell(cell => {
+              cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9FAFB' } };
+            });
+          }
+        });
+        
+        worksheet.addRow([]);
+      });
+
+      // 🔥 POPRAWIONE SZEROKOŚCI (7 kolumn)
+      worksheet.columns = [
+        { width: 28 },  // A - etykiety/trasa
+        { width: 22 },  // B - wartości/data
+        { width: 3 },   // C - separator
+        { width: 28 },  // D - etykiety/palety
+        { width: 20 },  // E - wartości/zmian
+        { width: 50 },  // F - szczegóły
+        { width: 5 }    // G - separator
+      ];
+
+      // STOPKA
+      worksheet.addRow([]);
+      const footer = worksheet.addRow(['Dokument wygenerowany przez Elis ServiceHub - System Zarządzania Matami Logo', '', '', '', '', '', '']);
+      worksheet.mergeCells(`A${footer.number}:G${footer.number}`);
+      footer.getCell(1).font = { italic: true, size: 9, color: { argb: 'FF6B7280' } };
+      footer.getCell(1).alignment = { horizontal: 'center' };
+
+      // ZAPIS
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const fileName = `Elis_Archiwum_Zamiennikow_${new Date().toISOString().split('T')[0]}.xlsx`;
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      link.click();
+      window.URL.revokeObjectURL(url);
+      
+      showToast("✅ Wyeksportowano archiwum zamienników do Excel!");
+      
+    } catch (error) {
+      console.error('Błąd eksportu:', error);
+      showToast("Błąd podczas eksportu: " + error.message, "error");
+    }
+  }
+
 // ==================== INICJALIZACJA ====================
   async function init() {
     const logoMatsPromise = fetchAndCacheLogoMats();
@@ -2913,12 +4006,21 @@ document.addEventListener("DOMContentLoaded", () => {
     // 🔥 NOWE: Aktualizuj badge archiwum przy starcie
     updateArchiveBadge();
     
+    // 🔥 NOWE: Aktualizuj badge archiwum zamienników przy starcie
+    updateReplacementsArchiveBadge();
+    setInterval(updateReplacementsArchiveBadge, 5 * 60 * 1000);
+
     // 🔥 NOWE: Sprawdź przypomnienia
     checkScheduledReminder();
+    setInterval(checkScheduledReminder, 60000); // Sprawdzaj co minutę
     
     // 🔥 NOWE: Odświeżaj badge co 5 minut
     setInterval(updateArchiveBadge, 5 * 60 * 1000);
         
+    // 🔥 NOWE: Sprawdź przypomnienia dla zamienników
+    checkReplacementsScheduledReminder();
+    setInterval(checkReplacementsScheduledReminder, 60000); // Sprawdzaj co minutę
+
     // ==================== REALTIME SUBSCRIPTIONS ====================
 
     const washingChannel = window.supabase
@@ -2958,9 +4060,25 @@ document.addEventListener("DOMContentLoaded", () => {
       })
       .subscribe();
 
-    // Inicjalizuj system palet
-    initPalletSystem();
+    // 🔥 NOWE: Realtime dla archiwum zamienników
+    const replacementsArchiveChannel = window.supabase
+      .channel('replacements-archive-updates')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'replacements_archive' 
+      }, async (payload) => {
+        console.log('✨ Zmiana w archiwum zamienników!', payload);
+        if (currentView === 'archive-replacements') {
+          const items = await fetchReplacementsArchive();
+          allReplacementsArchive = items;
+          const searchValue = document.getElementById('archiveReplacementsSearch')?.value || '';
+          renderReplacementsArchive(items, searchValue);
+        }
+      })
+      .subscribe();
 
+    initPalletSystem();
     navigateTo('home');
   }
 
