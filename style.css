@@ -2778,6 +2778,186 @@ body.dark .archive-time-left {
   }
 }
 
+/* ==================== ARCHIWUM ZAMIENNIKÓW ==================== */
+
+.archive-route-item {
+  background: var(--bg-card);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+  transition: all 0.2s ease;
+  animation: fadeInSlideUp 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.archive-route-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: linear-gradient(180deg, var(--primary), var(--accent));
+}
+
+.archive-route-item:hover {
+  border-color: var(--primary);
+  transform: translateX(4px);
+  box-shadow: 0 4px 16px rgba(0, 169, 190, 0.1);
+}
+
+.archive-route-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.archive-route-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.archive-route-meta {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.archive-route-badge {
+  background: rgba(0, 169, 190, 0.12);
+  color: var(--primary);
+  border: 1px solid rgba(0, 169, 190, 0.25);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+body.dark .archive-route-badge {
+  background: rgba(0, 194, 209, 0.15);
+  border-color: rgba(0, 194, 209, 0.3);
+}
+
+.archive-route-pallet {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.archive-route-changes {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.archive-change-item {
+  background: rgba(0, 0, 0, 0.02);
+  padding: 12px 16px;
+  border-radius: 10px;
+  border-left: 3px solid rgba(0, 169, 190, 0.3);
+}
+
+body.dark .archive-change-item {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.archive-change-item.addition {
+  background: rgba(0, 169, 190, 0.05);
+  border-left-color: var(--primary);
+}
+
+body.dark .archive-change-item.addition {
+  background: rgba(0, 194, 209, 0.08);
+}
+
+.archive-change-base {
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.archive-change-alts {
+  list-style: none;
+  padding-left: 20px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.archive-change-alts li {
+  font-size: 14px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.archive-change-alts li::before {
+  content: '→';
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.archive-route-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.archive-route-date {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.archive-route-date svg {
+  width: 16px;
+  height: 16px;
+  opacity: 0.6;
+}
+
+/* Responsywność */
+@media (max-width: 768px) {
+  .archive-route-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .archive-route-meta {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .archive-route-footer {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+}
+
 /* === MEDIA QUERIES === */
 @media (max-width: 640px) {
   .background-aurora {
@@ -3072,12 +3252,12 @@ body.dark .pallet-count-display {
   }
 }
 
-/* === DRUKOWANIE (STARY ŁADNY WYGLĄD BEZ STOPEK) === */
+/* === DRUKOWANIE (BEZ STOPEK) === */
 @media print { 
   /* 🔥 KLUCZOWE - usuwa stopki przeglądarki */
   @page { 
     size: A4;
-    margin: 0;  /* ⬅️ To usuwa stopki! */
+    margin: 0;
   }
   
   /* UKRYJ DOMYŚLNE NAGŁÓWKI/STOPKI */
@@ -3092,14 +3272,22 @@ body.dark .pallet-count-display {
     print-color-adjust: exact !important;
   }
   
+  /* === BODY I KONTENERY === */
   body { 
     background: white !important; 
     color: #000 !important; 
     font-size: 11pt;
     line-height: 1.4;
-    padding: 2cm 1.5cm;  /* ⬅️ Padding zamiast margin @page */
+    padding: 0;
+    margin: 0;
     -webkit-font-smoothing: antialiased;
-  } 
+  }
+  
+  /* 🔥 PADDING PRZENIESIONY NA KONTENER */
+  #print-output {
+    padding: 1.5cm 1cm;
+    min-height: 100vh;
+  }
   
   body > *:not(#print-container) { 
     display: none !important; 
@@ -3108,41 +3296,9 @@ body.dark .pallet-count-display {
   #print-container, 
   #print-output { 
     display: block !important; 
-  } 
+  }
   
-  /* === HEADER === */
-  .print-header { 
-    display: flex; 
-    justify-content: space-between; 
-    align-items: flex-start;
-    padding-bottom: 15px; 
-    margin-bottom: 25px; 
-    border-bottom: 2px solid #000;
-  } 
-  
-  .print-header img { 
-    max-width: 80px; 
-    height: auto; 
-  } 
-  
-  .print-header .title-block { 
-    text-align: right; 
-  } 
-  
-  .print-header h1 { 
-    font-size: 18pt; 
-    margin: 0; 
-    font-weight: 700; 
-    color: #000; 
-  } 
-  
-  .print-header p { 
-    font-size: 10pt; 
-    margin: 6px 0 0; 
-    color: #333; 
-  } 
-  
-  /* === SEKCJE === */
+  /* === NAGŁÓWKI OGÓLNE === */
   #print-output h2 { 
     font-size: 14pt; 
     padding-bottom: 6px; 
@@ -3151,12 +3307,45 @@ body.dark .pallet-count-display {
     color: #000; 
     border-bottom: 1px solid #666;
     page-break-after: avoid; 
+  }
+  
+  /* === HEADER DRUKU (WSPÓLNY) === */
+  .print-header { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: flex-start;
+    padding-bottom: 10px;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #000;
+    page-break-after: avoid !important;
+  }
+  
+  .print-header img { 
+    max-width: 70px;
+    height: auto; 
   } 
   
-  /* === ZMIANY === */
+  .print-header .title-block { 
+    text-align: right; 
+  } 
+  
+  .print-header h1 { 
+    font-size: 16pt;
+    margin: 0; 
+    font-weight: 700; 
+    color: #000; 
+  } 
+  
+  .print-header p { 
+    font-size: 9pt;
+    margin: 4px 0 0;
+    color: #333; 
+  }
+  
+  /* === ZMIANY MAT (PANEL TRAS) === */
   .print-change-item { 
     margin-bottom: 16px;
-    break-inside: avoid;
+    page-break-inside: avoid;
   } 
   
   .print-change-item .base { 
@@ -3206,6 +3395,7 @@ body.dark .pallet-count-display {
     padding: 10px 12px !important;
     border-radius: 4px;
     margin-bottom: 8px !important;
+    page-break-inside: avoid;
   }
 
   .print-addition .base::before {
@@ -3233,9 +3423,10 @@ body.dark .pallet-count-display {
     color: #92400e;
     text-align: center;
     box-shadow: 0 2px 8px rgba(245, 158, 11, 0.2);
+    page-break-inside: avoid;
   }
   
-  /* === MATY - HEADER === */
+  /* === MATY LOGO - HEADER === */
   .print-mats-header {
     display: flex;
     justify-content: space-between;
@@ -3243,6 +3434,7 @@ body.dark .pallet-count-display {
     padding-bottom: 15px;
     margin-bottom: 25px;
     border-bottom: 3px solid #000;
+    page-break-after: avoid;
   }
 
   .print-mats-header img {
@@ -3267,13 +3459,14 @@ body.dark .pallet-count-display {
     color: #333;
   }
 
-  /* === MATY - PODSUMOWANIE === */
+  /* === MATY LOGO - PODSUMOWANIE === */
   .print-mats-summary {
     background: #f5f5f5;
     padding: 12px;
     margin-bottom: 20px;
     border-radius: 6px;
     border-left: 4px solid #00a9be;
+    page-break-inside: avoid;
   }
 
   .print-mats-summary p {
@@ -3282,7 +3475,7 @@ body.dark .pallet-count-display {
     text-align: left;
   }
 
-  /* === MATY - TABELA === */
+  /* === MATY LOGO - TABELA === */
   .print-mats-table {
     width: 100%;
     border-collapse: collapse;
@@ -3338,13 +3531,28 @@ body.dark .pallet-count-display {
     color: #666;
   }
   
-  /* === ARCHIWUM === */
+  /* === ARCHIWUM - PODSUMOWANIE === */
   .print-archive-summary {
     background: #f8f9fa;
     padding: 16px 20px;
-    margin-bottom: 24px;
+    margin-bottom: 12px;
     border-radius: 6px;
     border-left: 4px solid #00a9be;
+    page-break-inside: avoid !important;
+    page-break-after: avoid !important;
+  }
+  
+  .print-archive-summary h3 {
+    margin: 0 0 8px !important;
+    font-size: 12pt !important;
+    padding-bottom: 4px !important;
+    color: #00a9be;
+    border-bottom: 2px solid #00a9be;
+  }
+  
+  .print-archive-summary > div[style*="grid"] {
+    margin-bottom: 8px !important;
+    gap: 8px !important;
   }
 
   .print-summary-row {
@@ -3364,23 +3572,54 @@ body.dark .pallet-count-display {
     color: #00a9be;
     font-size: 11pt;
   }
-
-  .print-archive-date-section {
-    margin-bottom: 32px;
+  
+  /* === ARCHIWUM - NAJCZĘŚCIEJ BRAKUJĄCA MATA === */
+  .print-archive-summary > div[style*="linear-gradient"],
+  .print-missing-mat-card {
+    background: linear-gradient(135deg, #fff9e6 0%, #fff3cd 100%);
+    border: 2px solid #fbbf24;
+    border-radius: 6px;
+    padding: 8px 12px !important;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px !important;
     page-break-inside: avoid;
+  }
+  
+  .print-archive-summary > p,
+  .print-missing-mat-note {
+    margin: 2px 0 0 !important;
+    font-size: 7pt !important;
+    color: #92400e;
+    font-style: italic;
+    text-align: center;
+    page-break-after: avoid;
+  }
+  
+  /* === ARCHIWUM - SEKCJE TYGODNIOWE === */
+  .print-archive-date-section {
+    margin-bottom: 16px;
+    page-break-inside: auto;
+  }
+  
+  .print-archive-date-section:first-of-type {
+    page-break-before: avoid !important;
+    margin-top: 6px !important;
   }
 
   .print-archive-date-header {
     font-size: 13pt;
     font-weight: 700;
     color: #000;
-    padding: 10px 12px;
+    padding: 10px 14px;
     background: linear-gradient(135deg, #e3e9f0 0%, #f8f9fa 100%);
     border-left: 4px solid #00a9be;
-    margin-bottom: 12px;
+    margin-bottom: 10px;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    page-break-after: avoid !important;
   }
 
   .print-archive-date-badge {
@@ -3391,7 +3630,31 @@ body.dark .pallet-count-display {
     border-radius: 4px;
     font-weight: 600;
   }
+  
+  .print-archive-date-section h3 {
+    page-break-after: avoid !important;
+    margin: 14px 0 10px !important;
+    font-size: 11pt !important;
+  }
 
+  /* === ARCHIWUM - POJEDYNCZE TRASY === */
+  .print-route-block {
+    margin-bottom: 12px;
+    padding: 10px;
+    page-break-inside: avoid !important;
+    page-break-after: auto;
+  }
+  
+  .print-route-block h4 {
+    margin: 0 0 6px !important;
+    font-size: 10pt !important;
+  }
+  
+  .print-route-block .print-change-item {
+    margin-top: 6px !important;
+  }
+
+  /* === ARCHIWUM - TABELA === */
   .print-archive-table {
     width: 100%;
     border-collapse: collapse;
@@ -3416,6 +3679,7 @@ body.dark .pallet-count-display {
 
   .print-archive-table tbody tr {
     border-bottom: 1px solid #ddd;
+    page-break-inside: avoid;
   }
 
   .print-archive-table tbody tr:nth-child(even) {
@@ -3437,7 +3701,9 @@ body.dark .pallet-count-display {
     font-weight: 700;
   }
 
-  .print-archive-footer {
+  /* === STOPKI RAPORTÓW === */
+  .print-archive-footer,
+  .print-mats-footer {
     margin-top: 40px;
     padding-top: 16px;
     border-top: 2px solid #ccc;
