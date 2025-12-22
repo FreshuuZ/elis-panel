@@ -5,6 +5,500 @@ document.addEventListener("DOMContentLoaded", () => {
   let allWashingItems = [];
   let allArchiveItems = [];
   let allReplacementsArchive = [];
+// ==================== SYSTEM ADMINISTRATORA ====================
+  let isAdmin = false;
+
+  // Wyloguj przy zamknięciu strony
+  window.addEventListener('beforeunload', () => {
+    logoutAdmin(true); // silent logout
+  });
+
+  // Wyloguj przy zmianie widoczności (opcjonalne - dodatkowe bezpieczeństwo)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      // Opcjonalnie: wyloguj po pewnym czasie nieaktywności
+      // setTimeout(() => { if (document.visibilityState === 'hidden') logoutAdmin(true); }, 300000);
+    }
+  });
+
+  // ==================== ELEMENTY DOM ADMINA ====================
+  const adminBtn = document.getElementById('adminBtn');
+  const adminModal = document.getElementById('adminModal');
+  const adminPinInput = document.getElementById('adminPinInput');
+  const pinError = document.getElementById('pinError');
+  const adminLoginSection = document.getElementById('adminLoginSection');
+  const adminLoggedSection = document.getElementById('adminLoggedSection');
+  const adminModalIcon = document.getElementById('adminModalIcon');
+  const adminModalTitle = document.getElementById('adminModalTitle');
+  const togglePinVisibility = document.getElementById('togglePinVisibility');
+
+  // Przyciski admina
+  const adminLoginCancel = document.getElementById('adminLoginCancel');
+  const adminLoginSubmit = document.getElementById('adminLoginSubmit');
+  const adminCloseBtn = document.getElementById('adminCloseBtn');
+  const adminLogoutBtn = document.getElementById('adminLogoutBtn');
+
+  // Sekcja dodawania maty
+  const adminAddMatSection = document.getElementById('adminAddMatSection');
+  const addNewMatBtn = document.getElementById('addNewMatBtn');
+
+  // Modal dodawania maty
+  const addMatModal = document.getElementById('addMatModal');
+  const addMatName = document.getElementById('addMatName');
+  const addMatRack = document.getElementById('addMatRack');
+  const addMatRow = document.getElementById('addMatRow');
+  const addMatPipe = document.getElementById('addMatPipe');
+  const addMatPallet = document.getElementById('addMatPallet');
+  const addMatSize = document.getElementById('addMatSize');
+  const addMatQty = document.getElementById('addMatQty');
+  const addRackFields = document.getElementById('addRackFields');
+  const addPalletFields = document.getElementById('addPalletFields');
+  const addMatCancel = document.getElementById('addMatCancel');
+  const addMatSubmit = document.getElementById('addMatSubmit');
+
+  // Modal edycji maty
+  const editMatModal = document.getElementById('editMatModal');
+  const editMatId = document.getElementById('editMatId');
+  const editMatName = document.getElementById('editMatName');
+  const editMatRack = document.getElementById('editMatRack');
+  const editMatRow = document.getElementById('editMatRow');
+  const editMatPipe = document.getElementById('editMatPipe');
+  const editMatPallet = document.getElementById('editMatPallet');
+  const editMatSize = document.getElementById('editMatSize');
+  const editMatQty = document.getElementById('editMatQty');
+  const editRackFields = document.getElementById('editRackFields');
+  const editPalletFields = document.getElementById('editPalletFields');
+  const editMatCancel = document.getElementById('editMatCancel');
+  const editMatSubmit = document.getElementById('editMatSubmit');
+
+  // Modal usuwania maty
+  const deleteMatModal = document.getElementById('deleteMatModal');
+  const deleteMatId = document.getElementById('deleteMatId');
+  const deleteMatName = document.getElementById('deleteMatName');
+  const deleteMatCancel = document.getElementById('deleteMatCancel');
+  const deleteMatConfirm = document.getElementById('deleteMatConfirm');
+
+  // ==================== FUNKCJE ADMINA ====================
+
+  function openAdminModal() {
+    if (isAdmin) {
+      // Pokaż sekcję zalogowanego
+      adminLoginSection.style.display = 'none';
+      adminLoggedSection.style.display = 'block';
+      adminModalIcon.textContent = '🔓';
+      adminModalTitle.textContent = 'Panel Administratora';
+    } else {
+      // Pokaż sekcję logowania
+      adminLoginSection.style.display = 'block';
+      adminLoggedSection.style.display = 'none';
+      adminModalIcon.textContent = '🔒';
+      adminModalTitle.textContent = 'Logowanie Administratora';
+      adminPinInput.value = '';
+      pinError.style.display = 'none';
+    }
+    openModal(adminModal);
+    if (!isAdmin) {
+      setTimeout(() => adminPinInput.focus(), 100);
+    }
+  }
+
+  async function verifyPin(pin) {
+    try {
+      const { data, error } = await window.supabase
+        .from('archive_pins')
+        .select('id')
+        .eq('pin_code', pin)
+        .limit(1);
+      
+      if (error) throw error;
+      return data && data.length > 0;
+    } catch (error) {
+      console.error('Błąd weryfikacji PIN:', error);
+      return false;
+    }
+  }
+
+  async function loginAdmin() {
+    const pin = adminPinInput.value.trim();
+    
+    if (!pin || pin.length < 3) {
+      pinError.style.display = 'flex';
+      pinError.querySelector('span').textContent = 'PIN musi mieć minimum 3 znaki';
+      adminPinInput.classList.add('error');
+      return;
+    }
+    
+    adminLoginSubmit.disabled = true;
+    adminLoginSubmit.innerHTML = '<span class="spinner"></span> Weryfikacja...';
+    
+    const isValid = await verifyPin(pin);
+    
+    if (isValid) {
+      isAdmin = true;
+      pinError.style.display = 'none';
+      adminPinInput.classList.remove('error');
+      closeModal(adminModal);
+      updateAdminUI();
+      showToast('✅ Zalogowano jako Administrator!', 'success');
+      
+      // Odśwież listę mat jeśli jesteśmy w widoku mat
+      if (currentView === 'mats') {
+        renderMats(allLogoMats, matsSearch.value);
+      }
+    } else {
+      pinError.style.display = 'flex';
+      pinError.querySelector('span').textContent = 'Nieprawidłowy PIN';
+      adminPinInput.classList.add('error');
+      adminPinInput.value = '';
+      adminPinInput.focus();
+    }
+    
+    adminLoginSubmit.disabled = false;
+    adminLoginSubmit.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:18px;height:18px;margin-right:6px;"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+      Zaloguj
+    `;
+  }
+
+  function logoutAdmin(silent = false) {
+    isAdmin = false;
+    updateAdminUI();
+    
+    if (!silent) {
+      closeModal(adminModal);
+      showToast('🔒 Wylogowano z panelu administratora', 'error');
+      
+      // Odśwież listę mat jeśli jesteśmy w widoku mat
+      if (currentView === 'mats') {
+        renderMats(allLogoMats, matsSearch.value);
+      }
+    }
+  }
+
+  function updateAdminUI() {
+    // Aktualizuj przycisk w headerze
+    adminBtn.classList.toggle('admin-logged', isAdmin);
+    
+    // Pokaż/ukryj sekcję dodawania maty
+    if (adminAddMatSection) {
+      adminAddMatSection.style.display = isAdmin ? 'block' : 'none';
+    }
+  }
+
+  // ==================== EVENT LISTENERY ADMINA ====================
+
+  adminBtn.addEventListener('click', openAdminModal);
+
+  adminLoginCancel.addEventListener('click', () => {
+    closeModal(adminModal);
+    adminPinInput.value = '';
+    pinError.style.display = 'none';
+    adminPinInput.classList.remove('error');
+  });
+
+  adminLoginSubmit.addEventListener('click', loginAdmin);
+
+  adminPinInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      loginAdmin();
+    }
+  });
+
+  adminPinInput.addEventListener('input', () => {
+    pinError.style.display = 'none';
+    adminPinInput.classList.remove('error');
+  });
+
+  togglePinVisibility.addEventListener('click', () => {
+    const isPassword = adminPinInput.type === 'password';
+    adminPinInput.type = isPassword ? 'text' : 'password';
+    togglePinVisibility.classList.toggle('visible', isPassword);
+  });
+
+  adminCloseBtn.addEventListener('click', () => closeModal(adminModal));
+  adminLogoutBtn.addEventListener('click', () => logoutAdmin(false));
+
+  // ==================== OBSŁUGA TYPU LOKALIZACJI ====================
+
+  // Toggle dla dodawania
+  document.querySelectorAll('input[name="addLocationType"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+      const isRack = e.target.value === 'rack';
+      addRackFields.style.display = isRack ? 'grid' : 'none';
+      addPalletFields.style.display = isRack ? 'none' : 'block';
+    });
+  });
+
+  // Toggle dla edycji
+  document.querySelectorAll('input[name="editLocationType"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+      const isRack = e.target.value === 'rack';
+      editRackFields.style.display = isRack ? 'grid' : 'none';
+      editPalletFields.style.display = isRack ? 'none' : 'block';
+    });
+  });
+
+  // ==================== BUDOWANIE LOKALIZACJI ====================
+
+  function buildLocationString(rack, row, pipe) {
+    if (!rack && !row && !pipe) return '';
+    
+    let parts = [];
+    if (rack) parts.push(rack);
+    if (row) parts.push(row);
+    if (pipe) parts.push(pipe);
+    
+    return parts.join('-');
+  }
+
+  function parseLocationString(location) {
+    if (!location) return { type: 'rack', rack: '', row: '', pipe: '', pallet: '' };
+    
+    // Sprawdź czy to paleta
+    const isPallet = location.toUpperCase().includes('PALETA') || 
+                    location.toUpperCase().includes('MAGAZYN') ||
+                    location.toUpperCase().includes('POD-') ||
+                    !location.includes('-') ||
+                    !/^\d/.test(location.charAt(0)) && !/^[A-Z]-\d/.test(location);
+    
+    if (isPallet) {
+      return { type: 'pallet', rack: '', row: '', pipe: '', pallet: location };
+    }
+    
+    // Parsuj format regałowy: REGAŁ-RZĄD-RURY
+    const parts = location.split('-');
+    return {
+      type: 'rack',
+      rack: parts[0] || '',
+      row: parts[1] || '',
+      pipe: parts.slice(2).join('-') || '',
+      pallet: ''
+    };
+  }
+
+  // ==================== DODAWANIE MATY ====================
+
+  addNewMatBtn?.addEventListener('click', () => {
+    // Reset formularza
+    addMatName.value = '';
+    addMatRack.value = '';
+    addMatRow.value = '';
+    addMatPipe.value = '';
+    addMatPallet.value = '';
+    addMatSize.value = '';
+    addMatQty.value = '1';
+    
+    // Reset typu lokalizacji
+    document.querySelector('input[name="addLocationType"][value="rack"]').checked = true;
+    addRackFields.style.display = 'grid';
+    addPalletFields.style.display = 'none';
+    
+    openModal(addMatModal);
+    setTimeout(() => addMatName.focus(), 100);
+  });
+
+  addMatCancel.addEventListener('click', () => closeModal(addMatModal));
+
+  addMatSubmit.addEventListener('click', async () => {
+    const name = addMatName.value.trim();
+    const qty = parseInt(addMatQty.value) || 0;
+    const size = addMatSize.value.trim();
+    
+    if (!name) {
+      showToast('Podaj nazwę maty!', 'error');
+      addMatName.focus();
+      return;
+    }
+    
+    // Buduj lokalizację
+    let location = '';
+    const locationType = document.querySelector('input[name="addLocationType"]:checked').value;
+    
+    if (locationType === 'rack') {
+      location = buildLocationString(
+        addMatRack.value.trim(),
+        addMatRow.value.trim(),
+        addMatPipe.value.trim()
+      );
+    } else {
+      location = addMatPallet.value.trim() || 'PALETA';
+    }
+    
+    addMatSubmit.disabled = true;
+    addMatSubmit.innerHTML = '<span class="spinner"></span> Dodawanie...';
+    
+    try {
+      const { data, error } = await window.supabase
+        .from('logo_mats')
+        .insert([{
+          name: name,
+          location: location,
+          size: size,
+          quantity: qty
+        }])
+        .select();
+      
+      if (error) throw error;
+      
+      showToast('✅ Mata dodana pomyślnie!', 'success');
+      closeModal(addMatModal);
+      
+      // Odśwież cache i listę
+      allLogoMats = [];
+      const newMats = await fetchAndCacheLogoMats();
+      renderMats(newMats, matsSearch.value);
+      
+    } catch (error) {
+      console.error('Błąd dodawania maty:', error);
+      showToast('Błąd dodawania maty: ' + error.message, 'error');
+    }
+    
+    addMatSubmit.disabled = false;
+    addMatSubmit.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:18px;height:18px;margin-right:6px;"><path d="M12 5v14m-7-7h14"/></svg>
+      Dodaj matę
+    `;
+  });
+
+  // ==================== EDYCJA MATY ====================
+
+  function openEditMatModal(mat) {
+    editMatId.value = mat.id;
+    editMatName.value = mat.name || '';
+    editMatSize.value = mat.size || '';
+    editMatQty.value = mat.quantity || 0;
+    
+    const parsed = parseLocationString(mat.location);
+    
+    if (parsed.type === 'pallet') {
+      document.querySelector('input[name="editLocationType"][value="pallet"]').checked = true;
+      editRackFields.style.display = 'none';
+      editPalletFields.style.display = 'block';
+      editMatPallet.value = parsed.pallet;
+      editMatRack.value = '';
+      editMatRow.value = '';
+      editMatPipe.value = '';
+    } else {
+      document.querySelector('input[name="editLocationType"][value="rack"]').checked = true;
+      editRackFields.style.display = 'grid';
+      editPalletFields.style.display = 'none';
+      editMatRack.value = parsed.rack;
+      editMatRow.value = parsed.row;
+      editMatPipe.value = parsed.pipe;
+      editMatPallet.value = '';
+    }
+    
+    openModal(editMatModal);
+  }
+
+  editMatCancel.addEventListener('click', () => closeModal(editMatModal));
+
+  editMatSubmit.addEventListener('click', async () => {
+    const id = editMatId.value;
+    const name = editMatName.value.trim();
+    const qty = parseInt(editMatQty.value) || 0;
+    const size = editMatSize.value.trim();
+    
+    if (!name) {
+      showToast('Podaj nazwę maty!', 'error');
+      editMatName.focus();
+      return;
+    }
+    
+    // Buduj lokalizację
+    let location = '';
+    const locationType = document.querySelector('input[name="editLocationType"]:checked').value;
+    
+    if (locationType === 'rack') {
+      location = buildLocationString(
+        editMatRack.value.trim(),
+        editMatRow.value.trim(),
+        editMatPipe.value.trim()
+      );
+    } else {
+      location = editMatPallet.value.trim() || 'PALETA';
+    }
+    
+    editMatSubmit.disabled = true;
+    editMatSubmit.innerHTML = '<span class="spinner"></span> Zapisywanie...';
+    
+    try {
+      const { error } = await window.supabase
+        .from('logo_mats')
+        .update({
+          name: name,
+          location: location,
+          size: size,
+          quantity: qty
+        })
+        .eq('id', id);
+      
+      if (error) throw error;
+      
+      showToast('✅ Mata zaktualizowana!', 'success');
+      closeModal(editMatModal);
+      
+      // Odśwież cache i listę
+      allLogoMats = [];
+      const newMats = await fetchAndCacheLogoMats();
+      renderMats(newMats, matsSearch.value);
+      
+    } catch (error) {
+      console.error('Błąd aktualizacji maty:', error);
+      showToast('Błąd aktualizacji: ' + error.message, 'error');
+    }
+    
+    editMatSubmit.disabled = false;
+    editMatSubmit.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;margin-right:6px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+      Zapisz zmiany
+    `;
+  });
+
+  // ==================== USUWANIE MATY ====================
+
+  function openDeleteMatModal(mat) {
+    deleteMatId.value = mat.id;
+    deleteMatName.textContent = mat.name;
+    openModal(deleteMatModal);
+  }
+
+  deleteMatCancel.addEventListener('click', () => closeModal(deleteMatModal));
+
+  deleteMatConfirm.addEventListener('click', async () => {
+    const id = deleteMatId.value;
+    
+    deleteMatConfirm.disabled = true;
+    deleteMatConfirm.innerHTML = '<span class="spinner"></span> Usuwanie...';
+    
+    try {
+      const { error } = await window.supabase
+        .from('logo_mats')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+      
+      showToast('🗑️ Mata usunięta!', 'error');
+      closeModal(deleteMatModal);
+      
+      // Odśwież cache i listę
+      allLogoMats = [];
+      const newMats = await fetchAndCacheLogoMats();
+      renderMats(newMats, matsSearch.value);
+      
+    } catch (error) {
+      console.error('Błąd usuwania maty:', error);
+      showToast('Błąd usuwania: ' + error.message, 'error');
+    }
+    
+    deleteMatConfirm.disabled = false;
+    deleteMatConfirm.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:18px;height:18px;margin-right:6px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+      Usuń matę
+    `;
+  });
+
   // ==================== ROUTING SYSTEM ====================
   const views = {
     home: document.getElementById('homeView'),
@@ -1165,8 +1659,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const filtered = matsData.filter(mat => {
       const search = filter.toLowerCase();
       return (mat.name?.toLowerCase() || '').includes(search) ||
-             (mat.location?.toLowerCase() || '').includes(search) ||
-             (mat.size?.toLowerCase() || '').includes(search);
+            (mat.location?.toLowerCase() || '').includes(search) ||
+            (mat.size?.toLowerCase() || '').includes(search);
     });
 
     const totalQuantity = matsData.reduce((sum, mat) => sum + mat.quantity, 0);
@@ -1192,8 +1686,26 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     matsList.innerHTML = filtered.map((mat) => {
+      // Przyciski admina (widoczne tylko dla zalogowanego admina)
+      const adminActions = isAdmin ? `
+        <div class="mat-admin-actions">
+          <button class="btn-edit-mat" data-mat-id="${mat.id}" aria-label="Edytuj matę">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+            </svg>
+          </button>
+          <button class="btn-delete-mat" data-mat-id="${mat.id}" aria-label="Usuń matę">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+          </button>
+        </div>
+      ` : '';
+
       return `
-        <div class="mat-item">
+        <div class="mat-item" data-mat-id="${mat.id}">
           <div class="mat-info">
             <div class="mat-name">${mat.name}</div>
             <div class="mat-details">
@@ -1202,11 +1714,33 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
           </div>
           <div class="mat-actions">
+            ${adminActions}
             <div class="mat-qty-badge">${mat.quantity}</div>
           </div>
         </div>
       `;
     }).join('');
+
+    // Dodaj event listenery dla przycisków admina
+    if (isAdmin) {
+      matsList.querySelectorAll('.btn-edit-mat').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const matId = btn.dataset.matId;
+          const mat = allLogoMats.find(m => m.id == matId);
+          if (mat) openEditMatModal(mat);
+        });
+      });
+
+      matsList.querySelectorAll('.btn-delete-mat').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const matId = btn.dataset.matId;
+          const mat = allLogoMats.find(m => m.id == matId);
+          if (mat) openDeleteMatModal(mat);
+        });
+      });
+    }
   }
 
   matsSearch.addEventListener('input', (e) => {
