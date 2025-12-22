@@ -4470,3 +4470,164 @@ body.dark .admin-status-badge {
 body.dark .location-type-option input:checked + .location-type-content {
   background: rgba(0, 194, 209, 0.12);
 }
+
+/* ==================== NUMER MATY ==================== */
+
+.mat-number-badge {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(139, 92, 246, 0.1);
+  color: #8b5cf6;
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  margin-left: 8px;
+  font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+  letter-spacing: 0.5px;
+}
+
+body.dark .mat-number-badge {
+  background: rgba(139, 92, 246, 0.15);
+  border-color: rgba(139, 92, 246, 0.35);
+  color: #a78bfa;
+}
+
+/* Responsywność */
+@media (max-width: 480px) {
+  .mat-number-badge {
+    font-size: 11px;
+    padding: 2px 6px;
+    margin-left: 6px;
+  }
+  
+  .mat-name {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+  }
+}
+
+/* ==================== OPTYMALIZACJA LISTY MAT ==================== */
+
+/* CSS Containment dla wydajności */
+.mat-item {
+  contain: content;
+  content-visibility: auto;
+  contain-intrinsic-size: 0 85px; /* Przewidywana wysokość elementu */
+}
+
+/* Sentinel / Load More */
+.load-more-sentinel {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.load-more-spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(0, 169, 190, 0.2);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* Wskaźnik wyszukiwania */
+.search-input.searching {
+  border-color: var(--primary);
+  background: rgba(0, 169, 190, 0.03);
+}
+
+.search-input.searching::placeholder {
+  opacity: 0.5;
+}
+
+/* Animacja pojawiania się mat */
+.mat-item {
+  animation: matFadeIn 0.2s ease-out;
+  animation-fill-mode: both;
+}
+
+@keyframes matFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Delay dla kolejnych elementów (tylko pierwsze 10) */
+.mat-item:nth-child(1) { animation-delay: 0.02s; }
+.mat-item:nth-child(2) { animation-delay: 0.04s; }
+.mat-item:nth-child(3) { animation-delay: 0.06s; }
+.mat-item:nth-child(4) { animation-delay: 0.08s; }
+.mat-item:nth-child(5) { animation-delay: 0.10s; }
+.mat-item:nth-child(6) { animation-delay: 0.12s; }
+.mat-item:nth-child(7) { animation-delay: 0.14s; }
+.mat-item:nth-child(8) { animation-delay: 0.16s; }
+.mat-item:nth-child(9) { animation-delay: 0.18s; }
+.mat-item:nth-child(10) { animation-delay: 0.20s; }
+
+/* Wyłącz animacje na mobile dla wydajności */
+@media (max-width: 768px) {
+  .mat-item {
+    animation: none;
+    contain-intrinsic-size: 0 95px; /* Wyższe na mobile */
+  }
+}
+
+/* Preferuje reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .mat-item {
+    animation: none;
+  }
+  
+  .load-more-spinner {
+    animation-duration: 1.5s;
+  }
+}
+
+/* Skeleton loader (opcjonalny) */
+.mat-item-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-card) 0%,
+    rgba(0, 169, 190, 0.05) 50%,
+    var(--bg-card) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 12px;
+  height: 85px;
+  margin-bottom: 12px;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Informacja o ilości załadowanych */
+.mats-loaded-info {
+  text-align: center;
+  padding: 12px;
+  font-size: 13px;
+  color: var(--muted);
+  border-top: 1px solid var(--border-color);
+  margin-top: 8px;
+}
+
+.mats-loaded-info strong {
+  color: var(--primary);
+}
