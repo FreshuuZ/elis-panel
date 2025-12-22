@@ -422,6 +422,10 @@
         <section>
           <h2 class="section-title">📦 Lista Mat (inwentaryzacja)</h2>
           <div id="matsList" class="mats-list"></div>
+          <div id="matsLoadMoreSentinel" class="load-more-sentinel">
+            <div class="load-more-spinner"></div>
+            <span>Ładowanie...</span>
+          </div>
         </section>
       </main>
     </div>
@@ -870,6 +874,11 @@
           <input type="text" id="addMatName" placeholder="np. Nowa Firma Logo" required>
         </div>
         
+        <div class="mat-form-group">
+          <label for="addMatNumber">Numer maty</label>
+          <input type="text" id="addMatNumber" placeholder="np. 12345">
+        </div>
+
         <div class="mat-form-group full-width">
           <label>Typ lokalizacji</label>
           <div class="location-type-toggle">
@@ -945,6 +954,11 @@
         <div class="mat-form-group full-width">
           <label for="editMatName">Nazwa maty *</label>
           <input type="text" id="editMatName" placeholder="Nazwa maty" required>
+        </div>
+
+        <div class="mat-form-group">
+          <label for="editMatNumber">Numer maty</label>
+          <input type="text" id="editMatNumber" placeholder="np. MAT-001 lub 12345">
         </div>
         
         <div class="mat-form-group full-width">
