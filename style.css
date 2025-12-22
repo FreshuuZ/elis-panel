@@ -3923,3 +3923,550 @@ body.dark .pallet-count-display {
     color: #666;
   }
 }
+
+/* ==================== SYSTEM ADMINISTRATORA ==================== */
+
+/* Przycisk admina w headerze */
+.admin-btn {
+  background: rgba(139, 92, 246, 0.08);
+  border: 2px solid rgba(139, 92, 246, 0.2);
+  border-radius: 50%;
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #8b5cf6;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  margin-right: 8px;
+}
+
+.admin-btn:hover {
+  background: rgba(139, 92, 246, 0.15);
+  border-color: #8b5cf6;
+  transform: scale(1.08);
+  box-shadow: 0 6px 20px rgba(139, 92, 246, 0.25);
+}
+
+.admin-btn svg {
+  width: 22px;
+  height: 22px;
+  transition: all 0.3s ease;
+}
+
+.admin-btn .admin-icon-unlocked {
+  display: none;
+}
+
+.admin-btn.admin-logged {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #10b981;
+}
+
+.admin-btn.admin-logged:hover {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: #10b981;
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.25);
+}
+
+.admin-btn.admin-logged .admin-icon-locked {
+  display: none;
+}
+
+.admin-btn.admin-logged .admin-icon-unlocked {
+  display: block;
+}
+
+/* Wskaźnik zalogowania */
+.admin-btn.admin-logged::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 12px;
+  height: 12px;
+  background: #10b981;
+  border-radius: 50%;
+  border: 2px solid var(--bg-app);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* Modal admina */
+.admin-modal-content {
+  max-width: 400px;
+}
+
+.admin-modal-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.admin-modal-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+  display: block;
+}
+
+.admin-modal-header h3 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: var(--text);
+}
+
+.admin-modal-desc {
+  text-align: center;
+  color: var(--muted);
+  margin-bottom: 20px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Input PIN */
+.pin-input-wrapper {
+  position: relative;
+  margin-bottom: 16px;
+}
+
+.pin-input-wrapper input {
+  width: 100%;
+  padding: 16px 50px 16px 20px;
+  font-size: 24px;
+  letter-spacing: 8px;
+  text-align: center;
+  font-weight: 700;
+  border: 2px solid var(--border-color);
+  border-radius: 12px;
+  background: rgba(139, 92, 246, 0.03);
+  color: var(--text);
+  transition: all 0.2s ease;
+}
+
+.pin-input-wrapper input::placeholder {
+  letter-spacing: 12px;
+  color: var(--muted);
+  opacity: 0.5;
+}
+
+.pin-input-wrapper input:focus {
+  outline: none;
+  border-color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.06);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+}
+
+.pin-input-wrapper input.error {
+  border-color: var(--accent);
+  background: rgba(227, 6, 19, 0.03);
+  animation: shake 0.4s ease;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-8px); }
+  75% { transform: translateX(8px); }
+}
+
+.pin-toggle-btn {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  padding: 8px;
+  cursor: pointer;
+  color: var(--muted);
+  transition: color 0.2s;
+  min-height: auto;
+}
+
+.pin-toggle-btn:hover {
+  color: var(--text);
+}
+
+.pin-toggle-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.pin-toggle-btn .eye-closed {
+  display: none;
+}
+
+.pin-toggle-btn.visible .eye-open {
+  display: none;
+}
+
+.pin-toggle-btn.visible .eye-closed {
+  display: block;
+}
+
+/* Błąd PIN */
+.pin-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(227, 6, 19, 0.1);
+  border: 1px solid rgba(227, 6, 19, 0.3);
+  color: var(--accent);
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  animation: fadeInSlideUp 0.3s ease;
+}
+
+.pin-error svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+/* Stan zalogowany */
+.admin-status-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.05));
+  border: 2px solid rgba(16, 185, 129, 0.3);
+  color: #10b981;
+  padding: 16px 20px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.admin-status-badge svg {
+  width: 22px;
+  height: 22px;
+}
+
+.admin-logged-desc {
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+/* Spinner */
+.spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: white;
+  animation: spin 0.8s ease-in-out infinite;
+  margin-right: 8px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ==================== SEKCJA DODAWANIA MATY ==================== */
+
+.admin-add-mat-section {
+  margin-bottom: 16px;
+  animation: fadeInSlideUp 0.3s ease;
+}
+
+.btn-add-mat {
+  width: 100%;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.05));
+  border: 2px dashed rgba(16, 185, 129, 0.4);
+  border-radius: 12px;
+  color: #10b981;
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-add-mat:hover {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(16, 185, 129, 0.1));
+  border-color: #10b981;
+  border-style: solid;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.2);
+}
+
+.btn-add-mat svg {
+  width: 22px;
+  height: 22px;
+}
+
+body.dark .btn-add-mat {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(16, 185, 129, 0.08));
+  border-color: rgba(16, 185, 129, 0.5);
+}
+
+/* ==================== PRZYCISKI ADMINA PRZY MATACH ==================== */
+
+.mat-admin-actions {
+  display: flex;
+  gap: 6px;
+  margin-right: 12px;
+}
+
+.btn-edit-mat,
+.btn-delete-mat {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-edit-mat {
+  background: rgba(139, 92, 246, 0.1);
+  border: 2px solid rgba(139, 92, 246, 0.2);
+  color: #8b5cf6;
+}
+
+.btn-edit-mat:hover {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: #8b5cf6;
+  transform: scale(1.1);
+}
+
+.btn-delete-mat {
+  background: rgba(227, 6, 19, 0.1);
+  border: 2px solid rgba(227, 6, 19, 0.2);
+  color: var(--accent);
+}
+
+.btn-delete-mat:hover {
+  background: rgba(227, 6, 19, 0.2);
+  border-color: var(--accent);
+  transform: scale(1.1);
+}
+
+.btn-edit-mat svg,
+.btn-delete-mat svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ==================== MODAL FORMULARZA MATY ==================== */
+
+.mat-form-modal {
+  max-width: 520px;
+}
+
+.mat-form-modal h3 {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.mat-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.mat-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mat-form-group.full-width {
+  grid-column: 1 / -1;
+}
+
+.mat-form-group label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.mat-form-group input {
+  padding: 12px 14px;
+  font-size: 15px;
+  border-radius: 10px;
+  border: 2px solid var(--border-color);
+  background: transparent;
+  color: var(--text);
+  transition: all 0.2s ease;
+}
+
+.mat-form-group input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(0, 169, 190, 0.1);
+}
+
+/* Toggle typu lokalizacji */
+.location-type-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.location-type-option {
+  cursor: pointer;
+}
+
+.location-type-option input {
+  display: none;
+}
+
+.location-type-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  border: 2px solid var(--border-color);
+  border-radius: 12px;
+  transition: all 0.2s ease;
+  background: transparent;
+}
+
+.location-type-option:hover .location-type-content {
+  border-color: var(--primary);
+  background: rgba(0, 169, 190, 0.03);
+}
+
+.location-type-option input:checked + .location-type-content {
+  border-color: var(--primary);
+  background: rgba(0, 169, 190, 0.08);
+  border-width: 3px;
+}
+
+.location-type-icon {
+  font-size: 28px;
+}
+
+.location-type-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Pola regału */
+.rack-fields {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+
+.pallet-fields {
+  grid-column: 1 / -1;
+}
+
+/* Ostrzeżenie usuwania */
+.delete-warning {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: rgba(227, 6, 19, 0.08);
+  border: 1px solid rgba(227, 6, 19, 0.2);
+  border-radius: 10px;
+  padding: 14px 20px;
+  margin: 16px 0;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.delete-warning svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+/* Responsywność */
+@media (max-width: 640px) {
+  .mat-form-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .rack-fields {
+    grid-template-columns: 1fr;
+  }
+  
+  .mat-admin-actions {
+    margin-right: 8px;
+  }
+  
+  .btn-edit-mat,
+  .btn-delete-mat {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+  }
+  
+  .btn-edit-mat svg,
+  .btn-delete-mat svg {
+    width: 16px;
+    height: 16px;
+  }
+  
+  .admin-btn {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    margin-right: 6px;
+  }
+  
+  .admin-btn svg {
+    width: 20px;
+    height: 20px;
+  }
+  
+  .pin-input-wrapper input {
+    font-size: 20px;
+    letter-spacing: 6px;
+    padding: 14px 46px 14px 16px;
+  }
+}
+
+/* Dark mode */
+body.dark .admin-btn {
+  background: rgba(139, 92, 246, 0.12);
+  border-color: rgba(139, 92, 246, 0.3);
+}
+
+body.dark .admin-btn.admin-logged {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+body.dark .pin-input-wrapper input {
+  background: rgba(139, 92, 246, 0.06);
+}
+
+body.dark .admin-status-badge {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(16, 185, 129, 0.08));
+}
+
+body.dark .location-type-option input:checked + .location-type-content {
+  background: rgba(0, 194, 209, 0.12);
+}
