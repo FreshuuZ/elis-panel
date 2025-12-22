@@ -2,6 +2,16 @@ document.addEventListener("DOMContentLoaded", () => {
   
   // ==================== GLOBAL STATE & CACHE ====================
   let allLogoMats = [];
+  // ==================== OPTYMALIZACJA LISTY MAT ====================
+  const MATS_PER_PAGE = 30;           // Ile mat na stronę
+  const SEARCH_DEBOUNCE_MS = 250;     // Opóźnienie wyszukiwania
+
+  let currentMatsPage = 0;
+  let filteredMatsCache = [];
+  let searchDebounceTimer = null;
+  let isLoadingMoreMats = false;
+  let matsObserver = null;
+
   let allWashingItems = [];
   let allArchiveItems = [];
   let allReplacementsArchive = [];
@@ -45,6 +55,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Modal dodawania maty
   const addMatModal = document.getElementById('addMatModal');
   const addMatName = document.getElementById('addMatName');
+  const addMatNumber = document.getElementById('addMatNumber');
   const addMatRack = document.getElementById('addMatRack');
   const addMatRow = document.getElementById('addMatRow');
   const addMatPipe = document.getElementById('addMatPipe');
@@ -60,6 +71,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const editMatModal = document.getElementById('editMatModal');
   const editMatId = document.getElementById('editMatId');
   const editMatName = document.getElementById('editMatName');
+  const editMatNumber = document.getElementById('editMatNumber');
   const editMatRack = document.getElementById('editMatRack');
   const editMatRow = document.getElementById('editMatRow');
   const editMatPipe = document.getElementById('editMatPipe');
@@ -281,6 +293,7 @@ document.addEventListener("DOMContentLoaded", () => {
   addNewMatBtn?.addEventListener('click', () => {
     // Reset formularza
     addMatName.value = '';
+    addMatNumber.value = '';  // 🆕 DODANE
     addMatRack.value = '';
     addMatRow.value = '';
     addMatPipe.value = '';
@@ -301,6 +314,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   addMatSubmit.addEventListener('click', async () => {
     const name = addMatName.value.trim();
+    const matNumber = addMatNumber.value.trim();  // 🆕 DODANE
     const qty = parseInt(addMatQty.value) || 0;
     const size = addMatSize.value.trim();
     
@@ -332,6 +346,7 @@ document.addEventListener("DOMContentLoaded", () => {
         .from('logo_mats')
         .insert([{
           name: name,
+          mat_number: matNumber || null,  // 🆕 DODANE
           location: location,
           size: size,
           quantity: qty
@@ -365,6 +380,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function openEditMatModal(mat) {
     editMatId.value = mat.id;
     editMatName.value = mat.name || '';
+    editMatNumber.value = mat.mat_number || '';  // 🆕 DODANE
     editMatSize.value = mat.size || '';
     editMatQty.value = mat.quantity || 0;
     
@@ -396,6 +412,7 @@ document.addEventListener("DOMContentLoaded", () => {
   editMatSubmit.addEventListener('click', async () => {
     const id = editMatId.value;
     const name = editMatName.value.trim();
+    const matNumber = editMatNumber.value.trim();  // 🆕 DODANE
     const qty = parseInt(editMatQty.value) || 0;
     const size = editMatSize.value.trim();
     
@@ -427,6 +444,7 @@ document.addEventListener("DOMContentLoaded", () => {
         .from('logo_mats')
         .update({
           name: name,
+          mat_number: matNumber || null,  // 🆕 DODANE
           location: location,
           size: size,
           quantity: qty
@@ -1655,96 +1673,311 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-  function renderMats(matsData, filter = '') {
-    const filtered = matsData.filter(mat => {
-      const search = filter.toLowerCase();
-      return (mat.name?.toLowerCase() || '').includes(search) ||
-            (mat.location?.toLowerCase() || '').includes(search) ||
-            (mat.size?.toLowerCase() || '').includes(search);
-    });
+// ==================== ZOPTYMALIZOWANA LISTA MAT ====================
 
-    const totalQuantity = matsData.reduce((sum, mat) => sum + mat.quantity, 0);
-    matsCount.textContent = `Załadowano: ${matsData.length} mat (łącznie: ${totalQuantity} szt.)`;
+  /**
+   * Główna funkcja renderowania mat z lazy loading
+   */
+  function renderMats(matsData, filter = '') {
+    // Anuluj poprzedni debounce
+    if (searchDebounceTimer) {
+      clearTimeout(searchDebounceTimer);
+    }
+    
+    // Debounce dla wyszukiwania (nie dla pierwszego ładowania)
+    if (filter !== '' && matsData === allLogoMats) {
+      searchDebounceTimer = setTimeout(() => {
+        executeRenderMats(matsData, filter);
+      }, SEARCH_DEBOUNCE_MS);
+    } else {
+      executeRenderMats(matsData, filter);
+    }
+  }
+
+  /**
+   * Wykonuje faktyczne renderowanie
+   */
+  function executeRenderMats(matsData, filter = '') {
+    // Filtruj dane
+    const search = filter.toLowerCase().trim();
+    
+    if (search) {
+      filteredMatsCache = matsData.filter(mat => {
+        return (mat.name?.toLowerCase() || '').includes(search) ||
+              (mat.location?.toLowerCase() || '').includes(search) ||
+              (mat.size?.toLowerCase() || '').includes(search) ||
+              (mat.mat_number?.toLowerCase() || '').includes(search);
+      });
+    } else {
+      filteredMatsCache = [...matsData];
+    }
+    
+    // Reset paginacji
+    currentMatsPage = 0;
+    isLoadingMoreMats = false;
+    
+    // Aktualizuj statystyki
+    updateMatsStats(matsData, filteredMatsCache, filter);
+    
+    // Wyczyść listę
+    matsList.innerHTML = '';
+    
+    // Sprawdź czy są wyniki
+    if (filteredMatsCache.length === 0) {
+      renderMatsEmptyState(filter);
+      hideMatsLoadMore();
+      return;
+    }
+    
+    // Renderuj pierwszą partię
+    renderMatsChunk(true);
+    
+    // Ustaw observer dla lazy loading
+    setupMatsObserver();
+  }
+
+  /**
+   * Renderuje partię mat
+   */
+  function renderMatsChunk(isFirstChunk = false) {
+    const start = currentMatsPage * MATS_PER_PAGE;
+    const end = start + MATS_PER_PAGE;
+    const matsToRender = filteredMatsCache.slice(start, end);
+    
+    if (matsToRender.length === 0) {
+      hideMatsLoadMore();
+      return;
+    }
+    
+    // Użyj DocumentFragment dla lepszej wydajności
+    const fragment = document.createDocumentFragment();
+    
+    matsToRender.forEach(mat => {
+      const matElement = createMatElement(mat);
+      fragment.appendChild(matElement);
+    });
+    
+    // Dodaj do DOM w jednej operacji
+    matsList.appendChild(fragment);
+    
+    // Podłącz event listenery dla przycisków admina
+    if (isAdmin) {
+      attachMatAdminListeners(matsToRender);
+    }
+    
+    // Sprawdź czy są kolejne strony
+    const hasMore = end < filteredMatsCache.length;
+    
+    if (hasMore) {
+      showMatsLoadMore();
+    } else {
+      hideMatsLoadMore();
+    }
+  }
+
+  /**
+   * Tworzy pojedynczy element maty (wydajniej niż innerHTML)
+   */
+  function createMatElement(mat) {
+    const div = document.createElement('div');
+    div.className = 'mat-item';
+    div.dataset.matId = mat.id;
+    
+    // Admin actions
+    const adminActionsHtml = isAdmin ? `
+      <div class="mat-admin-actions">
+        <button class="btn-edit-mat" data-mat-id="${mat.id}" aria-label="Edytuj matę">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+        </button>
+        <button class="btn-delete-mat" data-mat-id="${mat.id}" aria-label="Usuń matę">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          </svg>
+        </button>
+      </div>
+    ` : '';
+    
+    // Numer maty badge
+    const matNumberBadge = mat.mat_number ? `<span class="mat-number-badge">#${mat.mat_number}</span>` : '';
+    
+    div.innerHTML = `
+      <div class="mat-info">
+        <div class="mat-name">
+          ${escapeHtml(mat.name)}
+          ${matNumberBadge}
+        </div>
+        <div class="mat-details">
+          ${mat.location ? `<div class="mat-detail-item"><strong>${formatLocation(mat.location)}</strong></div>` : ''}
+          ${mat.size ? `<div class="mat-detail-item">📏 ${escapeHtml(mat.size)}</div>` : ''}
+        </div>
+      </div>
+      <div class="mat-actions">
+        ${adminActionsHtml}
+        <div class="mat-qty-badge">${mat.quantity}</div>
+      </div>
+    `;
+    
+    return div;
+  }
+
+  /**
+   * Escape HTML dla bezpieczeństwa
+   */
+  function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  /**
+   * Podłącza listenery dla przycisków admina w konkretnej partii
+   */
+  function attachMatAdminListeners(mats) {
+    mats.forEach(mat => {
+      const editBtn = matsList.querySelector(`.btn-edit-mat[data-mat-id="${mat.id}"]`);
+      const deleteBtn = matsList.querySelector(`.btn-delete-mat[data-mat-id="${mat.id}"]`);
+      
+      if (editBtn) {
+        editBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openEditMatModal(mat);
+        });
+      }
+      
+      if (deleteBtn) {
+        deleteBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openDeleteMatModal(mat);
+        });
+      }
+    });
+  }
+
+  /**
+   * Aktualizuje statystyki mat
+   */
+  function updateMatsStats(allMats, filtered, filter) {
+    const totalQuantity = allMats.reduce((sum, mat) => sum + (mat.quantity || 0), 0);
+    matsCount.textContent = `Załadowano: ${allMats.length} mat (łącznie: ${totalQuantity} szt.)`;
     
     if (filter) {
       matsFiltered.style.display = 'inline';
-      const filteredQuantity = filtered.reduce((sum, mat) => sum + mat.quantity, 0);
+      const filteredQuantity = filtered.reduce((sum, mat) => sum + (mat.quantity || 0), 0);
       matsFiltered.textContent = `Znaleziono: ${filtered.length} (${filteredQuantity} szt.)`;
     } else {
       matsFiltered.style.display = 'none';
     }
+  }
 
-    if (filtered.length === 0) {
-      matsList.innerHTML = `<div class="empty-state">
+  /**
+   * Renderuje empty state
+   */
+  function renderMatsEmptyState(filter) {
+    matsList.innerHTML = `
+      <div class="empty-state">
         <svg class="empty-state-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <circle cx="11" cy="11" r="8"></circle>
           <path d="m21 21-4.35-4.35"></path>
         </svg>
-        <div class="empty-state-text">${filter ? 'Nie znaleziono mat spełniających kryteria.' : 'Brak danych do wyświetlenia.'}</div>
-      </div>`;
+        <div class="empty-state-text">
+          ${filter ? 'Nie znaleziono mat spełniających kryteria.' : 'Brak danych do wyświetlenia.'}
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Ustawia Intersection Observer dla lazy loading
+   */
+  function setupMatsObserver() {
+    const sentinel = document.getElementById('matsLoadMoreSentinel');
+    if (!sentinel) return;
+    
+    // Odłącz poprzedni observer
+    if (matsObserver) {
+      matsObserver.disconnect();
+    }
+    
+    // Utwórz nowy observer
+    matsObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting && !isLoadingMoreMats) {
+          loadMoreMats();
+        }
+      });
+    }, {
+      root: null,
+      rootMargin: '200px', // Zacznij ładować 200px przed końcem
+      threshold: 0
+    });
+    
+    matsObserver.observe(sentinel);
+  }
+
+  /**
+   * Ładuje kolejną partię mat
+   */
+  function loadMoreMats() {
+    const nextStart = (currentMatsPage + 1) * MATS_PER_PAGE;
+    
+    // Sprawdź czy są jeszcze maty do załadowania
+    if (nextStart >= filteredMatsCache.length) {
+      hideMatsLoadMore();
       return;
     }
+    
+    isLoadingMoreMats = true;
+    showMatsLoadMore();
+    
+    // Użyj requestAnimationFrame dla płynności
+    requestAnimationFrame(() => {
+      currentMatsPage++;
+      renderMatsChunk(false);
+      isLoadingMoreMats = false;
+    });
+  }
 
-    matsList.innerHTML = filtered.map((mat) => {
-      // Przyciski admina (widoczne tylko dla zalogowanego admina)
-      const adminActions = isAdmin ? `
-        <div class="mat-admin-actions">
-          <button class="btn-edit-mat" data-mat-id="${mat.id}" aria-label="Edytuj matę">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-            </svg>
-          </button>
-          <button class="btn-delete-mat" data-mat-id="${mat.id}" aria-label="Usuń matę">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="3 6 5 6 21 6"/>
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-            </svg>
-          </button>
-        </div>
-      ` : '';
-
-      return `
-        <div class="mat-item" data-mat-id="${mat.id}">
-          <div class="mat-info">
-            <div class="mat-name">${mat.name}</div>
-            <div class="mat-details">
-              ${mat.location ? `<div class="mat-detail-item"><strong>${formatLocation(mat.location)}</strong></div>` : ''}
-              ${mat.size ? `<div class="mat-detail-item">📏 ${mat.size}</div>` : ''}
-            </div>
-          </div>
-          <div class="mat-actions">
-            ${adminActions}
-            <div class="mat-qty-badge">${mat.quantity}</div>
-          </div>
-        </div>
-      `;
-    }).join('');
-
-    // Dodaj event listenery dla przycisków admina
-    if (isAdmin) {
-      matsList.querySelectorAll('.btn-edit-mat').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const matId = btn.dataset.matId;
-          const mat = allLogoMats.find(m => m.id == matId);
-          if (mat) openEditMatModal(mat);
-        });
-      });
-
-      matsList.querySelectorAll('.btn-delete-mat').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const matId = btn.dataset.matId;
-          const mat = allLogoMats.find(m => m.id == matId);
-          if (mat) openDeleteMatModal(mat);
-        });
-      });
+  /**
+   * Pokazuje wskaźnik ładowania
+   */
+  function showMatsLoadMore() {
+    const sentinel = document.getElementById('matsLoadMoreSentinel');
+    if (sentinel) {
+      sentinel.style.display = 'flex';
     }
   }
 
+  /**
+   * Ukrywa wskaźnik ładowania
+   */
+  function hideMatsLoadMore() {
+    const sentinel = document.getElementById('matsLoadMoreSentinel');
+    if (sentinel) {
+      sentinel.style.display = 'none';
+    }
+  }
+  
   matsSearch.addEventListener('input', (e) => {
-    renderMats(allLogoMats, e.target.value);
+    const value = e.target.value;
+    
+    // Pokaż wskaźnik wyszukiwania
+    matsSearch.classList.toggle('searching', value.length > 0);
+    
+    renderMats(allLogoMats, value);
+  });
+
+  // Obsługa klawisza Escape - wyczyść wyszukiwanie
+  matsSearch.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      matsSearch.value = '';
+      matsSearch.classList.remove('searching');
+      renderMats(allLogoMats, '');
+    }
   });
   
   exportExcelBtn.addEventListener('click', async () => {
