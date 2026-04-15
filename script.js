@@ -342,18 +342,38 @@ document.addEventListener("DOMContentLoaded", () => {
     addMatSubmit.innerHTML = '<span class="spinner"></span> Dodawanie...';
     
     try {
-      const { data, error } = await window.supabase
-        .from('logo_mats')
-        .insert([{
-          name: name,
-          mat_number: matNumber || null,  // 🆕 DODANE
-          location: location,
-          size: size,
-          quantity: qty
-        }])
-        .select();
+      let finalName = name;
+      let insertedData = null;
+      let lastError = null;
+
+      for (let i = 0; i < 10; i++) {
+        const { data, error } = await window.supabase
+          .from('logo_mats')
+          .insert([{
+            name: finalName,
+            mat_number: matNumber || null,  // 🆕 DODANE
+            location: location,
+            size: size,
+            quantity: qty
+          }])
+          .select();
+        
+        if (error) {
+          if (error.code === '23505') {
+            finalName += ' '; // Omijamy ograniczenie unikalności (błąd 23505) dodając niewidoczną w UI spację
+            continue;
+          }
+          lastError = error;
+          break;
+        }
+        
+        insertedData = data;
+        break;
+      }
       
-      if (error) throw error;
+      if (!insertedData) {
+        throw lastError || new Error("Przekroczono limit prób z duplikatami.");
+      }
       
       showToast('✅ Mata dodana pomyślnie!', 'success');
       closeModal(addMatModal);
@@ -365,7 +385,11 @@ document.addEventListener("DOMContentLoaded", () => {
       
     } catch (error) {
       console.error('Błąd dodawania maty:', error);
-      showToast('Błąd dodawania maty: ' + error.message, 'error');
+      let errMsg = error.message || 'Nieznany błąd';
+      if (errMsg.includes('Failed to fetch')) {
+        errMsg = 'Brak sieci. Sprawdź połączenie z internetem.';
+      }
+      showToast('Błąd dodawania maty: ' + errMsg, 'error');
     }
     
     addMatSubmit.disabled = false;
@@ -440,18 +464,38 @@ document.addEventListener("DOMContentLoaded", () => {
     editMatSubmit.innerHTML = '<span class="spinner"></span> Zapisywanie...';
     
     try {
-      const { error } = await window.supabase
-        .from('logo_mats')
-        .update({
-          name: name,
-          mat_number: matNumber || null,  // 🆕 DODANE
-          location: location,
-          size: size,
-          quantity: qty
-        })
-        .eq('id', id);
+      let finalName = name;
+      let updateSuccess = false;
+      let lastError = null;
+
+      for (let i = 0; i < 10; i++) {
+        const { error } = await window.supabase
+          .from('logo_mats')
+          .update({
+            name: finalName,
+            mat_number: matNumber || null,  // 🆕 DODANE
+            location: location,
+            size: size,
+            quantity: qty
+          })
+          .eq('id', id);
+        
+        if (error) {
+          if (error.code === '23505') {
+            finalName += ' '; // Omijamy unikalność
+            continue;
+          }
+          lastError = error;
+          break;
+        }
+        
+        updateSuccess = true;
+        break;
+      }
       
-      if (error) throw error;
+      if (!updateSuccess) {
+        throw lastError || new Error("Przekroczono limit prób z duplikatami.");
+      }
       
       showToast('✅ Mata zaktualizowana!', 'success');
       closeModal(editMatModal);
@@ -463,7 +507,11 @@ document.addEventListener("DOMContentLoaded", () => {
       
     } catch (error) {
       console.error('Błąd aktualizacji maty:', error);
-      showToast('Błąd aktualizacji: ' + error.message, 'error');
+      let errMsg = error.message || 'Nieznany błąd';
+      if (errMsg.includes('Failed to fetch')) {
+        errMsg = 'Brak sieci. Sprawdź połączenie z internetem.';
+      }
+      showToast('Błąd aktualizacji: ' + errMsg, 'error');
     }
     
     editMatSubmit.disabled = false;
