@@ -195,9 +195,41 @@ document.addEventListener("DOMContentLoaded", () => {
     if (adminAddMatSection) {
       adminAddMatSection.style.display = isAdmin ? 'block' : 'none';
     }
+    
+    // Pokaż przycisk kopiowania zapasów u admina w Liście Mat Logo
+    const adminImportFromInventoryBtn = document.getElementById('adminImportFromInventoryBtn');
+    if (adminImportFromInventoryBtn) {
+      adminImportFromInventoryBtn.style.display = isAdmin ? 'flex' : 'none';
+    }
   }
 
   // ==================== EVENT LISTENERY ADMINA ====================
+
+  const adminImportFromInventoryBtn = document.getElementById('adminImportFromInventoryBtn');
+  const matsLoadFromInventoryModal = document.getElementById('matsLoadFromInventoryModal');
+  const matsLoadFromInventoryCancel = document.getElementById('matsLoadFromInventoryCancel');
+  const matsLoadFromInventoryConfirm = document.getElementById('matsLoadFromInventoryConfirm');
+
+  // Funkcjonalność modala Importowania Inwentaryzacji (dla Admina)
+  adminImportFromInventoryBtn?.addEventListener('click', () => {
+    openModal(matsLoadFromInventoryModal);
+  });
+  
+  matsLoadFromInventoryCancel?.addEventListener('click', () => {
+    closeModal(matsLoadFromInventoryModal);
+  });
+  
+  matsLoadFromInventoryConfirm?.addEventListener('click', async () => {
+    matsLoadFromInventoryConfirm.disabled = true;
+    const origText = matsLoadFromInventoryConfirm.innerText;
+    matsLoadFromInventoryConfirm.innerText = 'Trwa nadpisywanie...';
+    
+    await executeLoadToLogoMatsFromInventory();
+    
+    matsLoadFromInventoryConfirm.innerText = origText;
+    matsLoadFromInventoryConfirm.disabled = false;
+    closeModal(matsLoadFromInventoryModal);
+  });
 
   adminBtn.addEventListener('click', openAdminModal);
 
@@ -573,7 +605,9 @@ document.addEventListener("DOMContentLoaded", () => {
     washing: document.getElementById('washingView'),
     archive: document.getElementById('archiveView'), // Przedsionek
     'archive-replacements': document.getElementById('archiveReplacementsView'), // NOWE
-    'archive-washing': document.getElementById('archiveWashingView') // NOWE (zmienione z archiveView)
+    'archive-washing': document.getElementById('archiveWashingView'), // NOWE (zmienione z archiveView)
+    inventory: document.getElementById('inventoryView'),
+    reports: document.getElementById('reportsView')
   };
   
   const headerTitle = document.getElementById('headerTitle');
@@ -586,7 +620,9 @@ document.addEventListener("DOMContentLoaded", () => {
     'washing': 'home',
     'archive': 'home',
     'archive-replacements': 'archive',
-    'archive-washing': 'archive'
+    'archive-washing': 'archive',
+    'inventory': 'home',
+    'reports': 'home'
   };
   
   function navigateTo(viewName) {
@@ -608,6 +644,13 @@ document.addEventListener("DOMContentLoaded", () => {
           const mats = await fetchAndCacheLogoMats();
           renderMats(mats, matsSearch.value);
       })();
+    } else if (viewName === 'inventory') {
+      headerTitle.textContent = 'Inwentaryzacja Mat';
+      backBtn.style.display = 'flex';
+      (async () => {
+          const mats = await fetchInventoryMats();
+          renderInventory(mats, document.getElementById('inventorySearch').value);
+      })();
     } else if (viewName === 'washing') {
       headerTitle.textContent = 'System Prania Mat';
       backBtn.style.display = 'flex';
@@ -626,6 +669,12 @@ document.addEventListener("DOMContentLoaded", () => {
       headerTitle.textContent = 'Archiwum Prań Mat';
       backBtn.style.display = 'flex';
       loadArchiveData();
+    } else if (viewName === 'reports') {
+      headerTitle.textContent = 'Zgłoszenia';
+      backBtn.style.display = 'flex';
+      (async () => {
+          await fetchReports();
+      })();
     }
     
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1634,6 +1683,536 @@ document.addEventListener("DOMContentLoaded", () => {
   additionQtyInc.addEventListener('click', () => {
     additionQty.value = Math.max(1, Math.min(100, Number(additionQty.value) + 1));
   });
+
+  // ==================== INWENTARYZACJA MAT ====================
+  let allInventoryMats = [];
+  const inventorySearch = document.getElementById('inventorySearch');
+  const inventoryList = document.getElementById('inventoryList');
+  const inventoryTotal = document.getElementById('inventoryTotal');
+  const inventoryOk = document.getElementById('inventoryOk');
+  const inventoryNotOk = document.getElementById('inventoryNotOk');
+  const loadInventoryBtn = document.getElementById('loadInventoryBtn');
+  const clearInventoryBtn = document.getElementById('clearInventoryBtn');
+
+  // Modale inwentaryzacji
+  const inventoryLoadModal = document.getElementById('inventoryLoadModal');
+  const inventoryLoadCancel = document.getElementById('inventoryLoadCancel');
+  const inventoryLoadConfirm = document.getElementById('inventoryLoadConfirm');
+  const inventoryClearModal = document.getElementById('inventoryClearModal');
+  const inventoryClearCancel = document.getElementById('inventoryClearCancel');
+  const inventoryClearConfirm = document.getElementById('inventoryClearConfirm');
+
+  async function fetchInventoryMats() {
+    inventoryList.innerHTML = `<div class="empty-state"><div class="empty-state-text">Pobieranie danych inwentaryzacji...</div></div>`;
+    try {
+      const { data, error } = await window.supabase
+        .from('inventory_mats')
+        .select('*')
+        .order('name', { ascending: true })
+        .order('id', { ascending: true });
+
+      if (error) throw error;
+      allInventoryMats = data || [];
+      return allInventoryMats;
+    } catch (error) {
+      console.error("Błąd pobierania mat z inventory_mats:", error);
+      showToast("Błąd pobierania inwentaryzacji: " + (error.message || error), "error");
+      inventoryList.innerHTML = `<div class="empty-state error"><div class="empty-state-text">Nie udało się pobrać danych. Sprawdź czy tabela inventory_mats istnieje w Supabase i ma włączone RLS policies.</div></div>`;
+      return [];
+    }
+  }
+
+  async function executeLoadFromLogoMats() {
+    try {
+      showToast("Rozpoczęto kopiowanie danych...", "success");
+      // Najpierw pobierz oryginalne maty
+      const { data: originalMats, error: readError } = await window.supabase
+        .from('logo_mats')
+        .select('name, mat_number, location, size, quantity');
+        
+      if (readError) throw readError;
+
+      if (!originalMats || originalMats.length === 0) {
+        showToast("Brak mat w głównej bazie do skopiowania.", "error");
+        return;
+      }
+
+      // Oznacz maty domyślnie statusem 'unchecked'
+      const newInventory = originalMats.map(mat => ({
+        name: mat.name || null,
+        mat_number: mat.mat_number || null,
+        location: mat.location || null,
+        size: mat.size || null,
+        quantity: mat.quantity || 0,
+        status: 'unchecked'
+      }));
+
+      // Usuń stare wpisy bez awarii (paczkowanie po max 150 sztuk chroni przed URI Too Long)
+      let wipingInventory = true;
+      while (wipingInventory) {
+        const { data: rowsToDelete, error: selErr } = await window.supabase
+          .from('inventory_mats')
+          .select('id')
+          .limit(150);
+          
+        if (selErr) throw selErr;
+        
+        if (!rowsToDelete || rowsToDelete.length === 0) {
+          wipingInventory = false;
+          break;
+        }
+        
+        const ids = rowsToDelete.map(r => r.id);
+        const { error: delErr } = await window.supabase
+          .from('inventory_mats')
+          .delete()
+          .in('id', ids);
+          
+        if (delErr) throw delErr;
+        if (rowsToDelete.length < 150) wipingInventory = false;
+      }
+
+      // Wstaw nowe — w partiach po 500 aby uniknąć limitu
+      const batchSize = 500;
+      for (let i = 0; i < newInventory.length; i += batchSize) {
+        const batch = newInventory.slice(i, i + batchSize);
+        const { error: insertError } = await window.supabase
+          .from('inventory_mats')
+          .insert(batch);
+        if (insertError) throw insertError;
+      }
+
+      showToast(`Skopiowano ${newInventory.length} mat do inwentaryzacji!`, "success");
+      const freshMats = await fetchInventoryMats();
+      renderInventory(freshMats, inventorySearch.value);
+      
+    } catch (error) {
+      console.error("Błąd kopiowania danych z logo_mats do inventory_mats:", error);
+      showToast("Nie udało się skopiować danych: " + (error.message || error), "error");
+    }
+  }
+
+  async function executeClearInventoryStatus() {
+    try {
+      const { error } = await window.supabase
+        .from('inventory_mats')
+        .update({ status: 'unchecked' })
+        .in('status', ['ok', 'not_ok']);
+        
+      if (error) throw error;
+      
+      showToast("Oznaczenia zostały wyczyszczone.", "success");
+      const freshMats = await fetchInventoryMats();
+      renderInventory(freshMats, inventorySearch.value);
+    } catch(error) {
+      console.error("Błąd czyszczenia oznaczeń:", error);
+      showToast("Próba wyczyszczenia zakończona błędem: " + (error.message || error), "error");
+    }
+  }
+
+  async function updateInventoryStatus(id, newStatus) {
+    try {
+      // Optymistyczna aktualizacja — zmień dane w cache
+      const index = allInventoryMats.findIndex(mat => mat.id === id);
+      if (index !== -1) {
+        allInventoryMats[index].status = newStatus;
+      }
+
+      // In-place aktualizacja DOM — NIE re-renderuj całej listy
+      const itemEl = inventoryList.querySelector(`[data-inv-id="${id}"]`);
+      if (itemEl) {
+        // Usuń stare klasy statusu
+        itemEl.classList.remove('status-unchecked', 'status-ok', 'status-not_ok');
+        // Dodaj nową klasę
+        itemEl.classList.add(`status-${newStatus}`);
+      }
+
+      // Przelicz statystyki
+      updateInventoryStats();
+
+      const { error } = await window.supabase
+        .from('inventory_mats')
+        .update({ status: newStatus })
+        .eq('id', id);
+
+      if (error) throw error;
+    } catch (error) {
+        console.error("Błąd aktualizacji statusu maty:", error);
+        showToast("Wystąpił błąd w oznaczaniu.", "error");
+    }
+  }
+
+  // Przeliczenie statystyk bez przebudowy całej listy
+  const inventoryChecked = document.getElementById('inventoryChecked');
+
+  function updateInventoryStats() {
+    let ok = 0, notOk = 0, total = allInventoryMats.length;
+    allInventoryMats.forEach(mat => {
+      if (mat.status === 'ok') ok++;
+      if (mat.status === 'not_ok') notOk++;
+    });
+    const checked = ok + notOk;
+    inventoryTotal.textContent = total;
+    inventoryOk.textContent = ok;
+    inventoryNotOk.textContent = notOk;
+    inventoryChecked.textContent = `${checked} / ${total}`;
+    clearInventoryBtn.disabled = checked === 0;
+  }
+
+  async function updateInventoryQuantity(id, newQuantity) {
+    if (newQuantity < 0) return;
+    try {
+      // Optymistyczna aktualizacja ilości w lokalnym widoku
+      const index = allInventoryMats.findIndex(mat => mat.id === id);
+      if (index !== -1) {
+        allInventoryMats[index].quantity = newQuantity;
+        // Pomiń pełny render, aby nie gubić focusa z inputu, zrobiliśmy to w listenerach.
+      }
+
+      const { error } = await window.supabase
+        .from('inventory_mats')
+        .update({ quantity: newQuantity })
+        .eq('id', id);
+
+      if (error) throw error;
+    } catch (error) {
+        console.error("Błąd aktualizacji ilości maty:", error);
+        showToast("Nie udało się zapisać zmienionej ilości.", "error");
+    }
+  }
+
+  async function executeLoadToLogoMatsFromInventory() {
+    try {
+      showToast("Pobieranie zatwierdzonych stanów z inwentaryzacji...", "success");
+      
+      const { data: invMats, error: readError } = await window.supabase
+        .from('inventory_mats')
+        .select('*');
+        
+      if (readError) throw readError;
+
+      if (!invMats || invMats.length === 0) {
+        showToast("Brak mat w inwentaryzacji do skopiowania.", "error");
+        return;
+      }
+
+      const newLogoMats = invMats.map(mat => ({
+        name: mat.name,
+        mat_number: mat.mat_number,
+        location: mat.location,
+        size: mat.size,
+        quantity: mat.quantity
+      }));
+
+      // Usuń stare wpisy z logo_mats bez naruszenia URI (paczkuje po 150)
+      let wipingLogoMats = true;
+      while (wipingLogoMats) {
+        const { data: rowsToDelete, error: selErr } = await window.supabase
+          .from('logo_mats')
+          .select('id')
+          .limit(150);
+          
+        if (selErr) throw selErr;
+        
+        if (!rowsToDelete || rowsToDelete.length === 0) {
+          wipingLogoMats = false;
+          break;
+        }
+        
+        const ids = rowsToDelete.map(r => r.id);
+        const { error: delErr } = await window.supabase
+          .from('logo_mats')
+          .delete()
+          .in('id', ids);
+          
+        if (delErr) throw delErr;
+        if (rowsToDelete.length < 150) wipingLogoMats = false;
+      }
+
+      // Wstaw nowe inwentaryzacje z powrotem
+      const batchSize = 500;
+      for (let i = 0; i < newLogoMats.length; i += batchSize) {
+        const batch = newLogoMats.slice(i, i + batchSize);
+        const { error: insertError } = await window.supabase
+          .from('logo_mats')
+          .insert(batch);
+        if (insertError) throw insertError;
+      }
+
+      showToast(`Nadpisano główną bazę stanem z inwentaryzacji!`, "success");
+      allLogoMats = [];
+      const newMats = await fetchAndCacheLogoMats();
+      renderMats(newMats, matsSearch.value);
+      
+    } catch (error) {
+      console.error("Błąd kopiowania danych z inwentaryzacji do logo_mats:", error);
+      showToast("Nie udało się skopiować danych: " + (error.message || error), "error");
+    }
+  }
+
+  // Funkcje aktualizacji inwentaryzacji
+  const INV_PER_PAGE = 30;
+  let filteredInventoryCache = [];
+  let currentInventoryPage = 0;
+  let isLoadingMoreInventory = false;
+  let inventoryObserver = null;
+
+  function renderInventory(matsData, filter = '') {
+      const search = filter.toLowerCase().trim();
+      filteredInventoryCache = matsData;
+
+      if (search) {
+        filteredInventoryCache = matsData.filter(mat => {
+          return (mat.name?.toLowerCase() || '').includes(search) ||
+                (mat.location?.toLowerCase() || '').includes(search) ||
+                (mat.size?.toLowerCase() || '').includes(search) ||
+                (mat.mat_number?.toLowerCase() || '').includes(search);
+        });
+      }
+
+      // Reset paginacji
+      currentInventoryPage = 0;
+      isLoadingMoreInventory = false;
+
+      // Odłącz stary observer
+      if (inventoryObserver) {
+        inventoryObserver.disconnect();
+        inventoryObserver = null;
+      }
+
+      // Przelicz statystyki (używa allInventoryMats, nie filteredInventoryCache)
+      updateInventoryStats();
+
+      // Wyczyść listę
+      inventoryList.innerHTML = '';
+      hideInventoryLoadMore();
+
+      if (filteredInventoryCache.length === 0) {
+        inventoryList.innerHTML = `<div class="empty-state"><div class="empty-state-text">Brak danych inwentaryzacji. Kliknij "Wczytaj Listę", aby zacząć.</div></div>`;
+        return;
+      }
+
+      // Renderuj pierwszą partię
+      renderInventoryChunk();
+
+      // Ustaw observer dla lazy loading dopiero po renderze pierwszej partii
+      if (filteredInventoryCache.length > INV_PER_PAGE) {
+        setTimeout(() => setupInventoryObserver(), 100);
+      }
+  }
+
+  function renderInventoryChunk() {
+    const start = currentInventoryPage * INV_PER_PAGE;
+    const end = start + INV_PER_PAGE;
+    const matsToRender = filteredInventoryCache.slice(start, end);
+
+    if (matsToRender.length === 0) {
+      hideInventoryLoadMore();
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+
+    matsToRender.forEach(mat => {
+      const div = document.createElement('div');
+      div.className = `mat-item inventory-item status-${mat.status || 'unchecked'}`;
+      div.dataset.invId = mat.id;
+
+      let rawNum = mat.mat_number ? mat.mat_number.toString().trim() : '';
+      if (rawNum.startsWith('#')) rawNum = rawNum.substring(1);
+      const matNumberBadge = rawNum ? `<span class="mat-number-badge">${rawNum}</span>` : '';
+
+      div.innerHTML = `
+        <div class="mat-info">
+          <div class="mat-name">
+            ${escapeHtml(mat.name)}
+          </div>
+          <div class="mat-details">
+            ${mat.location ? `<div class="mat-detail-item"><strong>${formatLocation(mat.location)}</strong></div>` : ''}
+            ${mat.size ? `<div class="mat-detail-item">📏 ${escapeHtml(mat.size)}</div>` : ''}
+          </div>
+        </div>
+        <div class="mat-actions" style="align-items: center; justify-content: space-between;">
+          ${matNumberBadge}
+          <div class="inventory-actions" style="display: flex; align-items: center; gap: 8px;">
+            <button class="btn-inventory-ok" data-id="${mat.id}" aria-label="Zgodność">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            </button>
+            <button class="btn-inventory-not-ok" data-id="${mat.id}" aria-label="Brak zgodności">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+          <div class="inventory-qty-control">
+            <button class="inv-qty-dec" data-id="${mat.id}">−</button>
+            <input type="number" class="inv-qty-input" data-id="${mat.id}" value="${mat.quantity}" min="0">
+            <button class="inv-qty-inc" data-id="${mat.id}">+</button>
+          </div>
+        </div>
+      `;
+      fragment.appendChild(div);
+    });
+
+    inventoryList.appendChild(fragment);
+
+    // Sprawdź czy są kolejne strony
+    if (end < filteredInventoryCache.length) {
+      showInventoryLoadMore();
+    } else {
+      hideInventoryLoadMore();
+    }
+  }
+
+  function setupInventoryObserver() {
+    const sentinel = document.getElementById('inventoryLoadMoreSentinel');
+    if (!sentinel) return;
+
+    if (inventoryObserver) {
+      inventoryObserver.disconnect();
+    }
+
+    inventoryObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting && !isLoadingMoreInventory) {
+          loadMoreInventory();
+        }
+      });
+    }, {
+      root: null,
+      rootMargin: '300px',
+      threshold: 0
+    });
+
+    inventoryObserver.observe(sentinel);
+  }
+
+  function loadMoreInventory() {
+    const nextStart = (currentInventoryPage + 1) * INV_PER_PAGE;
+    if (nextStart >= filteredInventoryCache.length) {
+      hideInventoryLoadMore();
+      return;
+    }
+
+    isLoadingMoreInventory = true;
+
+    requestAnimationFrame(() => {
+      currentInventoryPage++;
+      renderInventoryChunk();
+      // Małe opóźnienie żeby przeglądarka zdążyła zrenderować DOM
+      // zanim pozwolimy na kolejną partię
+      setTimeout(() => {
+        isLoadingMoreInventory = false;
+      }, 50);
+    });
+  }
+
+  function showInventoryLoadMore() {
+    const sentinel = document.getElementById('inventoryLoadMoreSentinel');
+    if (sentinel) sentinel.style.display = 'flex';
+  }
+
+  function hideInventoryLoadMore() {
+    const sentinel = document.getElementById('inventoryLoadMoreSentinel');
+    if (sentinel) sentinel.style.display = 'none';
+  }
+
+  // Event delegation — jeden listener na cały kontener zamiast setek na poszczególnych przyciskach
+  inventoryList.addEventListener('click', (e) => {
+    const okBtn = e.target.closest('.btn-inventory-ok');
+    if (okBtn) {
+      e.stopPropagation();
+      const id = okBtn.dataset.id;
+      const mat = allInventoryMats.find(m => m.id === id);
+      // Toggle: jeśli już jest 'ok', cofnij do 'unchecked'
+      const newStatus = (mat && mat.status === 'ok') ? 'unchecked' : 'ok';
+      updateInventoryStatus(id, newStatus);
+      return;
+    }
+
+    const notOkBtn = e.target.closest('.btn-inventory-not-ok');
+    if (notOkBtn) {
+      e.stopPropagation();
+      const id = notOkBtn.dataset.id;
+      const mat = allInventoryMats.find(m => m.id === id);
+      // Toggle: jeśli już jest 'not_ok', cofnij do 'unchecked'
+      const newStatus = (mat && mat.status === 'not_ok') ? 'unchecked' : 'not_ok';
+      updateInventoryStatus(id, newStatus);
+      return;
+    }
+
+    const decBtn = e.target.closest('.inv-qty-dec');
+    if (decBtn) {
+      e.stopPropagation();
+      const id = decBtn.dataset.id;
+      const input = decBtn.nextElementSibling;
+      let val = parseInt(input.value) || 0;
+      if (val > 0) {
+        val--;
+        input.value = val;
+        updateInventoryQuantity(id, val);
+      }
+      return;
+    }
+
+    const incBtn = e.target.closest('.inv-qty-inc');
+    if (incBtn) {
+      e.stopPropagation();
+      const id = incBtn.dataset.id;
+      const input = incBtn.previousElementSibling;
+      let val = parseInt(input.value) || 0;
+      val++;
+      input.value = val;
+      updateInventoryQuantity(id, val);
+      return;
+    }
+  });
+
+  inventoryList.addEventListener('change', (e) => {
+    if (e.target.classList.contains('inv-qty-input')) {
+      const id = e.target.dataset.id;
+      let val = parseInt(e.target.value) || 0;
+      if (val < 0) { val = 0; e.target.value = 0; }
+      updateInventoryQuantity(id, val);
+    }
+  });
+
+  inventorySearch?.addEventListener('input', (e) => {
+    const value = e.target.value;
+    inventorySearch.classList.toggle('searching', value.length > 0);
+    renderInventory(allInventoryMats, value);
+  });
+  
+  // Przycisk "Wczytaj Listę" — otwiera modal potwierdzenia
+  loadInventoryBtn?.addEventListener('click', () => {
+    openModal(inventoryLoadModal);
+  });
+
+  inventoryLoadCancel?.addEventListener('click', () => {
+    closeModal(inventoryLoadModal);
+  });
+
+  inventoryLoadConfirm?.addEventListener('click', () => {
+    closeModal(inventoryLoadModal);
+    executeLoadFromLogoMats();
+  });
+
+  // Przycisk "Wyczyść Oznaczenia" — otwiera modal potwierdzenia
+  clearInventoryBtn?.addEventListener('click', () => {
+    openModal(inventoryClearModal);
+  });
+
+  inventoryClearCancel?.addEventListener('click', () => {
+    closeModal(inventoryClearModal);
+  });
+
+  inventoryClearConfirm?.addEventListener('click', () => {
+    closeModal(inventoryClearModal);
+    executeClearInventoryStatus();
+  });
   
   // ==================== LISTA MAT LOGO (SUPABASE) ====================
   const matsSearch = document.getElementById('matsSearch');
@@ -1840,32 +2419,37 @@ document.addEventListener("DOMContentLoaded", () => {
             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
           </svg>
         </button>
+        ${mat.status !== 'pending' ? `
         <button class="btn-delete-mat" data-mat-id="${mat.id}" aria-label="Usuń matę">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="3 6 5 6 21 6"/>
             <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
           </svg>
-        </button>
+        </button>` : ''}
       </div>
     ` : '';
     
     // Numer maty badge
-    const matNumberBadge = mat.mat_number ? `<span class="mat-number-badge">#${mat.mat_number}</span>` : '';
+    let rawNum = mat.mat_number ? mat.mat_number.toString().trim() : '';
+    if (rawNum.startsWith('#')) rawNum = rawNum.substring(1);
+    const matNumberBadge = rawNum ? `<span class="mat-number-badge">${rawNum}</span>` : '';
     
     div.innerHTML = `
       <div class="mat-info">
         <div class="mat-name">
           ${escapeHtml(mat.name)}
-          ${matNumberBadge}
         </div>
         <div class="mat-details">
           ${mat.location ? `<div class="mat-detail-item"><strong>${formatLocation(mat.location)}</strong></div>` : ''}
           ${mat.size ? `<div class="mat-detail-item">📏 ${escapeHtml(mat.size)}</div>` : ''}
         </div>
       </div>
-      <div class="mat-actions">
-        ${adminActionsHtml}
-        <div class="mat-qty-badge">${mat.quantity}</div>
+      <div class="mat-actions" style="align-items: center; justify-content: space-between;">
+        ${matNumberBadge}
+        <div style="display:flex; align-items:center; gap:8px;">
+          ${adminActionsHtml}
+          <div class="mat-qty-badge">${mat.quantity}</div>
+        </div>
       </div>
     `;
     
@@ -4893,9 +5477,666 @@ document.addEventListener("DOMContentLoaded", () => {
       })
       .subscribe();
 
+    // Dodanie Realtime dla inwentaryzacji
+    const inventoryChannel = window.supabase
+      .channel('inventory-updates')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'inventory_mats' 
+      }, (payload) => {
+        console.log('✨ Zmiana w inwentaryzacji na żywo!', payload);
+        if (payload.eventType === 'UPDATE') {
+          const index = allInventoryMats.findIndex(mat => mat.id === payload.new.id);
+          if (index !== -1) {
+             allInventoryMats[index] = payload.new;
+             if (currentView === 'inventory') {
+                 const itemEl = inventoryList.querySelector(`[data-inv-id="${payload.new.id}"]`);
+                 if (itemEl) {
+                     itemEl.className = 'inventory-item mat-item status-' + payload.new.status;
+                     const qtyInput = itemEl.querySelector('.inv-qty-val');
+                     if (qtyInput) qtyInput.value = payload.new.custom_qty !== null ? payload.new.custom_qty : payload.new.original_qty;
+                 }
+                 if (typeof updateInventoryStats === 'function') updateInventoryStats();
+             }
+          }
+        } else if (payload.eventType === 'INSERT') {
+          allInventoryMats.push(payload.new);
+          if (currentView === 'inventory' && typeof updateInventoryStats === 'function') updateInventoryStats();
+        }
+      })
+      .subscribe();
+
+    // Dodanie Realtime dla zgłoszeń
+    const reportsChannel = window.supabase
+      .channel('reports-updates')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'reports' 
+      }, async (payload) => {
+        console.log('✨ Zmiana w zgłoszeniach!', payload);
+        if (currentView === 'reports') {
+          await fetchReports();
+        }
+      })
+      .subscribe();
+
     initPalletSystem();
     navigateTo('home');
   }
+
+  // ==================== ZGŁOSZENIA (LOGIKA JS) ====================
+  const REPORT_PER_PAGE = 30;
+  let allReports = [];
+  let filteredReportsCache = [];
+  let currentReportPage = 0;
+  let isLoadingMoreReports = false;
+  let reportsObserver = null;
+  let currentReportTab = 'pending'; // 'pending' | 'resolved'
+  let reportCurrentFile = null;
+  let currentlyViewedReportId = null;
+
+  const reportsSearch = document.getElementById('reportsSearch');
+  const reportsList = document.getElementById('reportsList');
+  const reportsPendingCount = document.getElementById('reportsPendingCount');
+  const reportsResolvedCount = document.getElementById('reportsResolvedCount');
+  const newReportBtn = document.getElementById('newReportBtn');
+  const reportsTabs = document.querySelectorAll('.reports-tab');
+  const reportsDeleteOldContainer = document.getElementById('reportsDeleteOldContainer');
+  const reportsDeleteOldBtn = document.getElementById('reportsDeleteOldBtn');
+
+  const reportsDeleteOldModal = document.getElementById('reportsDeleteOldModal');
+  const reportsDeleteOldCancel = document.getElementById('reportsDeleteOldCancel');
+  const reportsDeleteOldConfirm = document.getElementById('reportsDeleteOldConfirm');
+
+  const reportFormModal = document.getElementById('reportFormModal');
+  const reportDeleteConfirmModal = document.getElementById('reportDeleteConfirmModal');
+  const reportDeleteConfirmCancel = document.getElementById('reportDeleteConfirmCancel');
+  const reportDeleteConfirmConfirm = document.getElementById('reportDeleteConfirmConfirm');
+  const reportFormCancel = document.getElementById('reportFormCancel');
+  const reportFormSubmit = document.getElementById('reportFormSubmit');
+  
+  const reportMatName = document.getElementById('reportMatName');
+  const reportDescription = document.getElementById('reportDescription');
+  const reportFileInput = document.getElementById('reportFileInput');
+  const reportFileBtnCamera = document.getElementById('reportFileBtnCamera');
+  const reportFileBtnGallery = document.getElementById('reportFileBtnGallery');
+  const reportFilePreview = document.getElementById('reportFilePreview');
+  const reportPreviewImg = document.getElementById('reportPreviewImg');
+  const reportFileRemove = document.getElementById('reportFileRemove');
+  const reportTypeBtns = document.querySelectorAll('.report-type-btn');
+
+  const reportDetailModal = document.getElementById('reportDetailModal');
+  const reportDetailBody = document.getElementById('reportDetailBody');
+  const reportDetailActions = document.getElementById('reportDetailActions');
+  const reportDetailResolved = document.getElementById('reportDetailResolved');
+  const reportDetailClose = document.getElementById('reportDetailClose');
+  const reportResponseText = document.getElementById('reportResponseText');
+  const reportResolveBtn = document.getElementById('reportResolveBtn');
+  const quickActionBtns = document.querySelectorAll('.quick-action-btn');
+
+  // Funkcje narzędziowe zgłoszeń
+  function getReportTypeLabel(type) {
+    if (type === 'damaged') return 'Mata zniszczona';
+    if (type === 'over_quantity') return 'Nad stan liczbowy';
+    return type;
+  }
+
+  function getReportBadgeHtml(type) {
+    if (type === 'damaged') {
+      return `<div class="report-card-badge report-badge-damaged">Zniszczona</div>`;
+    }
+    if (type === 'over_quantity') {
+      return `<div class="report-card-badge" style="background: rgba(16, 185, 129, 0.1); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.25);">Nad stan</div>`;
+    }
+    return '';
+  }
+
+  // Pobieranie zgłoszeń z Supabase
+  async function fetchReports() {
+    reportsList.innerHTML = `<div class="empty-state"><div class="empty-state-text">Pobieranie zgłoszeń...</div></div>`;
+    hideReportsLoadMore();
+    try {
+      const { data, error } = await window.supabase
+        .from('reports')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      allReports = data || [];
+      renderReports();
+    } catch (error) {
+      console.error("Błąd pobierania zgłoszeń:", error);
+      showToast("Nie udało się pobrać zgłoszeń.", "error");
+      reportsList.innerHTML = `<div class="empty-state error"><div class="empty-state-text">Błąd pobierania danych z bazy.</div></div>`;
+    }
+  }
+
+  // Obliczanie licznika zakładek
+  function updateReportsCounts() {
+    const pendingCount = allReports.filter(r => r.status === 'pending').length;
+    const resolvedCount = allReports.filter(r => r.status === 'resolved').length;
+    reportsPendingCount.textContent = pendingCount;
+    reportsResolvedCount.textContent = resolvedCount;
+  }
+
+  // Renderowanie zgłoszeń z paginacją
+  function renderReports(filter = reportsSearch?.value || '') {
+    updateReportsCounts();
+    
+    let filtered = allReports.filter(r => r.status === currentReportTab);
+    const search = filter.toLowerCase().trim();
+    if (search) {
+      filtered = filtered.filter(r => {
+        return (r.mat_name?.toLowerCase() || '').includes(search) ||
+               (r.description?.toLowerCase() || '').includes(search) ||
+               (getReportTypeLabel(r.report_type).toLowerCase()).includes(search);
+      });
+    }
+
+    filteredReportsCache = filtered;
+    currentReportPage = 0;
+    isLoadingMoreReports = false;
+
+    if (reportsObserver) {
+      reportsObserver.disconnect();
+      reportsObserver = null;
+    }
+
+    reportsList.innerHTML = '';
+    hideReportsLoadMore();
+
+    if (filteredReportsCache.length === 0) {
+      const typeText = currentReportTab === 'pending' ? 'oczekujących' : 'sprawdzonych';
+      reportsList.innerHTML = `<div class="empty-state"><div class="empty-state-text">Brak ${typeText} zgłoszeń.</div></div>`;
+      return;
+    }
+
+    renderReportsChunk();
+
+    if (filteredReportsCache.length > REPORT_PER_PAGE) {
+      setTimeout(() => setupReportsObserver(), 100);
+    }
+  }
+
+  function renderReportsChunk() {
+    const start = currentReportPage * REPORT_PER_PAGE;
+    const end = start + REPORT_PER_PAGE;
+    const reportsToRender = filteredReportsCache.slice(start, end);
+
+    if (reportsToRender.length === 0) {
+      hideReportsLoadMore();
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+
+    reportsToRender.forEach(report => {
+      const div = document.createElement('div');
+      div.className = 'report-card';
+      div.dataset.reportId = report.id;
+
+      const dateStr = new Date(report.created_at).toLocaleString('pl-PL', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+      });
+
+      const attachmentHtml = report.attachment_url ? 
+        `<div class="report-card-attachment">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+          Tak
+        </div>` : '';
+
+      const resolvedStr = report.status === 'resolved' ? 
+        `<span><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#00d26a" stroke-width="2" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg> Rozwiązano</span>` : '';
+
+      div.innerHTML = `
+        <div class="report-card-header">
+          <div class="report-card-title">${escapeHtml(report.mat_name)}</div>
+          ${getReportBadgeHtml(report.report_type)}
+        </div>
+        <div class="report-card-meta">
+          <span>📅 ${dateStr}</span>
+          ${attachmentHtml}
+          ${resolvedStr}
+        </div>
+        ${report.description ? `<div class="report-card-desc">${escapeHtml(report.description)}</div>` : ''}
+      `;
+      fragment.appendChild(div);
+    });
+
+    reportsList.appendChild(fragment);
+
+    if (end < filteredReportsCache.length) {
+      showReportsLoadMore();
+    } else {
+      hideReportsLoadMore();
+    }
+  }
+
+  function setupReportsObserver() {
+    const sentinel = document.getElementById('reportsLoadMoreSentinel');
+    if (!sentinel) return;
+
+    if (reportsObserver) {
+      reportsObserver.disconnect();
+    }
+
+    reportsObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting && !isLoadingMoreReports) {
+          loadMoreReports();
+        }
+      });
+    }, {
+      root: null,
+      rootMargin: '300px',
+      threshold: 0
+    });
+    reportsObserver.observe(sentinel);
+  }
+
+  function loadMoreReports() {
+    const nextStart = (currentReportPage + 1) * REPORT_PER_PAGE;
+    if (nextStart >= filteredReportsCache.length) {
+      hideReportsLoadMore();
+      return;
+    }
+    isLoadingMoreReports = true;
+    requestAnimationFrame(() => {
+      currentReportPage++;
+      renderReportsChunk();
+      setTimeout(() => { isLoadingMoreReports = false; }, 50);
+    });
+  }
+
+  function showReportsLoadMore() {
+    const sentinel = document.getElementById('reportsLoadMoreSentinel');
+    if (sentinel) sentinel.style.display = 'flex';
+  }
+
+  function hideReportsLoadMore() {
+    const sentinel = document.getElementById('reportsLoadMoreSentinel');
+    if (sentinel) sentinel.style.display = 'none';
+  }
+
+  // Zakładki i wyszukiwanie
+  reportsTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      reportsTabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentReportTab = tab.dataset.tab;
+      
+      if (currentReportTab === 'resolved') {
+        reportsDeleteOldContainer.style.display = 'flex';
+      } else {
+        reportsDeleteOldContainer.style.display = 'none';
+      }
+      
+      renderReports();
+    });
+  });
+
+  reportsSearch?.addEventListener('input', (e) => {
+    renderReports(e.target.value);
+  });
+
+  // Usuwanie starych zgłoszeń (> 24h)
+  reportsDeleteOldBtn?.addEventListener('click', () => {
+    openModal(reportsDeleteOldModal);
+  });
+
+  reportsDeleteOldCancel?.addEventListener('click', () => {
+    closeModal(reportsDeleteOldModal);
+  });
+
+  let selectedReportType = 'over_quantity';
+
+  reportsDeleteOldConfirm?.addEventListener('click', async () => {
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    
+    const origText = reportsDeleteOldConfirm.innerText;
+    reportsDeleteOldConfirm.innerText = 'Usuwanie...';
+    reportsDeleteOldConfirm.disabled = true;
+    reportsDeleteOldCancel.disabled = true;
+    
+    try {
+      const { error } = await window.supabase
+        .from('reports')
+        .delete()
+        .eq('status', 'resolved')
+        .lt('resolved_at', twentyFourHoursAgo);
+        
+      if (error) throw error;
+      showToast('Usunięto stare zgłoszenia!', 'success');
+      closeModal(reportsDeleteOldModal);
+      await fetchReports();
+    } catch (err) {
+      console.error("Błąd usuwania starych zgłoszeń:", err);
+      showToast("Nie udało się usunąć starych zgłoszeń.", "error");
+    } finally {
+      reportsDeleteOldConfirm.innerText = origText;
+      reportsDeleteOldConfirm.disabled = false;
+      reportsDeleteOldCancel.disabled = false;
+    }
+  });
+
+  // Nowe zgłoszenie - obsługa UI
+  newReportBtn?.addEventListener('click', () => {
+    reportMatName.value = '';
+    reportDescription.value = '';
+    reportCurrentFile = null;
+    reportFileInput.value = '';
+    reportFilePreview.style.display = 'none';
+    reportPreviewImg.src = '';
+    
+    reportTypeBtns.forEach(b => b.classList.remove('active'));
+    document.querySelector('.report-type-btn[data-type="over_quantity"]')?.classList.add('active');
+
+    openModal(reportFormModal);
+  });
+
+  reportFormCancel?.addEventListener('click', () => closeModal(reportFormModal));
+
+  reportTypeBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      reportTypeBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+
+  // Upload plików API HTML
+  reportFileBtnCamera?.addEventListener('click', () => {
+    reportFileInput.setAttribute('capture', 'environment');
+    reportFileInput.click();
+  });
+
+  reportFileBtnGallery?.addEventListener('click', () => {
+    reportFileInput.removeAttribute('capture');
+    reportFileInput.click();
+  });
+
+  reportFileInput?.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      reportCurrentFile = file;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        reportPreviewImg.src = e.target.result;
+        reportFilePreview.style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+    }
+  });
+
+  reportFileRemove?.addEventListener('click', () => {
+    reportCurrentFile = null;
+    reportFileInput.value = '';
+    reportFilePreview.style.display = 'none';
+    reportPreviewImg.src = '';
+  });
+
+  function generateUuid() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+
+  async function uploadReportImage(file) {
+    if (!file) return null;
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}_${generateUuid()}.${fileExt}`;
+
+      const { data, error } = await window.supabase.storage
+        .from('report-attachments')
+        .upload(fileName, file);
+
+      if (error) throw error;
+      
+      const { data: publicData } = window.supabase.storage
+        .from('report-attachments')
+        .getPublicUrl(fileName);
+
+      return publicData.publicUrl;
+    } catch (err) {
+      console.error("Błąd uploadu załącznika:", err);
+      showToast("Nie udało się zgrać zdjęcia. Zgłoszenie bez zdjęcia.", "error");
+      return null;
+    }
+  }
+
+  // Zapis do bazy
+  reportFormSubmit?.addEventListener('click', async () => {
+    const matName = reportMatName.value.trim();
+    if (!matName) {
+      showToast("Wpisz nazwę maty!", "error");
+      return;
+    }
+
+    const typeBtn = document.querySelector('.report-type-btn.active');
+    const reportType = typeBtn ? typeBtn.dataset.type : 'over_quantity';
+    const description = reportDescription.value.trim();
+    
+    // Blokada guzika
+    const origText = reportFormSubmit.innerText;
+    reportFormSubmit.innerText = 'Wysyłanie...';
+    reportFormSubmit.disabled = true;
+
+    try {
+      let attachmentUrl = null;
+      if (reportCurrentFile) {
+        attachmentUrl = await uploadReportImage(reportCurrentFile);
+      }
+
+      const { error } = await window.supabase
+        .from('reports')
+        .insert([{
+          mat_name: matName,
+          report_type: reportType,
+          description: description || null,
+          attachment_url: attachmentUrl,
+          status: 'pending'
+        }]);
+
+      if (error) throw error;
+
+      showToast("Zgłoszenie wysłane pomyślnie!", "success");
+      closeModal(reportFormModal);
+      
+      // Realtime samo odświeży listę! Użytkownik zobaczy nowy stan w ułamek sekundy (lub samo przełącza zakładkę).
+      if (currentReportTab !== 'pending') {
+         document.querySelector('.reports-tab[data-tab="pending"]')?.click();
+      }
+    } catch (err) {
+      console.error("Błąd zapisu zgłoszenia:", err);
+      showToast("Błąd przy zapisywaniu zgłoszenia.", "error");
+    } finally {
+      reportFormSubmit.innerText = origText;
+      reportFormSubmit.disabled = false;
+    }
+  });
+
+  // Szczegóły zgłoszenia
+  reportsList?.addEventListener('click', (e) => {
+    const card = e.target.closest('.report-card');
+    if (!card) return;
+
+    const id = card.dataset.reportId;
+    const report = allReports.find(r => r.id === id);
+    if (!report) return;
+
+    currentlyViewedReportId = id;
+
+    quickActionBtns.forEach(b => b.classList.remove('selected'));
+    reportResponseText.value = '';
+
+    const dateStr = new Date(report.created_at).toLocaleString('pl-PL');
+    
+    let html = `
+      <div class="report-detail-row">
+        <span class="report-detail-label">Mata</span>
+        <span class="report-detail-value">${escapeHtml(report.mat_name)}</span>
+      </div>
+      <div class="report-detail-row">
+        <span class="report-detail-label">Data zgłoszenia</span>
+        <span class="report-detail-value" style="font-weight: 500;">${dateStr}</span>
+      </div>
+      <div class="report-detail-row" style="border-bottom: none; padding-bottom: 0;">
+        <span class="report-detail-label">Typ zgłoszenia</span>
+      </div>
+      <div style="margin-bottom: 8px;">${getReportBadgeHtml(report.report_type)}</div>
+    `;
+
+    if (report.description) {
+      html += `
+        <div class="report-detail-label" style="margin-top: 8px; margin-bottom: 4px;">Opis dodatkowy</div>
+        <div class="report-detail-desc">${escapeHtml(report.description)}</div>
+      `;
+    }
+
+    if (report.attachment_url) {
+      html += `
+        <div class="report-detail-label" style="margin-top: 12px; margin-bottom: 4px;">Załączone zdjęcie</div>
+        <div class="report-detail-image">
+          <img src="${report.attachment_url}" alt="Załącznik">
+        </div>
+      `;
+    }
+
+    reportDetailBody.innerHTML = html;
+
+    if (report.status === 'resolved') {
+      reportDetailActions.style.display = 'none';
+      reportDetailResolved.style.display = 'block';
+      const resDate = report.resolved_at ? new Date(report.resolved_at).toLocaleString('pl-PL') : '';
+      let actionLabel = report.response_type;
+      if (actionLabel === 'repair') actionLabel = '🔧 Naprawa maty';
+      if (actionLabel === 'utilize') actionLabel = '🗑️ Utylizacja maty';
+      if (actionLabel === 'replace_set') actionLabel = '🔄 Wymiana kompletu';
+      if (actionLabel === 'over_quantity_ok') actionLabel = '✅ Nad stan (Akceptacja)';
+      if (actionLabel === 'custom') actionLabel = 'Własna odpowiedź';
+
+      reportDetailResolved.innerHTML = `
+        <h4>Wykonana akcja: ${actionLabel}</h4>
+        ${report.response_text ? `<p><strong>Notatka:</strong> ${escapeHtml(report.response_text)}</p>` : ''}
+        <p style="font-size: 0.8rem; margin-top: 8px; color: var(--muted);">Sprawdzono: ${resDate}</p>
+      `;
+      // Przywracam pokazanie jak jest RESOLVED
+      document.getElementById('reportDetailDelete').style.display = 'block';
+    } else {
+      reportDetailActions.style.display = 'block';
+      reportDetailResolved.style.display = 'none';
+      reportResolveBtn.disabled = true;
+      // Wymuszam ukrycie jak jest PENDING
+      document.getElementById('reportDetailDelete').style.display = 'none';
+    }
+
+    openModal(reportDetailModal);
+  });
+
+  reportDetailClose?.addEventListener('click', () => {
+    closeModal(reportDetailModal);
+  });
+
+  const reportDetailDelete = document.getElementById('reportDetailDelete');
+  
+  // Customowa funkcja usuwania zgłoszenia z dodatkowym modalem
+  reportDetailDelete?.addEventListener('click', () => {
+    openModal(reportDeleteConfirmModal);
+  });
+
+  reportDeleteConfirmCancel?.addEventListener('click', () => {
+    closeModal(reportDeleteConfirmModal);
+  });
+
+  reportDeleteConfirmConfirm?.addEventListener('click', async () => {
+    if (!currentlyViewedReportId) return;
+    
+    const origText = reportDeleteConfirmConfirm.innerText;
+    reportDeleteConfirmConfirm.innerText = 'Usuwanie...';
+    reportDeleteConfirmConfirm.disabled = true;
+
+    try {
+      const { error } = await window.supabase
+        .from('reports')
+        .delete()
+        .eq('id', currentlyViewedReportId);
+
+      if (error) throw error;
+      
+      showToast('Zgłoszenie trwale usunięte!', 'success');
+      closeModal(reportDeleteConfirmModal);
+      closeModal(reportDetailModal); // zamknięcie głównego modala również
+      await fetchReports();
+    } catch (err) {
+      console.error("Błąd usuwania zgłoszenia", err);
+      showToast('Nie udało się usunąć zgłoszenia.', 'error');
+    } finally {
+      reportDeleteConfirmConfirm.innerText = origText;
+      reportDeleteConfirmConfirm.disabled = false;
+    }
+  });
+
+  // Obsługa przycisków
+  quickActionBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.classList.contains('selected')) {
+        btn.classList.remove('selected');
+      } else {
+        quickActionBtns.forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+      }
+      checkResolveBtnState();
+    });
+  });
+
+  reportResponseText?.addEventListener('input', () => {
+    checkResolveBtnState();
+  });
+
+  function checkResolveBtnState() {
+    const hasQuickAction = document.querySelector('.quick-action-btn.selected');
+    const hasText = reportResponseText.value.trim().length > 0;
+    reportResolveBtn.disabled = !(hasQuickAction || hasText);
+  }
+
+  reportResolveBtn?.addEventListener('click', async () => {
+    if (!currentlyViewedReportId) return;
+
+    const quickBtn = document.querySelector('.quick-action-btn.selected');
+    const responseType = quickBtn ? quickBtn.dataset.action : 'custom';
+    const responseText = reportResponseText.value.trim();
+
+    const origText = reportResolveBtn.innerText;
+    reportResolveBtn.innerText = 'Zapisywanie...';
+    reportResolveBtn.disabled = true;
+
+    try {
+      const { error } = await window.supabase
+        .from('reports')
+        .update({
+          status: 'resolved',
+          response_type: responseType,
+          response_text: responseText || null,
+          resolved_at: new Date().toISOString()
+        })
+        .eq('id', currentlyViewedReportId);
+
+      if (error) throw error;
+
+      showToast("Zgłoszenie rozwiązane!", "success");
+      closeModal(reportDetailModal);
+    } catch (err) {
+      console.error("Błąd oznaczania zgłoszenia:", err);
+      showToast("Nie udało się rozwiązać zgłoszenia.", "error");
+    } finally {
+      reportResolveBtn.innerText = origText;
+      reportResolveBtn.disabled = false;
+    }
+  });
 
   init();
 
