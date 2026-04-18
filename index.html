@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Elis ServiceHub — Centrum Główne</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=26">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0d1117">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -101,7 +101,37 @@
             </div>
             <div class="home-tile-content">
               <h2>Lista Mat Logo</h2>
-              <p>Inwentaryzacja i zarządzanie matami</p>
+              <p>Zarządzanie matami</p>
+            </div>
+          </button>
+
+          <button class="home-tile" data-navigate="inventory">
+            <div class="home-tile-icon">
+              <!-- Checklist icon -->
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 11l3 3L22 4"></path>
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+              </svg>
+            </div>
+            <div class="home-tile-content">
+              <h2>Inwentaryzacja Mat</h2>
+              <p>Weryfikacja i oznaczanie stanów mat</p>
+            </div>
+          </button>
+
+          <button class="home-tile" data-navigate="reports">
+            <div class="home-tile-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                <line x1="9" y1="9" x2="15" y2="9"></line>
+                <line x1="12" y1="6" x2="12" y2="12"></line>
+              </svg>
+            </div>
+            <div class="home-tile-content">
+              <h2>Zgłoszenia</h2>
+              <p>Zgłaszanie problemów i śledzenie napraw</p>
             </div>
           </button>
 
@@ -421,8 +451,19 @@
       <main class="app-main">
         <section class="card">
           <div class="card-header">
-            <h2>🔍 Wyszukiwarka Mat Logo</h2>
+            <h2 id="matsListTitle">Lista Mat</h2>
             <div class="mats-actions-buttons">
+              <!-- Przycisk kopiowania inwentaryzacji (widoczny tylko dla admina) -->
+              <button id="adminImportFromInventoryBtn" class="btn-secondary" style="display: none;">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;margin-right:6px;">
+                  <polyline points="8 17 12 21 16 17"></polyline>
+                  <line x1="12" y1="12" x2="12" y2="21"></line>
+                  <path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"></path>
+                </svg>
+                <span>Wczytaj z inwentaryzacji</span>
+              </button>
+              
               <button id="exportExcelBtn" class="btn-export-excel" aria-label="Eksportuj do Excel">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -751,6 +792,224 @@
       </div>
     </div>
 
+    <!-- ==================== WIDOK: INWENTARYZACJA MAT ==================== -->
+    <div id="inventoryView" class="view">
+      <main class="app-main">
+        <section class="card">
+          <div class="card-header">
+            <h2>📦 Inwentaryzacja Mat</h2>
+            <div class="mats-actions-buttons">
+              <button id="loadInventoryBtn" class="btn-export-excel" aria-label="Wczytaj maty z listy mat logo" style="background-color: var(--primary); color: var(--text);">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                <span>Wczytaj Listę</span>
+              </button>
+              <button id="clearInventoryBtn" class="btn-print-mats" aria-label="Wyczyść oznaczone maty" style="background-color: #ff4b4b; color: white;" disabled>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 6h18"></path>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+                <span>Wyczyść Oznaczenia</span>
+              </button>
+            </div>
+          </div>
+          
+          <div class="stats-row" style="margin-bottom: 24px;">
+            <div class="stat-card">
+              <div class="stat-value" id="inventoryChecked" style="color: var(--primary);">0 / 0</div>
+              <div class="stat-label">Sprawdzonych</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="inventoryTotal">0</div>
+              <div class="stat-label">Wszystkich</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="inventoryOk" style="color: #00d26a;">0</div>
+              <div class="stat-label">Zgodność</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="inventoryNotOk" style="color: #ff4b4b;">0</div>
+              <div class="stat-label">Brak zgodności</div>
+            </div>
+          </div>
+
+          <div class="search-box">
+            <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <path d="m21 21-4.35-4.35"></path>
+            </svg>
+            <input type="text" id="inventorySearch" placeholder="Wpisz nazwę, lokalizację lub rozmiar..."
+              class="search-input">
+          </div>
+        </section>
+
+        <section>
+          <div id="inventoryList" class="mats-list"></div>
+          <div id="inventoryLoadMoreSentinel" class="load-more-sentinel">
+            <div class="load-more-spinner"></div>
+            <span>Ładowanie...</span>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- ==================== WIDOK: ZGŁOSZENIA ==================== -->
+    <div id="reportsView" class="view">
+      <main class="app-main">
+        <section class="card">
+          <div class="card-header">
+            <h2>📢 Zgłoszenia</h2>
+            <div class="mats-actions-buttons">
+              <button id="newReportBtn" class="btn-export-excel" style="background-color: var(--primary); color: var(--text);">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 5v14m-7-7h14" />
+                </svg>
+                <span>Nowe zgłoszenie</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="reports-tabs">
+            <button class="reports-tab active" data-tab="pending">
+              Oczekujące <span id="reportsPendingCount" class="tab-badge">0</span>
+            </button>
+            <button class="reports-tab" data-tab="resolved">
+              Sprawdzone <span id="reportsResolvedCount" class="tab-badge">0</span>
+            </button>
+          </div>
+
+          <div class="search-box">
+            <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <path d="m21 21-4.35-4.35"></path>
+            </svg>
+            <input type="text" id="reportsSearch" placeholder="Szukaj zgłoszenia..." class="search-input">
+          </div>
+          <div id="reportsDeleteOldContainer" style="display: none; justify-content: flex-end; margin-top: 12px;">
+            <button id="reportsDeleteOldBtn" class="btn-inventory-not-ok" style="width: auto; padding: 6px 12px; font-size: 0.85rem; border-radius: var(--radius); gap: 6px; display: flex; align-items: center;">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+              Usuń starsze niż 24h
+            </button>
+          </div>
+        </section>
+
+        <section>
+          <div id="reportsList" class="mats-list"></div>
+          <div id="reportsLoadMoreSentinel" class="load-more-sentinel">
+            <div class="load-more-spinner"></div>
+            <span>Ładowanie...</span>
+          </div>
+        </section>
+      </main>
+    </div>
+
+  </div>
+
+  <!-- ==================== MODAL: NOWE ZGŁOSZENIE ==================== -->
+  <div id="reportFormModal" class="modal">
+    <div class="modal-content large">
+      <h3>Nowe zgłoszenie</h3>
+      <div class="report-form">
+        <label class="form-label">Nazwa maty *</label>
+        <input type="text" id="reportMatName" class="form-input" placeholder="Wpisz nazwę maty...">
+
+        <label class="form-label">Powód zgłoszenia *</label>
+        <div class="report-type-selector">
+          <button class="report-type-btn active" data-type="over_quantity">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            Nad stan
+          </button>
+          <button class="report-type-btn" data-type="damaged">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4m0 4h.01M5.07 19H19a2 2 0 0 0 1.75-2.96L13.04 4.06a2 2 0 0 0-3.5 0l-7.68 12a2 2 0 0 0 1.74 2.94z"/></svg>
+            Zniszczona
+          </button>
+        </div>
+
+        <label class="form-label">Dodatkowy opis (opcjonalnie)</label>
+        <textarea id="reportDescription" class="form-textarea" placeholder="Opisz problem szczegółowo..." rows="3"></textarea>
+
+        <label class="form-label">Załącznik / zdjęcie (opcjonalnie)</label>
+        <div class="report-file-upload">
+          <input type="file" id="reportFileInput" accept="image/*" capture="environment" style="display: none;">
+          <button id="reportFileBtnCamera" class="btn-secondary report-file-btn" type="button">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            Zrób zdjęcie
+          </button>
+          <button id="reportFileBtnGallery" class="btn-secondary report-file-btn" type="button">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            Z galerii
+          </button>
+        </div>
+        <div id="reportFilePreview" class="report-file-preview" style="display: none;">
+          <img id="reportPreviewImg" src="" alt="Podgląd">
+          <button id="reportFileRemove" class="btn-remove-file">&times;</button>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button id="reportFormCancel" class="btn-secondary">Anuluj</button>
+        <button id="reportFormSubmit" class="btn-primary">Wyślij zgłoszenie</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL: SZCZEGÓŁY ZGŁOSZENIA ==================== -->
+  <div id="reportDetailModal" class="modal">
+    <div class="modal-content large">
+      <h3 id="reportDetailTitle">Szczegóły zgłoszenia</h3>
+      <div id="reportDetailBody" class="report-detail-body"></div>
+      
+      <div id="reportDetailActions" class="report-detail-actions">
+        <label class="form-label">Szybkie akcje</label>
+        <div class="quick-actions">
+          <button class="quick-action-btn" data-action="repair">🔧 Naprawa</button>
+          <button class="quick-action-btn" data-action="utilize">🗑️ Utylizacja</button>
+          <button class="quick-action-btn" data-action="replace_set">🔄 Wymiana</button>
+          <button class="quick-action-btn" data-action="over_quantity_ok">✅ Nad stan</button>
+        </div>
+        <label class="form-label" style="margin-top: 12px;">Lub wpisz własną odpowiedź</label>
+        <textarea id="reportResponseText" class="form-textarea" placeholder="Wpisz odpowiedź..." rows="2"></textarea>
+        <button id="reportResolveBtn" class="btn-primary" style="margin-top: 12px; width: 100%;">Oznacz jako sprawdzone</button>
+      </div>
+
+      <div id="reportDetailResolved" class="report-resolved-info" style="display: none;"></div>
+
+      <div class="modal-actions">
+        <button id="reportDetailDelete" class="btn-secondary" style="flex: 1; background: #ff4b4b; color: white;">Usuń trwale</button>
+        <button id="reportDetailClose" class="btn-secondary" style="flex: 1;">Zamknij</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL: USUWANIE STARYCH ZGŁOSZEŃ ==================== -->
+  <div id="reportsDeleteOldModal" class="modal">
+    <div class="modal-content">
+      <h3>Usuwanie starych zgłoszeń</h3>
+      <p>Czy na pewno chcesz usunąć wszystkie zgłoszenia, które zostały oznaczone jako sprawdzone ponad <strong>24 godziny temu</strong>? Ta operacja jest nieodwracalna.</p>
+      <div class="modal-actions">
+        <button id="reportsDeleteOldCancel" class="btn-secondary">Anuluj</button>
+        <button id="reportsDeleteOldConfirm" class="btn-primary" style="background: #ff4b4b;">Tak, usuń</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL: USUWANIE POJEDYNCZEGO ZGŁOSZENIA ==================== -->
+  <div id="reportDeleteConfirmModal" class="modal">
+    <div class="modal-content">
+      <h3>Trwałe usunięcie zgłoszenia</h3>
+      <p>Czy na pewno chcesz trwale usunąć to zgłoszenie ze Sprawdzonych? Ta operacja jest nieodwracalna.</p>
+      <div class="modal-actions">
+        <button id="reportDeleteConfirmCancel" class="btn-secondary">Anuluj</button>
+        <button id="reportDeleteConfirmConfirm" class="btn-primary" style="background: #ff4b4b;">Tak, usuń</button>
+      </div>
+    </div>
   </div>
 
   <footer class="app-footer">
@@ -758,6 +1017,40 @@
   </footer>
 
   <div id="toast" class="toast"></div>
+
+  <!-- ==================== MODALE INWENTARYZACJI ==================== -->
+  <div id="matsLoadFromInventoryModal" class="modal">
+    <div class="modal-content">
+      <h3>Wczytaj dany inwentaryzacji do bazy głównej</h3>
+      <p>Czy na pewno chcesz przenieść obecne ilości z inwentaryzacji i NADPISAĆ NIMI listę na zakładce Mat Logo? Ta operacja usunie stare ilości mat i zastąpi je tymi z inwentaryzacji.</p>
+      <div class="modal-actions">
+        <button id="matsLoadFromInventoryCancel" class="btn-secondary">Anuluj</button>
+        <button id="matsLoadFromInventoryConfirm" class="btn-primary" style="background: var(--primary);">Tak, nadpisz bazę główną</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="inventoryLoadModal" class="modal">
+    <div class="modal-content">
+      <h3>Wczytaj listę mat</h3>
+      <p>Czy na pewno chcesz wczytać listę mat z głównej bazy? Zastąpi to obecną inwentaryzację nowymi pozycjami i zresetuje wszystkie oznaczenia.</p>
+      <div class="modal-actions">
+        <button id="inventoryLoadCancel" class="btn-secondary">Anuluj</button>
+        <button id="inventoryLoadConfirm" class="btn-primary">Wczytaj</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="inventoryClearModal" class="modal">
+    <div class="modal-content">
+      <h3>Wyczyść oznaczenia</h3>
+      <p>Czy na pewno chcesz wyczyścić wszystkie oznaczenia (zgodne/niezgodne)? Maty wrócą do stanu niesprawdzonych.</p>
+      <div class="modal-actions">
+        <button id="inventoryClearCancel" class="btn-secondary">Anuluj</button>
+        <button id="inventoryClearConfirm" class="btn-danger">Wyczyść</button>
+      </div>
+    </div>
+  </div>
 
   <!-- ==================== MODALE PANEL TRAS ==================== -->
   <div id="editSimpleModal" class="modal">
@@ -1174,7 +1467,8 @@
   </script>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-  <script src="script.js"></script>
+  <script src="logoData.js?v=33"></script>
+  <script src="script.js?v=33"></script>
 </body>
 
 </html>
