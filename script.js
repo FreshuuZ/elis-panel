@@ -1,5 +1,13 @@
 document.addEventListener("DOMContentLoaded", () => {
   
+  // ==================== ZMIENNE POWIADOMIEŃ ====================
+  let unreadReportIds = new Set();
+  let titleBlinkInterval = null;
+  let isTitleBlinking = false;
+  const originalDocumentTitle = document.title;
+  
+  // Powiadomienia włączamy manualnie przyciskiem w Zgłoszeniach
+
   // ==================== GLOBAL STATE & CACHE ====================
   let allLogoMats = [];
   // ==================== OPTYMALIZACJA LISTY MAT ====================
@@ -672,6 +680,33 @@ document.addEventListener("DOMContentLoaded", () => {
     } else if (viewName === 'reports') {
       headerTitle.textContent = 'Zgłoszenia';
       backBtn.style.display = 'flex';
+      
+      // LOKALNE wyzerowanie powiadomień
+      unreadReportIds.clear();
+      const reportsTileBadge = document.getElementById('reportsTileBadge');
+      if (reportsTileBadge) reportsTileBadge.style.display = 'none';
+      if (titleBlinkInterval) {
+        clearInterval(titleBlinkInterval);
+        titleBlinkInterval = null;
+      }
+      isTitleBlinking = false;
+      document.title = originalDocumentTitle;
+
+
+      // Odśwież UI przycisku powiadomień 
+      const notifBtnText = document.getElementById('toggleNotificationsText');
+      if (notifBtnText && "Notification" in window) {
+          if (Notification.permission === 'granted') {
+              notifBtnText.textContent = 'Powiadomienia (wł.)';
+              document.getElementById('notifIconOff').style.display = 'none';
+              document.getElementById('notifIconOn').style.display = 'inline-block';
+          } else {
+              notifBtnText.textContent = 'Włącz powiadomienia';
+              document.getElementById('notifIconOff').style.display = 'inline-block';
+              document.getElementById('notifIconOn').style.display = 'none';
+          }
+      }
+
       (async () => {
           await fetchReports();
       })();
@@ -5494,8 +5529,10 @@ document.addEventListener("DOMContentLoaded", () => {
                  const itemEl = inventoryList.querySelector(`[data-inv-id="${payload.new.id}"]`);
                  if (itemEl) {
                      itemEl.className = 'inventory-item mat-item status-' + payload.new.status;
-                     const qtyInput = itemEl.querySelector('.inv-qty-val');
-                     if (qtyInput) qtyInput.value = payload.new.custom_qty !== null ? payload.new.custom_qty : payload.new.original_qty;
+                     const qtyInput = itemEl.querySelector('.inv-qty-input');
+                     if (qtyInput && document.activeElement !== qtyInput) {
+                         qtyInput.value = payload.new.quantity;
+                     }
                  }
                  if (typeof updateInventoryStats === 'function') updateInventoryStats();
              }
@@ -5519,8 +5556,64 @@ document.addEventListener("DOMContentLoaded", () => {
         if (currentView === 'reports') {
           await fetchReports();
         }
+        
+        const isNew = (payload.eventType === 'INSERT');
+        const isResolved = (payload.eventType === 'UPDATE' && payload.new.status === 'resolved' && payload.old.status !== 'resolved');
+        const isDeleted = (payload.eventType === 'DELETE');
+
+        if (isDeleted) {
+            unreadReportIds.delete(payload.old.id);
+        } else if ((isNew || isResolved) && currentView !== 'reports') {
+            unreadReportIds.add(payload.new.id);
+        }
+
+        const reportsTileBadge = document.getElementById('reportsTileBadge');
+        if (reportsTileBadge && currentView !== 'reports') {
+            if (unreadReportIds.size > 0) {
+                reportsTileBadge.textContent = unreadReportIds.size;
+                reportsTileBadge.style.display = 'inline-block';
+                // Ostatnia akcja definiuje nowy kolor
+                if (isResolved || isNew) {
+                    reportsTileBadge.style.backgroundColor = isResolved ? 'var(--success, #10b981)' : 'var(--danger, #ef4444)';
+                }
+            } else {
+                reportsTileBadge.style.display = 'none';
+                if (titleBlinkInterval) {
+                    clearInterval(titleBlinkInterval);
+                    titleBlinkInterval = null;
+                }
+                isTitleBlinking = false;
+                document.title = originalDocumentTitle;
+            }
+        }
+        
+        if ((isNew || isResolved) && currentView !== 'reports') {
+            if ("Notification" in window && Notification.permission === "granted") {
+                const notifTitle = isNew ? "Nowe zgłoszenie" : "Zgłoszenie sprawdzone";
+                const notifBody = isNew ? "W systemie pojawiło się nowe zgłoszenie." : "Zgłoszenie zostało oznaczone jako sprawdzone.";
+                const notif = new Notification(notifTitle, {
+                    body: notifBody,
+                    icon: "icons/icon-192.png"
+                });
+                notif.onclick = () => {
+                    window.focus();
+                    navigateTo('reports');
+                };
+            }
+            
+            if (document.hidden && !isTitleBlinking) {
+                isTitleBlinking = true;
+                let titleState = false;
+                titleBlinkInterval = setInterval(() => {
+                    document.title = titleState ? "🔔 Nowe zgłoszenie!" : originalDocumentTitle;
+                    titleState = !titleState;
+                }, 1000);
+            }
+        }
       })
       .subscribe();
+      
+      window.reportsChannel = reportsChannel;
 
     initPalletSystem();
     navigateTo('home');
@@ -5540,6 +5633,33 @@ document.addEventListener("DOMContentLoaded", () => {
   const reportsSearch = document.getElementById('reportsSearch');
   const reportsList = document.getElementById('reportsList');
   const reportsPendingCount = document.getElementById('reportsPendingCount');
+  
+  // Zmienne do przycisku powiadomień
+  const toggleNotificationsBtn = document.getElementById('toggleNotificationsBtn');
+  
+  if (toggleNotificationsBtn) {
+      toggleNotificationsBtn.addEventListener('click', async () => {
+          if (!("Notification" in window)) {
+             alert("Twoja przeglądarka nie obsługuje powiadomień.");
+             return;
+          }
+          if (Notification.permission === 'default' || Notification.permission === 'denied') {
+              const perm = await Notification.requestPermission();
+              // Aktualizuj UI na podstawie odpowiedzi
+              const notifBtnText = document.getElementById('toggleNotificationsText');
+              if (perm === 'granted') {
+                  if(notifBtnText) notifBtnText.textContent = 'Powiadomienia (wł.)';
+                  document.getElementById('notifIconOff').style.display = 'none';
+                  document.getElementById('notifIconOn').style.display = 'inline-block';
+                  new Notification('Elis ServiceHub', { body: 'Powiadomienia pomyślnie uruchomione!', icon: 'icons/icon-192.png' });
+              } else {
+                  alert("Powiadomienia zablokowane. Kliknij w kłódkę obok pola adresu strony, by zezwolić na powiadomienia ręcznie.");
+              }
+          } else {
+              alert("Masz już włączone powiadomienia! Jeśli nie pojawiają się w rogu ekranu sprawdź, czy w systemie Windows/Android nie masz włączonej opcji 'Nie przeszkadzać'.");
+          }
+      });
+  }
   const reportsResolvedCount = document.getElementById('reportsResolvedCount');
   const newReportBtn = document.getElementById('newReportBtn');
   const reportsTabs = document.querySelectorAll('.reports-tab');
