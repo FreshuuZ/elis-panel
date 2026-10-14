@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Elis ServiceHub — Centrum Główne</title>
-  <link rel="stylesheet" href="style.css?v=26">
+  <link rel="stylesheet" href="style.css?v=29">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0d1117">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -469,6 +469,17 @@
                 </svg>
                 <span>Wczytaj z inwentaryzacji</span>
               </button>
+
+              <button id="openSeasonalMatsBtn" class="btn-print-mats" data-navigate="seasonal" aria-label="Maty logo sezonowe">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                  <line x1="16" y1="2" x2="16" y2="6"></line>
+                  <line x1="8" y1="2" x2="8" y2="6"></line>
+                  <line x1="3" y1="10" x2="21" y2="10"></line>
+                </svg>
+                <span>Maty sezonowe</span>
+              </button>
               
               <button id="exportExcelBtn" class="btn-export-excel" aria-label="Eksportuj do Excel">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -520,6 +531,55 @@
             <div class="load-more-spinner"></div>
             <span>Ładowanie...</span>
           </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- ==================== WIDOK: MATY LOGO SEZONOWE ==================== -->
+    <div id="seasonalView" class="view">
+      <main class="app-main">
+        <section class="card">
+          <div class="card-header">
+            <h2>🗓️ Maty Logo Sezonowe</h2>
+            <div class="mats-actions-buttons">
+              <button id="printSeasonalBtn" class="btn-print-mats" aria-label="Drukuj listę mat sezonowych">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                  <rect x="6" y="14" width="12" height="8"></rect>
+                </svg>
+                <span>Drukuj</span>
+              </button>
+            </div>
+          </div>
+          <div class="search-box">
+            <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <path d="m21 21-4.35-4.35"></path>
+            </svg>
+            <input type="text" id="seasonalSearch" placeholder="Wpisz nazwę, lokalizację lub rozmiar..."
+              class="search-input">
+          </div>
+          <div id="seasonalAddMatSection" class="admin-add-mat-section" style="display: none;">
+            <button id="addSeasonalMatBtn" class="btn-add-mat">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2.5">
+                <path d="M12 5v14m-7-7h14" />
+              </svg>
+              <span>Dodaj matę sezonową</span>
+            </button>
+          </div>
+          <div class="mats-stats">
+            <span id="seasonalCount">Załadowano: 0 mat</span>
+            <span id="seasonalFiltered" style="display:none;"></span>
+          </div>
+        </section>
+
+        <section>
+          <h2 class="section-title">🗓️ Lista Mat Sezonowych (najnowsze na górze)</h2>
+          <div id="seasonalList" class="mats-list"></div>
         </section>
       </main>
     </div>
@@ -1276,7 +1336,12 @@
           <input type="text" id="addMatNumber" placeholder="np. 12345">
         </div>
 
-        <div class="mat-form-group full-width">
+        <div id="addSeasonalLocationFields" class="mat-form-group full-width" style="display: none;">
+          <label for="addMatSeasonalLocation">Lokalizacja (opcjonalnie)</label>
+          <input type="text" id="addMatSeasonalLocation" placeholder="Wózek">
+        </div>
+
+        <div id="addLocationTypeGroup" class="mat-form-group full-width">
           <label>Typ lokalizacji</label>
           <div class="location-type-toggle">
             <label class="location-type-option">
@@ -1307,10 +1372,15 @@
             <input type="text" id="addMatRow" placeholder="np. 1">
           </div>
           <div class="mat-form-group">
-            <label for="addMatPipe">Rura</label>
-            <input type="text" id="addMatPipe" placeholder="np. 7,,12 lub 3,4,5">
+            <label for="addMatPipe">Rura od</label>
+            <input type="number" id="addMatPipe" min="0" inputmode="numeric" placeholder="np. 7">
+          </div>
+          <div class="mat-form-group">
+            <label for="addMatPipeTo">Rura do (opcjonalnie)</label>
+            <input type="number" id="addMatPipeTo" min="0" inputmode="numeric" placeholder="np. 12">
           </div>
         </div>
+        <div id="addLocationPreview" class="location-preview full-width"></div>
 
         <!-- Pole dla Palety -->
         <div id="addPalletFields" class="pallet-fields" style="display: none;">
@@ -1361,7 +1431,12 @@
           <input type="text" id="editMatNumber" placeholder="np. MAT-001 lub 12345">
         </div>
 
-        <div class="mat-form-group full-width">
+        <div id="editSeasonalLocationFields" class="mat-form-group full-width" style="display: none;">
+          <label for="editMatSeasonalLocation">Lokalizacja (opcjonalnie)</label>
+          <input type="text" id="editMatSeasonalLocation" placeholder="Wózek">
+        </div>
+
+        <div id="editLocationTypeGroup" class="mat-form-group full-width">
           <label>Typ lokalizacji</label>
           <div class="location-type-toggle">
             <label class="location-type-option">
@@ -1392,10 +1467,15 @@
             <input type="text" id="editMatRow" placeholder="np. 1">
           </div>
           <div class="mat-form-group">
-            <label for="editMatPipe">Rura</label>
-            <input type="text" id="editMatPipe" placeholder="np. 7,,12 lub 3,4,5">
+            <label for="editMatPipe">Rura od</label>
+            <input type="number" id="editMatPipe" min="0" inputmode="numeric" placeholder="np. 7">
+          </div>
+          <div class="mat-form-group">
+            <label for="editMatPipeTo">Rura do (opcjonalnie)</label>
+            <input type="number" id="editMatPipeTo" min="0" inputmode="numeric" placeholder="np. 12">
           </div>
         </div>
+        <div id="editLocationPreview" class="location-preview full-width"></div>
 
         <!-- Pole dla Palety -->
         <div id="editPalletFields" class="pallet-fields" style="display: none;">
@@ -1479,7 +1559,8 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script src="logoData.js?v=33"></script>
-  <script src="script.js?v=33"></script>
+  <script src="locationFormat.js?v=1"></script>
+  <script src="script.js?v=37"></script>
 </body>
 
 </html>
