@@ -67,6 +67,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const addMatRack = document.getElementById('addMatRack');
   const addMatRow = document.getElementById('addMatRow');
   const addMatPipe = document.getElementById('addMatPipe');
+  const addMatPipeTo = document.getElementById('addMatPipeTo');
   const addMatPallet = document.getElementById('addMatPallet');
   const addMatSize = document.getElementById('addMatSize');
   const addMatQty = document.getElementById('addMatQty');
@@ -83,6 +84,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const editMatRack = document.getElementById('editMatRack');
   const editMatRow = document.getElementById('editMatRow');
   const editMatPipe = document.getElementById('editMatPipe');
+  const editMatPipeTo = document.getElementById('editMatPipeTo');
   const editMatPallet = document.getElementById('editMatPallet');
   const editMatSize = document.getElementById('editMatSize');
   const editMatQty = document.getElementById('editMatQty');
@@ -164,6 +166,8 @@ document.addEventListener("DOMContentLoaded", () => {
       // Odśwież listę mat jeśli jesteśmy w widoku mat
       if (currentView === 'mats') {
         renderMats(allLogoMats, matsSearch.value);
+      } else if (currentView === 'seasonal') {
+        renderSeasonalMats();
       }
     } else {
       pinError.style.display = 'flex';
@@ -191,6 +195,8 @@ document.addEventListener("DOMContentLoaded", () => {
       // Odśwież listę mat jeśli jesteśmy w widoku mat
       if (currentView === 'mats') {
         renderMats(allLogoMats, matsSearch.value);
+      } else if (currentView === 'seasonal') {
+        renderSeasonalMats();
       }
     }
   }
@@ -202,6 +208,11 @@ document.addEventListener("DOMContentLoaded", () => {
     // Pokaż/ukryj sekcję dodawania maty
     if (adminAddMatSection) {
       adminAddMatSection.style.display = isAdmin ? 'block' : 'none';
+    }
+
+    const seasonalAddMatSection = document.getElementById('seasonalAddMatSection');
+    if (seasonalAddMatSection) {
+      seasonalAddMatSection.style.display = isAdmin ? 'block' : 'none';
     }
     
     // Pokaż przycisk kopiowania zapasów u admina w Liście Mat Logo
@@ -292,52 +303,103 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ==================== BUDOWANIE LOKALIZACJI ====================
 
-  function buildLocationString(rack, row, pipe) {
-    if (!rack && !row && !pipe) return '';
-    
-    let parts = [];
-    if (rack) parts.push(rack);
-    if (row) parts.push(row);
-    if (pipe) parts.push(pipe);
-    
-    return parts.join('-');
+  // Zwraca { location, error } na podstawie pól formularza (prefix: 'add' | 'edit')
+  function readLocationFromForm(prefix) {
+    if (matFormTarget === 'seasonal') {
+      const text = document.getElementById(`${prefix}MatSeasonalLocation`).value.trim() || 'Wózek';
+      return { location: LocationFormat.normalizeLocation(text), error: null };
+    }
+
+    const locationType = document.querySelector(`input[name="${prefix}LocationType"]:checked`).value;
+
+    if (locationType !== 'rack') {
+      const text = document.getElementById(`${prefix}MatPallet`).value.trim() || 'PALETA';
+      return { location: LocationFormat.normalizeLocation(text), error: null };
+    }
+
+    const rack = document.getElementById(`${prefix}MatRack`).value.trim();
+    const row = document.getElementById(`${prefix}MatRow`).value.trim();
+    const pipeFrom = document.getElementById(`${prefix}MatPipe`).value.trim();
+    const pipeTo = document.getElementById(`${prefix}MatPipeTo`).value.trim();
+
+    if (!rack && !row && !pipeFrom && !pipeTo) return { location: '', error: null };
+    if (!/^(\d+|[A-Za-z])$/.test(rack)) return { location: '', error: 'Regał to numer (np. 2) albo jedna litera (np. A).' };
+    if (!/^\d+$/.test(row)) return { location: '', error: 'Podaj numer rzędu.' };
+    if ((pipeFrom && !/^\d+$/.test(pipeFrom)) || (pipeTo && !/^\d+$/.test(pipeTo))) {
+      return { location: '', error: 'Numery rur muszą być liczbami.' };
+    }
+
+    return { location: LocationFormat.buildCanonical(rack, row, pipeFrom, pipeTo), error: null };
   }
 
-  function parseLocationString(location) {
-    if (!location) return { type: 'rack', rack: '', row: '', pipe: '', pallet: '' };
-    
-    // Sprawdź czy to paleta
-    const isPallet = location.toUpperCase().includes('PALETA') || 
-                    location.toUpperCase().includes('MAGAZYN') ||
-                    location.toUpperCase().includes('POD-') ||
-                    !location.includes('-') ||
-                    !/^\d/.test(location.charAt(0)) && !/^[A-Z]-\d/.test(location);
-    
-    if (isPallet) {
-      return { type: 'pallet', rack: '', row: '', pipe: '', pallet: location };
+  // Maty sezonowe leżą na wózku – zamiast regału/palety jedno opcjonalne pole
+  function setLocationLayout(prefix, target) {
+    const isSeasonal = target === 'seasonal';
+    document.getElementById(`${prefix}SeasonalLocationFields`).style.display = isSeasonal ? 'block' : 'none';
+    document.getElementById(`${prefix}LocationTypeGroup`).style.display = isSeasonal ? 'none' : '';
+    if (isSeasonal) {
+      document.getElementById(`${prefix}RackFields`).style.display = 'none';
+      document.getElementById(`${prefix}PalletFields`).style.display = 'none';
     }
-    
-    // Parsuj format regałowy: REGAŁ-RZĄD-RURY
-    const parts = location.split('-');
-    return {
-      type: 'rack',
-      rack: parts[0] || '',
-      row: parts[1] || '',
-      pipe: parts.slice(2).join('-') || '',
-      pallet: ''
-    };
   }
+
+  function updateLocationPreview(prefix) {
+    const preview = document.getElementById(`${prefix}LocationPreview`);
+    const { location, error } = readLocationFromForm(prefix);
+
+    if (error) {
+      preview.innerHTML = `<span class="location-preview-label">⚠️</span>${escapeHtml(error)}`;
+    } else if (location) {
+      preview.innerHTML = `<span class="location-preview-label">Zapisze się jako:</span><strong>${escapeHtml(LocationFormat.describeLocation(location))}</strong>`;
+    } else {
+      preview.innerHTML = '';
+    }
+  }
+
+  ['add', 'edit'].forEach(prefix => {
+    ['MatRack', 'MatRow', 'MatPipe', 'MatPipeTo', 'MatPallet', 'MatSeasonalLocation'].forEach(field => {
+      document.getElementById(`${prefix}${field}`).addEventListener('input', () => updateLocationPreview(prefix));
+    });
+    document.querySelectorAll(`input[name="${prefix}LocationType"]`).forEach(radio => {
+      radio.addEventListener('change', () => updateLocationPreview(prefix));
+    });
+  });
 
   // ==================== DODAWANIE MATY ====================
 
-  addNewMatBtn?.addEventListener('click', () => {
+  // 'logo' = główna lista (logo_mats), 'seasonal' = maty sezonowe (seasonal_logo_mats)
+  let matFormTarget = 'logo';
+
+  function getMatTable(target) {
+    return target === 'seasonal' ? 'seasonal_logo_mats' : 'logo_mats';
+  }
+
+  async function refreshMatList(target) {
+    if (target === 'seasonal') {
+      await loadSeasonalMats();
+    } else {
+      allLogoMats = [];
+      const newMats = await fetchAndCacheLogoMats();
+      renderMats(newMats, matsSearch.value);
+    }
+  }
+
+  addNewMatBtn?.addEventListener('click', () => openAddMatModal('logo'));
+  document.getElementById('addSeasonalMatBtn')?.addEventListener('click', () => openAddMatModal('seasonal'));
+
+  function openAddMatModal(target) {
+    matFormTarget = target;
+    addMatModal.querySelector('h3').textContent = target === 'seasonal' ? '➕ Dodaj matę sezonową' : '➕ Dodaj nową matę';
+
     // Reset formularza
     addMatName.value = '';
     addMatNumber.value = '';  // 🆕 DODANE
     addMatRack.value = '';
     addMatRow.value = '';
     addMatPipe.value = '';
+    addMatPipeTo.value = '';
     addMatPallet.value = '';
+    document.getElementById('addMatSeasonalLocation').value = '';
     addMatSize.value = '';
     addMatQty.value = '1';
     
@@ -345,10 +407,12 @@ document.addEventListener("DOMContentLoaded", () => {
     document.querySelector('input[name="addLocationType"][value="rack"]').checked = true;
     addRackFields.style.display = 'grid';
     addPalletFields.style.display = 'none';
+    setLocationLayout('add', target);
+    updateLocationPreview('add');
     
     openModal(addMatModal);
     setTimeout(() => addMatName.focus(), 100);
-  });
+  }
 
   addMatCancel.addEventListener('click', () => closeModal(addMatModal));
 
@@ -364,23 +428,17 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     
-    // Buduj lokalizację
-    let location = '';
-    const locationType = document.querySelector('input[name="addLocationType"]:checked').value;
-    
-    if (locationType === 'rack') {
-      location = buildLocationString(
-        addMatRack.value.trim(),
-        addMatRow.value.trim(),
-        addMatPipe.value.trim()
-      );
-    } else {
-      location = addMatPallet.value.trim() || 'PALETA';
+    const { location, error: locationError } = readLocationFromForm('add');
+    if (locationError) {
+      showToast(locationError, 'error');
+      return;
     }
     
     addMatSubmit.disabled = true;
     addMatSubmit.innerHTML = '<span class="spinner"></span> Dodawanie...';
     
+    const target = matFormTarget;
+
     try {
       let finalName = name;
       let insertedData = null;
@@ -388,7 +446,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       for (let i = 0; i < 10; i++) {
         const { data, error } = await window.supabase
-          .from('logo_mats')
+          .from(getMatTable(target))
           .insert([{
             name: finalName,
             mat_number: matNumber || null,  // 🆕 DODANE
@@ -419,9 +477,7 @@ document.addEventListener("DOMContentLoaded", () => {
       closeModal(addMatModal);
       
       // Odśwież cache i listę
-      allLogoMats = [];
-      const newMats = await fetchAndCacheLogoMats();
-      renderMats(newMats, matsSearch.value);
+      await refreshMatList(target);
       
     } catch (error) {
       console.error('Błąd dodawania maty:', error);
@@ -441,32 +497,38 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ==================== EDYCJA MATY ====================
 
-  function openEditMatModal(mat) {
+  function openEditMatModal(mat, target = 'logo') {
+    matFormTarget = target;
     editMatId.value = mat.id;
     editMatName.value = mat.name || '';
     editMatNumber.value = mat.mat_number || '';  // 🆕 DODANE
     editMatSize.value = mat.size || '';
     editMatQty.value = mat.quantity || 0;
     
-    const parsed = parseLocationString(mat.location);
+    const parsed = LocationFormat.parseLocation(mat.location);
     
-    if (parsed.type === 'pallet') {
+    if (parsed.type === 'other') {
       document.querySelector('input[name="editLocationType"][value="pallet"]').checked = true;
       editRackFields.style.display = 'none';
       editPalletFields.style.display = 'block';
-      editMatPallet.value = parsed.pallet;
+      editMatPallet.value = parsed.text;
       editMatRack.value = '';
       editMatRow.value = '';
       editMatPipe.value = '';
+      editMatPipeTo.value = '';
     } else {
       document.querySelector('input[name="editLocationType"][value="rack"]').checked = true;
       editRackFields.style.display = 'grid';
       editPalletFields.style.display = 'none';
       editMatRack.value = parsed.rack;
       editMatRow.value = parsed.row;
-      editMatPipe.value = parsed.pipe;
+      editMatPipe.value = parsed.pipeFrom;
+      editMatPipeTo.value = parsed.pipeTo;
       editMatPallet.value = '';
     }
+    document.getElementById('editMatSeasonalLocation').value = mat.location === 'Wózek' ? '' : (mat.location || '');
+    setLocationLayout('edit', target);
+    updateLocationPreview('edit');
     
     openModal(editMatModal);
   }
@@ -486,23 +548,17 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     
-    // Buduj lokalizację
-    let location = '';
-    const locationType = document.querySelector('input[name="editLocationType"]:checked').value;
-    
-    if (locationType === 'rack') {
-      location = buildLocationString(
-        editMatRack.value.trim(),
-        editMatRow.value.trim(),
-        editMatPipe.value.trim()
-      );
-    } else {
-      location = editMatPallet.value.trim() || 'PALETA';
+    const { location, error: locationError } = readLocationFromForm('edit');
+    if (locationError) {
+      showToast(locationError, 'error');
+      return;
     }
     
     editMatSubmit.disabled = true;
     editMatSubmit.innerHTML = '<span class="spinner"></span> Zapisywanie...';
     
+    const target = matFormTarget;
+
     try {
       let finalName = name;
       let updateSuccess = false;
@@ -510,7 +566,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       for (let i = 0; i < 10; i++) {
         const { error } = await window.supabase
-          .from('logo_mats')
+          .from(getMatTable(target))
           .update({
             name: finalName,
             mat_number: matNumber || null,  // 🆕 DODANE
@@ -541,9 +597,7 @@ document.addEventListener("DOMContentLoaded", () => {
       closeModal(editMatModal);
       
       // Odśwież cache i listę
-      allLogoMats = [];
-      const newMats = await fetchAndCacheLogoMats();
-      renderMats(newMats, matsSearch.value);
+      await refreshMatList(target);
       
     } catch (error) {
       console.error('Błąd aktualizacji maty:', error);
@@ -563,7 +617,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ==================== USUWANIE MATY ====================
 
-  function openDeleteMatModal(mat) {
+  function openDeleteMatModal(mat, target = 'logo') {
+    matFormTarget = target;
     deleteMatId.value = mat.id;
     deleteMatName.textContent = mat.name;
     openModal(deleteMatModal);
@@ -577,9 +632,11 @@ document.addEventListener("DOMContentLoaded", () => {
     deleteMatConfirm.disabled = true;
     deleteMatConfirm.innerHTML = '<span class="spinner"></span> Usuwanie...';
     
+    const target = matFormTarget;
+
     try {
       const { error } = await window.supabase
-        .from('logo_mats')
+        .from(getMatTable(target))
         .delete()
         .eq('id', id);
       
@@ -589,9 +646,7 @@ document.addEventListener("DOMContentLoaded", () => {
       closeModal(deleteMatModal);
       
       // Odśwież cache i listę
-      allLogoMats = [];
-      const newMats = await fetchAndCacheLogoMats();
-      renderMats(newMats, matsSearch.value);
+      await refreshMatList(target);
       
     } catch (error) {
       console.error('Błąd usuwania maty:', error);
@@ -610,6 +665,7 @@ document.addEventListener("DOMContentLoaded", () => {
     home: document.getElementById('homeView'),
     panel: document.getElementById('panelView'),
     mats: document.getElementById('matsView'),
+    seasonal: document.getElementById('seasonalView'),
     washing: document.getElementById('washingView'),
     archive: document.getElementById('archiveView'), // Przedsionek
     'archive-replacements': document.getElementById('archiveReplacementsView'), // NOWE
@@ -625,6 +681,7 @@ document.addEventListener("DOMContentLoaded", () => {
     'home': null,
     'panel': 'home',
     'mats': 'home',
+    'seasonal': 'mats',
     'washing': 'home',
     'archive': 'home',
     'archive-replacements': 'archive',
@@ -652,6 +709,10 @@ document.addEventListener("DOMContentLoaded", () => {
           const mats = await fetchAndCacheLogoMats();
           renderMats(mats, matsSearch.value);
       })();
+    } else if (viewName === 'seasonal') {
+      headerTitle.textContent = 'Maty Logo Sezonowe';
+      backBtn.style.display = 'flex';
+      loadSeasonalMats();
     } else if (viewName === 'inventory') {
       headerTitle.textContent = 'Inwentaryzacja Mat';
       backBtn.style.display = 'flex';
@@ -1776,7 +1837,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const newInventory = originalMats.map(mat => ({
         name: mat.name || null,
         mat_number: mat.mat_number || null,
-        location: mat.location || null,
+        location: mat.location ? LocationFormat.normalizeLocation(mat.location) : null,
         size: mat.size || null,
         quantity: mat.quantity || 0,
         status: 'unchecked'
@@ -1934,7 +1995,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const newLogoMats = invMats.map(mat => ({
         name: mat.name,
         mat_number: mat.mat_number,
-        location: mat.location,
+        location: mat.location ? LocationFormat.normalizeLocation(mat.location) : mat.location,
         size: mat.size,
         quantity: mat.quantity
       }));
@@ -2288,50 +2349,8 @@ document.addEventListener("DOMContentLoaded", () => {
   // 🆕 FUNKCJA FORMATUJĄCA LOKACJĘ
   function formatLocation(location) {
     if (!location) return '';
-    
-    // Specjalne lokacje (bez numerów regałów)
-    const specialLocations = ['PALETA', 'REGAŁ', 'MAGAZYN', 'KASA', 'SPEC', 'NIEZNANE', 'POD-MAŁYMI-ŻABKAMI', 'BIURO', 'NOWY'];
-    if (specialLocations.some(special => location.toUpperCase().includes(special))) {
-      return `📦 ${location}`;
-    }
-    
-    // Sprawdź czy to format REGAŁ-RZĄD-RURY (np. "2-1-7,,12" lub "A-1")
-    const parts = location.split('-');
-    
-    if (parts.length >= 3) {
-      // Format: REGAŁ-RZĄD-RURY
-      const shelf = parts[0];
-      const row = parts[1];
-      const pipes = parts.slice(2).join('-'); // reszta to rury
-      
-      // Parsuj rury
-      let pipeText = '';
-      if (pipes.includes(',,')) {
-        // Format zakresu: "7,,12" → "7-12"
-        const rangeParts = pipes.split(',,').filter(p => p);
-        if (rangeParts.length === 2) {
-          pipeText = `${rangeParts[0]}-${rangeParts[1]}`;
-        } else if (rangeParts.length === 1) {
-          pipeText = rangeParts[0];
-        } else {
-          pipeText = pipes.replace(/,,/g, '-');
-        }
-      } else if (pipes.includes(',')) {
-        // Format listy: "3,4,5" → "3, 4, 5"
-        pipeText = pipes.replace(/,/g, ', ');
-      } else {
-        pipeText = pipes;
-      }
-      
-      return `📍 Regał ${shelf} → Rząd ${row} → Rura ${pipeText}`;
-      
-    } else if (parts.length === 2) {
-      // Format: REGAŁ-RZĄD (np. "A-1")
-      return `📍 Regał ${parts[0]} / Rząd ${parts[1]}`;
-    }
-    
-    // Fallback - zwróć oryginalną lokację
-    return `📍 ${location}`;
+    const isRack = LocationFormat.parseLocation(location).type === 'rack';
+    return `${isRack ? '📍' : '📦'} ${escapeHtml(LocationFormat.describeLocation(location))}`;
   }
 
 
@@ -2646,6 +2665,148 @@ document.addEventListener("DOMContentLoaded", () => {
       renderMats(allLogoMats, '');
     }
   });
+
+  // ==================== MATY LOGO SEZONOWE ====================
+  let allSeasonalMats = [];
+  const seasonalList = document.getElementById('seasonalList');
+  const seasonalSearch = document.getElementById('seasonalSearch');
+  const seasonalCount = document.getElementById('seasonalCount');
+  const seasonalFiltered = document.getElementById('seasonalFiltered');
+
+  async function loadSeasonalMats() {
+    if (allSeasonalMats.length === 0) {
+      seasonalList.innerHTML = `<div class="empty-state"><div class="empty-state-text">Pobieranie danych z bazy...</div></div>`;
+    }
+
+    try {
+      const { data, error } = await window.supabase
+        .from('seasonal_logo_mats')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      allSeasonalMats = data || [];
+      renderSeasonalMats();
+    } catch (error) {
+      console.error('Błąd pobierania mat sezonowych:', error);
+      showToast('Błąd pobierania mat sezonowych.', 'error');
+      seasonalList.innerHTML = `<div class="empty-state error"><div class="empty-state-text">Nie udało się pobrać danych.</div></div>`;
+    }
+  }
+
+  function formatAddedDate(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (isNaN(date)) return '';
+    return date.toLocaleString('pl-PL', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+  }
+
+  function renderSeasonalMats() {
+    const search = (seasonalSearch.value || '').toLowerCase().trim();
+    const filtered = search
+      ? allSeasonalMats.filter(mat =>
+          (mat.name?.toLowerCase() || '').includes(search) ||
+          (mat.location?.toLowerCase() || '').includes(search) ||
+          (mat.size?.toLowerCase() || '').includes(search) ||
+          (mat.mat_number?.toLowerCase() || '').includes(search))
+      : allSeasonalMats;
+
+    const totalQuantity = allSeasonalMats.reduce((sum, mat) => sum + (mat.quantity || 0), 0);
+    seasonalCount.textContent = `Załadowano: ${allSeasonalMats.length} mat (łącznie: ${totalQuantity} szt.)`;
+    if (search) {
+      const filteredQuantity = filtered.reduce((sum, mat) => sum + (mat.quantity || 0), 0);
+      seasonalFiltered.style.display = 'inline';
+      seasonalFiltered.textContent = `Znaleziono: ${filtered.length} (${filteredQuantity} szt.)`;
+    } else {
+      seasonalFiltered.style.display = 'none';
+    }
+
+    seasonalList.innerHTML = '';
+
+    if (filtered.length === 0) {
+      seasonalList.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-text">
+            ${search ? 'Nie znaleziono mat spełniających kryteria.' : 'Brak mat sezonowych.'}
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+
+    filtered.forEach(mat => {
+      const el = createMatElement(mat);
+
+      const addedAt = formatAddedDate(mat.created_at);
+      if (addedAt) {
+        const dateItem = document.createElement('div');
+        dateItem.className = 'mat-detail-item mat-added-date';
+        dateItem.textContent = `📅 Dodano: ${addedAt}`;
+        el.querySelector('.mat-details').appendChild(dateItem);
+      }
+
+      if (isAdmin) {
+        el.querySelector('.btn-edit-mat')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openEditMatModal(mat, 'seasonal');
+        });
+        el.querySelector('.btn-delete-mat')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openDeleteMatModal(mat, 'seasonal');
+        });
+      }
+
+      fragment.appendChild(el);
+    });
+
+    seasonalList.appendChild(fragment);
+  }
+
+  document.getElementById('printSeasonalBtn').addEventListener('click', () => {
+    if (allSeasonalMats.length === 0) {
+      showToast("Brak mat sezonowych do wydrukowania.", "error");
+      return;
+    }
+    const printDate = new Date().toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const totalQuantity = allSeasonalMats.reduce((sum, mat) => sum + (mat.quantity || 0), 0);
+
+    let printHTML = `
+      <div class="print-mats-header">
+        <img src="icons/icon-192.png" alt="Elis Logo">
+        <div class="title-block">
+          <h1>Lista Mat Logo Sezonowych</h1>
+          <p>Data wydruku: ${printDate}</p>
+        </div>
+      </div>
+      <div class="print-mats-summary">
+        <p><strong>Łączna liczba pozycji:</strong> ${allSeasonalMats.length}</p>
+        <p><strong>Suma wszystkich mat:</strong> ${totalQuantity} szt.</p>
+      </div>
+      <table class="print-mats-table print-seasonal-table">
+        <thead><tr><th>Nazwa</th><th>Lokalizacja</th><th>Rozmiar</th><th>Ilość</th><th>Data dodania</th></tr></thead>
+        <tbody>
+    `;
+    allSeasonalMats.forEach(mat => {
+      printHTML += `<tr><td>${escapeHtml(mat.name)}</td><td>${escapeHtml(LocationFormat.describeLocation(mat.location)) || '—'}</td><td>${escapeHtml(mat.size) || '—'}</td><td>${mat.quantity}</td><td>${formatAddedDate(mat.created_at) || '—'}</td></tr>`;
+    });
+    printHTML += `</tbody></table><div class="print-mats-footer"><p>Dokument wygenerowany automatycznie przez system Elis</p></div>`;
+    printOutput.innerHTML = printHTML;
+    setTimeout(() => { try { window.print(); } catch (error) { console.error("Błąd drukowania:", error); showToast("Błąd podczas otwierania okna drukowania.", "error"); } }, 100);
+  });
+
+  seasonalSearch.addEventListener('input', renderSeasonalMats);
+  seasonalSearch.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      seasonalSearch.value = '';
+      renderSeasonalMats();
+    }
+  });
   
   exportExcelBtn.addEventListener('click', async () => {
     if (allLogoMats.length === 0) {
@@ -2706,7 +2867,7 @@ document.addEventListener("DOMContentLoaded", () => {
       headerRow.eachCell((cell) => { cell.border = { top: { style: 'thin', color: { argb: 'FF000000' } }, left: { style: 'thin', color: { argb: 'FF000000' } }, bottom: { style: 'medium', color: { argb: 'FF000000' } }, right: { style: 'thin', color: { argb: 'FF000000' } } }; });
 
       sortedMats.forEach((mat, index) => {
-        const row = worksheet.addRow([mat.name, mat.location || 'Nie określono', mat.size || 'Nie określono', mat.quantity]);
+        const row = worksheet.addRow([mat.name, LocationFormat.describeLocation(mat.location) || 'Nie określono', mat.size || 'Nie określono', mat.quantity]);
         row.height = 22;
         row.font = { name: 'Calibri', size: 10 };
         if (index % 2 === 0) { row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9FAFB' } }; }
@@ -2777,7 +2938,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <tbody>
     `;
     sortedMats.forEach(mat => {
-      printHTML += `<tr><td>${mat.name}</td><td>${mat.location || '—'}</td><td>${mat.size || '—'}</td><td>${mat.quantity}</td></tr>`;
+      printHTML += `<tr><td>${mat.name}</td><td>${escapeHtml(LocationFormat.describeLocation(mat.location)) || '—'}</td><td>${mat.size || '—'}</td><td>${mat.quantity}</td></tr>`;
     });
     printHTML += `</tbody></table><div class="print-mats-footer"><p>Dokument wygenerowany automatycznie przez system Elis</p></div>`;
     printOutput.innerHTML = printHTML;
@@ -3716,7 +3877,7 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
           
           <div class="archive-item-details">
-            ${item.mat_location ? `<div class="archive-item-detail"><span>📍</span><strong>${item.mat_location}</strong></div>` : ''}
+            ${item.mat_location ? `<div class="archive-item-detail"><span>📍</span><strong>${escapeHtml(LocationFormat.describeLocation(item.mat_location))}</strong></div>` : ''}
             ${item.mat_size ? `<div class="archive-item-detail"><span>📏</span><span>${item.mat_size}</span></div>` : ''}
             <div class="archive-item-detail"><span>⏱️</span><span>Prane: ${durationText} temu}</span></div>
           </div>
@@ -4194,7 +4355,7 @@ document.addEventListener("DOMContentLoaded", () => {
           printHTML += `
             <tr>
               <td><strong>${item.mat_name}</strong></td>
-              <td>${item.mat_location || '—'}</td>
+              <td>${escapeHtml(LocationFormat.describeLocation(item.mat_location)) || '—'}</td>
               <td>${item.mat_size || '—'}</td>
               <td class="text-center"><strong>${item.quantity || 1}</strong></td>
               <td class="text-center">${item.shift || '—'}</td>
@@ -4349,7 +4510,7 @@ document.addEventListener("DOMContentLoaded", () => {
           
           const row = worksheet.addRow([
             item.mat_name,
-            item.mat_location || 'Nie określono',
+            LocationFormat.describeLocation(item.mat_location) || 'Nie określono',
             item.mat_size || 'Nie określono',
             item.quantity || 1,
             item.shift || '-',
