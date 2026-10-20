@@ -168,6 +168,8 @@ document.addEventListener("DOMContentLoaded", () => {
         renderMats(allLogoMats, matsSearch.value);
       } else if (currentView === 'seasonal') {
         renderSeasonalMats();
+      } else if (currentView === 'recent') {
+        renderRecentMats();
       }
     } else {
       pinError.style.display = 'flex';
@@ -197,6 +199,8 @@ document.addEventListener("DOMContentLoaded", () => {
         renderMats(allLogoMats, matsSearch.value);
       } else if (currentView === 'seasonal') {
         renderSeasonalMats();
+      } else if (currentView === 'recent') {
+        renderRecentMats();
       }
     }
   }
@@ -381,6 +385,7 @@ document.addEventListener("DOMContentLoaded", () => {
       allLogoMats = [];
       const newMats = await fetchAndCacheLogoMats();
       renderMats(newMats, matsSearch.value);
+      if (currentView === 'recent') await loadRecentMats();
     }
   }
 
@@ -666,6 +671,7 @@ document.addEventListener("DOMContentLoaded", () => {
     panel: document.getElementById('panelView'),
     mats: document.getElementById('matsView'),
     seasonal: document.getElementById('seasonalView'),
+    recent: document.getElementById('recentView'),
     washing: document.getElementById('washingView'),
     archive: document.getElementById('archiveView'), // Przedsionek
     'archive-replacements': document.getElementById('archiveReplacementsView'), // NOWE
@@ -682,6 +688,7 @@ document.addEventListener("DOMContentLoaded", () => {
     'panel': 'home',
     'mats': 'home',
     'seasonal': 'mats',
+    'recent': 'mats',
     'washing': 'home',
     'archive': 'home',
     'archive-replacements': 'archive',
@@ -713,6 +720,10 @@ document.addEventListener("DOMContentLoaded", () => {
       headerTitle.textContent = 'Maty Logo Sezonowe';
       backBtn.style.display = 'flex';
       loadSeasonalMats();
+    } else if (viewName === 'recent') {
+      headerTitle.textContent = 'Ostatnio dodane';
+      backBtn.style.display = 'flex';
+      loadRecentMats();
     } else if (viewName === 'inventory') {
       headerTitle.textContent = 'Inwentaryzacja Mat';
       backBtn.style.display = 'flex';
@@ -788,16 +799,223 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
   
-  // ==================== THEME TOGGLE ====================
-  const themeToggle = document.getElementById("themeToggle");
-  const savedTheme = localStorage.getItem("theme") || 'light';
-  document.body.className = savedTheme;
+  // ==================== MOTYWY ====================
+  const HALLOWEEN_END = new Date(2026, 10, 2); // 2.11.2026 00:00 – motyw działa do 23:59 1.11
+  const isHalloweenAvailable = () => new Date() < HALLOWEEN_END;
 
-  themeToggle.addEventListener("click", () => {
-    const isDark = document.body.classList.toggle("dark");
-    document.body.classList.toggle("light", !isDark);
-    localStorage.setItem("theme", isDark ? "dark" : "light");
+  // Halloween bazuje na ciemnym motywie – wszystkie style body.dark nadal działają
+  const THEME_CLASSES = { light: 'light', dark: 'dark', halloween: 'dark halloween' };
+  const THEME_COLORS = { light: '#e3e9f0', dark: '#0d1117', halloween: '#130b1c' };
+
+  const themeToggle = document.getElementById("themeToggle");
+  const themeMenu = document.getElementById("themeMenu");
+  const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+
+  const halloweenFX = createHalloweenFX();
+
+  function applyTheme(theme) {
+    if (theme === 'halloween' && !isHalloweenAvailable()) theme = 'dark';
+    if (!THEME_CLASSES[theme]) theme = 'light';
+
+    document.body.className = THEME_CLASSES[theme];
+    localStorage.setItem("theme", theme);
+    if (themeColorMeta) themeColorMeta.setAttribute('content', THEME_COLORS[theme]);
+
+    themeMenu.querySelectorAll('.theme-option').forEach(option => {
+      const isActive = option.dataset.theme === theme;
+      option.classList.toggle('active', isActive);
+      option.setAttribute('aria-checked', isActive);
+    });
+
+    if (theme === 'halloween') halloweenFX.start();
+    else halloweenFX.stop();
+  }
+
+  function setThemeMenuOpen(open) {
+    themeMenu.classList.toggle('open', open);
+    themeMenu.hidden = !open;
+    themeToggle.setAttribute('aria-expanded', String(open));
+  }
+
+  function retireHalloweenTheme() {
+    if (isHalloweenAvailable()) return;
+    themeMenu.querySelector('[data-theme="halloween"]')?.remove();
+    if (document.body.classList.contains('halloween')) {
+      setThemeMenuOpen(false);
+      applyTheme('dark');
+    }
+  }
+
+  if (!isHalloweenAvailable()) {
+    themeMenu.querySelector('[data-theme="halloween"]')?.remove();
+  } else {
+    const msUntilEnd = HALLOWEEN_END.getTime() - Date.now();
+    if (msUntilEnd < 2147483647) setTimeout(retireHalloweenTheme, msUntilEnd + 1000);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') retireHalloweenTheme();
+    });
+  }
+
+  applyTheme(localStorage.getItem("theme") || 'light');
+
+  themeToggle.addEventListener("click", (e) => {
+    e.stopPropagation();
+    setThemeMenuOpen(!themeMenu.classList.contains('open'));
   });
+
+  themeMenu.addEventListener('click', (e) => {
+    const option = e.target.closest('.theme-option');
+    if (!option) return;
+    applyTheme(option.dataset.theme);
+    setThemeMenuOpen(false);
+  });
+
+  document.addEventListener('click', (e) => {
+    if (themeMenu.classList.contains('open') && !themeMenu.contains(e.target)) setThemeMenuOpen(false);
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && themeMenu.classList.contains('open')) setThemeMenuOpen(false);
+  });
+
+  // ==================== HALLOWEEN – DEKORACJE I EASTER EGGI ====================
+  function createHalloweenFX() {
+    const GHOST_SVG = `<svg viewBox="0 0 64 72" xmlns="http://www.w3.org/2000/svg"><path d="M32 2C16 2 6 14 6 30v38l8-6 8 6 10-7 10 7 8-6 8 6V30C58 14 48 2 32 2z" fill="#fff"/><ellipse cx="23" cy="30" rx="4.5" ry="6" fill="#2a1a3a"/><ellipse cx="41" cy="30" rx="4.5" ry="6" fill="#2a1a3a"/><ellipse cx="32" cy="45" rx="5" ry="6" fill="#2a1a3a"/></svg>`;
+    const BAT_SVG = `<svg viewBox="0 0 64 32" xmlns="http://www.w3.org/2000/svg"><path d="M32 10c2-4 4-6 4-6l1 5c3-1 6 0 8 2 4-4 11-5 17-2-4 2-6 6-6 10-3-2-7-2-9 1-2-2-6-2-8 0-2 2-4 6-7 9-3-3-5-7-7-9-2-2-6-2-8 0-2-3-6-3-9-1 0-4-2-8-6-10 6-3 13-2 17 2 2-2 5-3 8-2l1-5s2 2 4 6z" fill="#0b0610"/></svg>`;
+    const PUMPKIN_SVG = `<svg viewBox="0 0 120 112" xmlns="http://www.w3.org/2000/svg"><path d="M58 30c-1-12 4-20 12-26" stroke="#3f6212" stroke-width="5" fill="none" stroke-linecap="round"/><path d="M68 14c8 2 12 8 9 13" stroke="#84cc16" stroke-width="3" fill="none" stroke-linecap="round"/><ellipse cx="32" cy="70" rx="26" ry="34" fill="#9a3412"/><ellipse cx="88" cy="70" rx="26" ry="34" fill="#c2410c"/><ellipse cx="48" cy="72" rx="22" ry="36" fill="#ea580c"/><ellipse cx="74" cy="72" rx="22" ry="36" fill="#f97316"/><ellipse cx="60" cy="72" rx="24" ry="38" fill="#fb923c"/><path d="M60 36c-1 22-1 50 0 72M46 44c-6 16-4 40 2 54M76 44c6 16 4 40-2 54" stroke="#c2410c" stroke-width="2.2" fill="none" opacity="0.45" stroke-linecap="round"/><ellipse cx="50" cy="54" rx="7" ry="12" fill="#fed7aa" opacity="0.55"/><path d="M40 64l12-14 10 14z" fill="#1c0a14"/><path d="M68 64l12-14 10 14z" fill="#1c0a14"/><path d="M46 64l6-7 5 7z" fill="#fde68a" opacity="0.85"/><path d="M74 64l6-7 5 7z" fill="#fde68a" opacity="0.85"/><path d="M44 82c6 10 26 12 34 0-6 4-10 8-17 8s-12-4-17-8z" fill="#1c0a14"/><path d="M52 84c3 3 13 3 16 0" stroke="#fde68a" stroke-width="1.4" fill="none" opacity="0.7"/></svg>`;
+    const WEB_SVG = `<svg viewBox="0 0 150 150" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#fff" stroke-width="1.2"><path d="M0 0L150 150M0 0L150 70M0 0L70 150M0 0L150 10M0 0L10 150"/><path d="M0 30Q18 22 28 8M0 62Q36 46 56 14M0 95Q55 70 86 18M0 128Q72 96 118 22"/><path d="M28 8Q30 20 22 28M56 14Q60 40 40 56M86 18Q92 62 60 86M118 22Q124 84 80 118"/></svg>`;
+    const SPIDER_SVG = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><g stroke="#e9d5ff" stroke-width="1.3" stroke-linecap="round"><path d="M12 10L4 4M12 10L3 10M12 14L3 18M12 14L5 22M12 10L20 4M12 10L21 10M12 14L21 18M12 14L19 22"/></g><ellipse cx="12" cy="13.5" rx="4.2" ry="5" fill="#2e1065"/><circle cx="12" cy="8" r="3" fill="#3b0764"/><circle cx="11" cy="7.4" r="0.7" fill="#fef3c7"/><circle cx="13.2" cy="7.4" r="0.7" fill="#fef3c7"/></svg>`;
+
+    let bgLayer = null;
+    let flyLayer = null;
+    let peekTimer = null;
+    let flyTimer = null;
+    let logoClicks = [];
+
+    const isActive = () => document.body.classList.contains('halloween');
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function spawn(className, html, lifetimeMs) {
+      if (!bgLayer) return null;
+      const el = document.createElement('div');
+      el.className = className;
+      el.innerHTML = html;
+      bgLayer.appendChild(el);
+      if (lifetimeMs) setTimeout(() => el.remove(), lifetimeMs);
+      return el;
+    }
+
+    function pageTopInView() {
+      const margin = 80;
+      const span = Math.max(140, window.innerHeight - margin * 2);
+      return window.scrollY + margin + Math.random() * span;
+    }
+
+    function launchFlyer(kind) {
+      if (!flyLayer || !isActive() || reduceMotion || document.visibilityState !== 'visible') return;
+      const isBat = kind === 'bat';
+      const cap = isBat ? 2 : 3;
+      if (flyLayer.querySelectorAll(isBat ? '.hw-bat' : '.hw-ghost').length >= cap) return;
+      const el = document.createElement('div');
+      const fromRight = Math.random() < 0.45;
+      el.className = `${isBat ? 'hw-bat' : 'hw-ghost'} hw-pass${fromRight ? ' from-right' : ''}`;
+      el.innerHTML = isBat ? BAT_SVG : GHOST_SVG;
+      el.style.top = pageTopInView() + 'px';
+      el.style.width = (isBat ? 28 + Math.random() * 12 : 46 + Math.random() * 14) + 'px';
+      const dur = (isBat ? 11 : 15) + Math.random() * 6;
+      el.style.animationDuration = dur + 's';
+      flyLayer.appendChild(el);
+      setTimeout(() => el.remove(), dur * 1000 + 250);
+    }
+
+    function scheduleFlyers() {
+      clearTimeout(flyTimer);
+      flyTimer = setTimeout(() => {
+        launchFlyer('ghost');
+        if (Math.random() < 0.55) launchFlyer('bat');
+        scheduleFlyers();
+      }, 2400 + Math.random() * 2600);
+    }
+
+    function schedulePeek() {
+      clearTimeout(peekTimer);
+      peekTimer = setTimeout(() => {
+        if (isActive() && document.visibilityState === 'visible') {
+          spawn(`hw-peek ${Math.random() < 0.5 ? 'left' : 'right'}`, GHOST_SVG, 4600);
+        }
+        schedulePeek();
+      }, 45000 + Math.random() * 45000);
+    }
+
+    function batSwarm() {
+      if (!flyLayer) return;
+      for (let i = 0; i < 8; i++) {
+        const bat = document.createElement('div');
+        bat.className = 'hw-swarm-bat';
+        bat.innerHTML = BAT_SVG;
+        bat.style.top = (window.scrollY + window.innerHeight * (0.15 + Math.random() * 0.7)) + 'px';
+        bat.style.animationDelay = `${i * 0.12}s`;
+        flyLayer.appendChild(bat);
+        setTimeout(() => bat.remove(), 3400 + i * 120);
+      }
+    }
+
+    // 5 szybkich kliknięć w logo → stado nietoperzy, bez powiadomienia
+    document.querySelector('.brand-logo')?.addEventListener('click', () => {
+      if (!isActive()) return;
+      const now = Date.now();
+      logoClicks = logoClicks.filter(t => now - t < 2000).concat(now);
+      if (logoClicks.length >= 5) {
+        logoClicks = [];
+        batSwarm();
+      }
+    });
+
+    // Co jakiś czas duch zerka zza krawędzi ekranu (schedulePeek)
+
+    function start() {
+      if (bgLayer) return;
+
+      bgLayer = document.createElement('div');
+      bgLayer.className = 'hw-bg';
+      bgLayer.setAttribute('aria-hidden', 'true');
+      bgLayer.innerHTML = `
+        <div class="hw-stars"></div>
+        <div class="hw-moon"></div>
+        <div class="hw-web">${WEB_SVG}</div>
+        <div class="hw-spider">${SPIDER_SVG}</div>
+        <div class="hw-mist"></div>
+        <div class="hw-pumpkin hw-pumpkin-1">${PUMPKIN_SVG}</div>
+        <div class="hw-pumpkin hw-pumpkin-3">${PUMPKIN_SVG}</div>
+        <div class="hw-pumpkin hw-pumpkin-2">${PUMPKIN_SVG}</div>
+      `;
+
+      flyLayer = document.createElement('div');
+      flyLayer.className = 'hw-fly';
+      flyLayer.setAttribute('aria-hidden', 'true');
+
+      const aurora = document.querySelector('.background-aurora');
+      if (aurora) aurora.after(bgLayer);
+      else document.body.prepend(bgLayer);
+      document.body.appendChild(flyLayer);
+      launchFlyer('ghost');
+      launchFlyer('bat');
+      setTimeout(() => { if (isActive()) launchFlyer('ghost'); }, 1600);
+      scheduleFlyers();
+      schedulePeek();
+    }
+
+    function stop() {
+      clearTimeout(peekTimer);
+      clearTimeout(flyTimer);
+      bgLayer?.remove();
+      flyLayer?.remove();
+      bgLayer = null;
+      flyLayer = null;
+    }
+
+    return { start, stop };
+  }
   
   // ==================== TOAST ====================
   function showToast(message, type = "success") {
@@ -1992,13 +2210,51 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      const newLogoMats = invMats.map(mat => ({
-        name: mat.name,
-        mat_number: mat.mat_number,
-        location: mat.location ? LocationFormat.normalizeLocation(mat.location) : mat.location,
-        size: mat.size,
-        quantity: mat.quantity
-      }));
+      // Zachowaj oryginalne daty dodania mat (inaczej "Ostatnio dodane" pokazałoby wszystkie maty)
+      const existingLogoMats = [];
+      for (let from = 0; ; from += 1000) {
+        const { data: page, error: pageError } = await window.supabase
+          .from('logo_mats')
+          .select('name, mat_number, location, size, created_at')
+          .range(from, from + 999);
+        if (pageError) throw pageError;
+        existingLogoMats.push(...page);
+        if (page.length < 1000) break;
+      }
+
+      const looseKey = m => [(m.name || '').trim(), m.mat_number || '', (m.size || '').trim()].join('|');
+      const fullKey = m => looseKey(m) + '|' + LocationFormat.normalizeLocation(m.location || '');
+      const datesByFull = new Map();
+      const datesByLoose = new Map();
+      existingLogoMats.forEach(m => {
+        if (!m.created_at) return;
+        if (!datesByFull.has(fullKey(m))) datesByFull.set(fullKey(m), []);
+        if (!datesByLoose.has(looseKey(m))) datesByLoose.set(looseKey(m), []);
+        datesByFull.get(fullKey(m)).push(m.created_at);
+        datesByLoose.get(looseKey(m)).push(m.created_at);
+      });
+
+      const nowIso = new Date().toISOString();
+      const usedUniqueKeys = new Set();
+
+      const newLogoMats = invMats.map(mat => {
+        const location = mat.location ? LocationFormat.normalizeLocation(mat.location) : mat.location;
+        const createdAt = datesByFull.get(fullKey(mat))?.shift() || datesByLoose.get(looseKey(mat))?.shift() || nowIso;
+
+        // logo_mats ma unikalność (name, location, size) – jak przy dodawaniu, dopisujemy niewidoczną spację
+        let name = mat.name;
+        while (usedUniqueKeys.has([name, location ?? '', mat.size ?? ''].join('|'))) name += ' ';
+        usedUniqueKeys.add([name, location ?? '', mat.size ?? ''].join('|'));
+
+        return {
+          name,
+          mat_number: mat.mat_number,
+          location,
+          size: mat.size,
+          quantity: mat.quantity,
+          created_at: createdAt
+        };
+      });
 
       // Usuń stare wpisy z logo_mats bez naruszenia URI (paczkuje po 150)
       let wipingLogoMats = true;
@@ -2705,33 +2961,34 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  function renderSeasonalMats() {
-    const search = (seasonalSearch.value || '').toLowerCase().trim();
+  // Lista mat z datą dodania (maty sezonowe, ostatnio dodane)
+  function renderDatedMats({ mats, listEl, searchEl, countEl, filteredEl, target, emptyText }) {
+    const search = (searchEl.value || '').toLowerCase().trim();
     const filtered = search
-      ? allSeasonalMats.filter(mat =>
+      ? mats.filter(mat =>
           (mat.name?.toLowerCase() || '').includes(search) ||
           (mat.location?.toLowerCase() || '').includes(search) ||
           (mat.size?.toLowerCase() || '').includes(search) ||
           (mat.mat_number?.toLowerCase() || '').includes(search))
-      : allSeasonalMats;
+      : mats;
 
-    const totalQuantity = allSeasonalMats.reduce((sum, mat) => sum + (mat.quantity || 0), 0);
-    seasonalCount.textContent = `Załadowano: ${allSeasonalMats.length} mat (łącznie: ${totalQuantity} szt.)`;
+    const totalQuantity = mats.reduce((sum, mat) => sum + (mat.quantity || 0), 0);
+    countEl.textContent = `Załadowano: ${mats.length} mat (łącznie: ${totalQuantity} szt.)`;
     if (search) {
       const filteredQuantity = filtered.reduce((sum, mat) => sum + (mat.quantity || 0), 0);
-      seasonalFiltered.style.display = 'inline';
-      seasonalFiltered.textContent = `Znaleziono: ${filtered.length} (${filteredQuantity} szt.)`;
+      filteredEl.style.display = 'inline';
+      filteredEl.textContent = `Znaleziono: ${filtered.length} (${filteredQuantity} szt.)`;
     } else {
-      seasonalFiltered.style.display = 'none';
+      filteredEl.style.display = 'none';
     }
 
-    seasonalList.innerHTML = '';
+    listEl.innerHTML = '';
 
     if (filtered.length === 0) {
-      seasonalList.innerHTML = `
+      listEl.innerHTML = `
         <div class="empty-state">
           <div class="empty-state-text">
-            ${search ? 'Nie znaleziono mat spełniających kryteria.' : 'Brak mat sezonowych.'}
+            ${search ? 'Nie znaleziono mat spełniających kryteria.' : emptyText}
           </div>
         </div>
       `;
@@ -2754,18 +3011,30 @@ document.addEventListener("DOMContentLoaded", () => {
       if (isAdmin) {
         el.querySelector('.btn-edit-mat')?.addEventListener('click', (e) => {
           e.stopPropagation();
-          openEditMatModal(mat, 'seasonal');
+          openEditMatModal(mat, target);
         });
         el.querySelector('.btn-delete-mat')?.addEventListener('click', (e) => {
           e.stopPropagation();
-          openDeleteMatModal(mat, 'seasonal');
+          openDeleteMatModal(mat, target);
         });
       }
 
       fragment.appendChild(el);
     });
 
-    seasonalList.appendChild(fragment);
+    listEl.appendChild(fragment);
+  }
+
+  function renderSeasonalMats() {
+    renderDatedMats({
+      mats: allSeasonalMats,
+      listEl: seasonalList,
+      searchEl: seasonalSearch,
+      countEl: seasonalCount,
+      filteredEl: seasonalFiltered,
+      target: 'seasonal',
+      emptyText: 'Brak mat sezonowych.'
+    });
   }
 
   document.getElementById('printSeasonalBtn').addEventListener('click', () => {
@@ -2805,6 +3074,59 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.key === 'Escape') {
       seasonalSearch.value = '';
       renderSeasonalMats();
+    }
+  });
+
+  // ==================== OSTATNIO DODANE (z logo_mats) ====================
+  const RECENT_DAYS = 30;
+  let allRecentMats = [];
+  const recentList = document.getElementById('recentList');
+  const recentSearch = document.getElementById('recentSearch');
+  const recentCount = document.getElementById('recentCount');
+  const recentFiltered = document.getElementById('recentFiltered');
+
+  async function loadRecentMats() {
+    if (allRecentMats.length === 0) {
+      recentList.innerHTML = `<div class="empty-state"><div class="empty-state-text">Pobieranie danych z bazy...</div></div>`;
+    }
+
+    const since = new Date(Date.now() - RECENT_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+    try {
+      const { data, error } = await window.supabase
+        .from('logo_mats')
+        .select('*')
+        .gte('created_at', since)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      allRecentMats = data || [];
+      renderRecentMats();
+    } catch (error) {
+      console.error('Błąd pobierania ostatnio dodanych mat:', error);
+      showToast('Błąd pobierania ostatnio dodanych mat.', 'error');
+      recentList.innerHTML = `<div class="empty-state error"><div class="empty-state-text">Nie udało się pobrać danych.</div></div>`;
+    }
+  }
+
+  function renderRecentMats() {
+    renderDatedMats({
+      mats: allRecentMats,
+      listEl: recentList,
+      searchEl: recentSearch,
+      countEl: recentCount,
+      filteredEl: recentFiltered,
+      target: 'logo',
+      emptyText: `Brak mat dodanych w ciągu ostatnich ${RECENT_DAYS} dni.`
+    });
+  }
+
+  recentSearch.addEventListener('input', renderRecentMats);
+  recentSearch.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      recentSearch.value = '';
+      renderRecentMats();
     }
   });
   
@@ -5648,6 +5970,8 @@ document.addEventListener("DOMContentLoaded", () => {
         
         if (currentView === 'mats') {
           renderMats(newMats, matsSearch.value);
+        } else if (currentView === 'recent') {
+          loadRecentMats();
         }
         
         const logoMatNames = newMats.map(m => m.name).filter((v, i, a) => a.indexOf(v) === i).sort();
