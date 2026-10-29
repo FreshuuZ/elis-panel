@@ -273,6 +273,9 @@ body.dark .icon-moon { transform: rotate(0) scale(1); opacity: 1; }
   margin: 4px 0 36px;
   text-align: center;
 }
+@media (max-width: 1024px), ((hover: none) and (pointer: coarse)) {
+  .home-desktop-download { display: none !important; }
+}
 
 .desktop-download-btn {
   display: inline-flex;
@@ -4664,17 +4667,19 @@ body.dark .mat-number-badge {
   left: 0;
   right: 0;
   top: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  height: 0;
 }
 .mats-virtual .mat-item {
+  position: absolute;
+  left: 0;
+  right: 0;
   height: 86px;
+  margin: 0;
   box-sizing: border-box;
   overflow: hidden;
-  animation: none;
+  animation: none !important;
   content-visibility: visible;
-  contain: none;
+  contain: layout style;
 }
 .mats-virtual .mat-details {
   flex-wrap: nowrap;

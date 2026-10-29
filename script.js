@@ -2,6 +2,8 @@ document.addEventListener("DOMContentLoaded", () => {
   if (window.elisDesktop && window.elisDesktop.isDesktop) {
     document.body.classList.add('elis-desktop');
     document.getElementById('desktopDownloadRow')?.remove();
+  } else if (window.matchMedia('(hover: none) and (pointer: coarse), (max-width: 1024px)').matches) {
+    document.getElementById('desktopDownloadRow')?.remove();
   }
 
   document.getElementById('desktopDownloadBtn')?.addEventListener('click', () => {
@@ -2814,11 +2816,11 @@ document.addEventListener("DOMContentLoaded", () => {
       const scroller = getMatsScroller();
       if (scroller) setMatsScroll(scroller, 0);
     }
-    renderMatsWindow();
+    renderMatsWindow(true);
     ensureMatsScrollListener();
   }
 
-  function renderMatsWindow() {
+  function renderMatsWindow(force = false) {
     const count = filteredMatsCache.length;
     if (!count || !matsList) return;
     const scroller = getMatsScroller();
@@ -2827,13 +2829,19 @@ document.addEventListener("DOMContentLoaded", () => {
     const scrollerTop = scrollerIsPage ? 0 : scroller.getBoundingClientRect().top;
     const scrollTop = scroller.scrollTop || 0;
     const listTop = matsList.getBoundingClientRect().top - scrollerTop + scrollTop;
-    let start = Math.floor((scrollTop - listTop) / MAT_ROW_STRIDE) - 6;
-    if (start < 0 || scrollTop + viewHeight < listTop) start = 0;
-    const visibleCount = Math.ceil(viewHeight / MAT_ROW_STRIDE) + 14;
-    let end = Math.min(count, start + visibleCount);
-    if (start === matsVirtualStart && end === matsVirtualEnd && matsList.querySelector('.mats-virtual-window')) return;
-    matsVirtualStart = start;
-    matsVirtualEnd = end;
+    let visibleStart = Math.floor((scrollTop - listTop) / MAT_ROW_STRIDE);
+    if (visibleStart < 0 || scrollTop + viewHeight < listTop) visibleStart = 0;
+    const visibleCount = Math.ceil(viewHeight / MAT_ROW_STRIDE) + 1;
+    const visibleEnd = Math.min(count, visibleStart + visibleCount);
+    const nearTop = visibleStart - matsVirtualStart < 6 && matsVirtualStart > 0;
+    const nearBottom = matsVirtualEnd - visibleEnd < 6 && matsVirtualEnd < count;
+    const covers = visibleStart >= matsVirtualStart && visibleEnd <= matsVirtualEnd;
+    if (!force && covers && !nearTop && !nearBottom && matsList.querySelector('.mats-virtual-window')) return;
+
+    const renderStart = Math.max(0, visibleStart - 14);
+    const renderEnd = Math.min(count, visibleEnd + 14);
+    matsVirtualStart = renderStart;
+    matsVirtualEnd = renderEnd;
 
     let spacer = matsList.querySelector('.mats-virtual-spacer');
     let windowEl = spacer?.querySelector('.mats-virtual-window');
@@ -2845,17 +2853,22 @@ document.addEventListener("DOMContentLoaded", () => {
       spacer.appendChild(windowEl);
       matsList.replaceChildren(spacer);
     }
-    spacer.style.height = (count * MAT_ROW_HEIGHT + Math.max(0, count - 1) * MAT_ROW_GAP) + 'px';
-    const savedScroll = scroller.scrollTop || 0;
-    windowEl.style.transform = 'translateY(' + (start * MAT_ROW_STRIDE) + 'px)';
-    windowEl.replaceChildren();
-    for (let i = start; i < end; i++) {
+    spacer.style.height = (count * MAT_ROW_STRIDE) + 'px';
+    if (force) windowEl.replaceChildren();
+    const keep = new Set();
+    for (let i = renderStart; i < renderEnd; i++) keep.add(i);
+    for (const child of [...windowEl.children]) {
+      if (!keep.has(Number(child.dataset.virtualIndex))) child.remove();
+    }
+    for (let i = renderStart; i < renderEnd; i++) {
+      if (windowEl.querySelector('[data-virtual-index="' + i + '"]')) continue;
       const mat = filteredMatsCache[i];
       const matElement = createMatElement(mat);
       decorateMatPresence(matElement, mat);
+      matElement.dataset.virtualIndex = String(i);
+      matElement.style.top = (i * MAT_ROW_STRIDE) + 'px';
       windowEl.appendChild(matElement);
     }
-    if (Math.abs((scroller.scrollTop || 0) - savedScroll) > 1) setMatsScroll(scroller, savedScroll);
   }
 
   function ensureMatsScrollListener() {
@@ -6492,6 +6505,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let reportsObserver = null;
   let currentReportTab = 'pending'; // 'pending' | 'resolved'
   let reportCurrentFile = null;
+  let reportPreviewUrl = '';
   let currentlyViewedReportId = null;
 
   const reportsSearch = document.getElementById('reportsSearch');
@@ -6915,10 +6929,7 @@ document.addEventListener("DOMContentLoaded", () => {
   newReportBtn?.addEventListener('click', () => {
     reportMatName.value = '';
     reportDescription.value = '';
-    reportCurrentFile = null;
-    reportFileInput.value = '';
-    reportFilePreview.style.display = 'none';
-    reportPreviewImg.src = '';
+    clearReportPreview();
     
     reportTypeBtns.forEach(b => b.classList.remove('active'));
     document.querySelector('.report-type-btn[data-type="over_quantity"]')?.classList.add('active');
@@ -6946,24 +6957,29 @@ document.addEventListener("DOMContentLoaded", () => {
     reportFileInput.click();
   });
 
+  function clearReportPreview() {
+    reportCurrentFile = null;
+    if (reportFileInput) reportFileInput.value = '';
+    if (reportPreviewUrl) {
+      URL.revokeObjectURL(reportPreviewUrl);
+      reportPreviewUrl = '';
+    }
+    if (reportFilePreview) reportFilePreview.style.display = 'none';
+    if (reportPreviewImg) reportPreviewImg.removeAttribute('src');
+  }
+
   reportFileInput?.addEventListener('change', (e) => {
     const file = e.target.files[0];
-    if (file) {
-      reportCurrentFile = file;
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        reportPreviewImg.src = e.target.result;
-        reportFilePreview.style.display = 'block';
-      };
-      reader.readAsDataURL(file);
-    }
+    if (!file) return;
+    reportCurrentFile = file;
+    if (reportPreviewUrl) URL.revokeObjectURL(reportPreviewUrl);
+    reportPreviewUrl = URL.createObjectURL(file);
+    reportPreviewImg.src = reportPreviewUrl;
+    reportFilePreview.style.display = 'block';
   });
 
   reportFileRemove?.addEventListener('click', () => {
-    reportCurrentFile = null;
-    reportFileInput.value = '';
-    reportFilePreview.style.display = 'none';
-    reportPreviewImg.src = '';
+    clearReportPreview();
   });
 
   function generateUuid() {
@@ -6974,23 +6990,30 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function compressReportImage(file) {
+    let probe = null;
+    let bitmap = null;
     try {
       if (!file || !file.type || !file.type.startsWith('image/')) return file;
-      const bitmap = await createImageBitmap(file);
-      const maxEdge = 1600;
-      const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
-      const width = Math.max(1, Math.round(bitmap.width * scale));
-      const height = Math.max(1, Math.round(bitmap.height * scale));
+      probe = await createImageBitmap(file);
+      const maxEdge = 1280;
+      const scale = Math.min(1, maxEdge / Math.max(probe.width, probe.height));
+      const width = Math.max(1, Math.round(probe.width * scale));
+      const height = Math.max(1, Math.round(probe.height * scale));
+      bitmap = scale < 1
+        ? await createImageBitmap(file, { resizeWidth: width, resizeHeight: height, resizeQuality: 'medium' })
+        : probe;
       const canvas = document.createElement('canvas');
       canvas.width = width;
       canvas.height = height;
-      canvas.getContext('2d').drawImage(bitmap, 0, 0, width, height);
-      if (bitmap.close) bitmap.close();
+      canvas.getContext('2d', { alpha: false }).drawImage(bitmap, 0, 0, width, height);
       const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.72));
       if (!blob || blob.size >= file.size) return file;
       return new File([blob], 'zgloszenie.jpg', { type: 'image/jpeg' });
     } catch (err) {
       return file;
+    } finally {
+      if (bitmap && bitmap !== probe && bitmap.close) bitmap.close();
+      if (probe && probe.close) probe.close();
     }
   }
 
@@ -7035,6 +7058,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const origText = reportFormSubmit.innerText;
     reportFormSubmit.innerText = 'Wysyłanie...';
     reportFormSubmit.disabled = true;
+    await new Promise(resolve => setTimeout(resolve, 20));
 
     try {
       let attachmentUrl = null;
@@ -7056,6 +7080,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (error) throw error;
 
       showToast("Zgłoszenie wysłane pomyślnie!", "success");
+      clearReportPreview();
       closeModal(reportFormModal);
       
       // Realtime samo odświeży listę! Użytkownik zobaczy nowy stan w ułamek sekundy (lub samo przełącza zakładkę).
