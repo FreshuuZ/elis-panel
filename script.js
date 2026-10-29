@@ -995,6 +995,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const SPIDER_SVG = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><g stroke="#e9d5ff" stroke-width="1.3" stroke-linecap="round"><path d="M12 10L4 4M12 10L3 10M12 14L3 18M12 14L5 22M12 10L20 4M12 10L21 10M12 14L21 18M12 14L19 22"/></g><ellipse cx="12" cy="13.5" rx="4.2" ry="5" fill="#2e1065"/><circle cx="12" cy="8" r="3" fill="#3b0764"/><circle cx="11" cy="7.4" r="0.7" fill="#fef3c7"/><circle cx="13.2" cy="7.4" r="0.7" fill="#fef3c7"/></svg>`;
 
     let bgLayer = null;
+    let groundLayer = null;
     let flyLayer = null;
     let peekTimer = null;
     let flyTimer = null;
@@ -1092,6 +1093,12 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="hw-moon"></div>
         <div class="hw-web">${WEB_SVG}</div>
         <div class="hw-spider">${SPIDER_SVG}</div>
+      `;
+
+      groundLayer = document.createElement('div');
+      groundLayer.className = 'hw-ground';
+      groundLayer.setAttribute('aria-hidden', 'true');
+      groundLayer.innerHTML = `
         <div class="hw-mist"></div>
         <div class="hw-pumpkin hw-pumpkin-1">${PUMPKIN_SVG}</div>
         <div class="hw-pumpkin hw-pumpkin-3">${PUMPKIN_SVG}</div>
@@ -1105,6 +1112,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const aurora = document.querySelector('.background-aurora');
       if (aurora) aurora.after(bgLayer);
       else document.body.prepend(bgLayer);
+      document.body.appendChild(groundLayer);
       document.body.appendChild(flyLayer);
       launchFlyer('ghost');
       launchFlyer('bat');
@@ -1117,8 +1125,10 @@ document.addEventListener("DOMContentLoaded", () => {
       clearTimeout(peekTimer);
       clearTimeout(flyTimer);
       bgLayer?.remove();
+      groundLayer?.remove();
       flyLayer?.remove();
       bgLayer = null;
+      groundLayer = null;
       flyLayer = null;
     }
 
@@ -2889,6 +2899,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const MAT_PRESENT_KEY = 'elisMatPresent';
   let matPresentColumn = null;
+  const presencePending = new Set();
 
   function readPresentMap() {
     try { return JSON.parse(localStorage.getItem(MAT_PRESENT_KEY) || '{}'); }
@@ -2945,28 +2956,33 @@ document.addEventListener("DOMContentLoaded", () => {
     const mat = allLogoMats.find(item => item.id === id);
     if (!mat) return;
     const next = !matIsPresent(mat);
+    presencePending.add(id);
     mat.present = next;
     const map = readPresentMap();
     if (next) map[id] = true;
     else delete map[id];
     localStorage.setItem(MAT_PRESENT_KEY, JSON.stringify(map));
     paintMatPresence(id, next);
-    if (matPresentColumn === false) return;
-    const { error } = await window.supabase.from('logo_mats').update({ present: next }).eq('id', id);
-    if (error) {
-      if (error.code === '42703' || (error.message || '').includes('present')) {
-        matPresentColumn = false;
+    try {
+      if (matPresentColumn === false) return;
+      const { error } = await window.supabase.from('logo_mats').update({ present: next }).eq('id', id);
+      if (error) {
+        if (error.code === '42703' || (error.message || '').includes('present')) {
+          matPresentColumn = false;
+          return;
+        }
+        mat.present = !next;
+        if (next) delete map[id];
+        else map[id] = true;
+        localStorage.setItem(MAT_PRESENT_KEY, JSON.stringify(map));
+        paintMatPresence(id, !next);
+        showToast('Nie udało się zapisać oznaczenia maty.', 'error');
         return;
       }
-      mat.present = !next;
-      if (next) delete map[id];
-      else map[id] = true;
-      localStorage.setItem(MAT_PRESENT_KEY, JSON.stringify(map));
-      paintMatPresence(id, !next);
-      showToast('Nie udało się zapisać oznaczenia maty.', 'error');
-      return;
+      matPresentColumn = true;
+    } finally {
+      presencePending.delete(id);
     }
-    matPresentColumn = true;
   }
 
   /**
@@ -6359,6 +6375,31 @@ document.addEventListener("DOMContentLoaded", () => {
       })
       .subscribe();
 
+    function applyRemotePresence(id, present) {
+      if (presencePending.has(id) || typeof present !== 'boolean') return;
+      const mat = allLogoMats.find(item => item.id === id);
+      const cached = filteredMatsCache.find(item => item.id === id);
+      if (mat && mat.present === present && (!cached || cached.present === present)) return;
+      if (mat) mat.present = present;
+      if (cached) cached.present = present;
+      const map = readPresentMap();
+      if (present) map[id] = true;
+      else delete map[id];
+      localStorage.setItem(MAT_PRESENT_KEY, JSON.stringify(map));
+      paintMatPresence(id, present);
+    }
+
+    async function syncMatPresence() {
+      if (currentView !== 'mats' || matPresentColumn === false || !allLogoMats.length) return;
+      const { data, error } = await window.supabase.from('logo_mats').select('id,present');
+      if (error) {
+        if (error.code === '42703' || (error.message || '').includes('present')) matPresentColumn = false;
+        return;
+      }
+      (data || []).forEach(row => applyRemotePresence(row.id, row.present));
+    }
+    setInterval(syncMatPresence, 3000);
+
     const matsChannel = window.supabase
       .channel('mats-updates')
       .on('postgres_changes', { 
@@ -6366,7 +6407,13 @@ document.addEventListener("DOMContentLoaded", () => {
         schema: 'public', 
         table: 'logo_mats' 
       }, async (payload) => {
-        console.log('✨ Zmiana w liście mat!', payload);
+        const row = payload.new;
+        if (payload.eventType === 'UPDATE' && row && row.id) {
+          const mat = allLogoMats.find(item => item.id === row.id);
+          const structural = mat && ['name', 'mat_number', 'location', 'size', 'quantity'].some(key => row[key] !== undefined && row[key] !== mat[key]);
+          if (typeof row.present === 'boolean') applyRemotePresence(row.id, row.present);
+          if (!structural && mat) return;
+        }
         allLogoMats = [];
         const newMats = await fetchAndCacheLogoMats();
         

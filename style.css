@@ -6038,6 +6038,16 @@ body.halloween .app-header::after {
   pointer-events: none;
   z-index: -1;
 }
+.hw-ground {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 240px;
+  z-index: -1;
+  pointer-events: none;
+  overflow: visible;
+}
 
 /* Duszki i nietoperze są w miejscu strony, w którym wyleciały.
    Poziomy clip ucina wylot za krawędź, żeby nie pojawiał się pasek w bok. */
@@ -6055,6 +6065,8 @@ body.halloween .app-header::after {
 
 .hw-bg,
 .hw-bg *,
+.hw-ground,
+.hw-ground *,
 .hw-fly,
 .hw-fly * {
   pointer-events: none;
@@ -6106,7 +6118,7 @@ body.halloween .app-header::after {
   left: 0;
   right: 0;
   bottom: 0;
-  height: 26%;
+  height: 100%;
   background: linear-gradient(to top, rgba(76, 29, 149, 0.28), transparent);
 }
 
@@ -6206,7 +6218,7 @@ body.halloween .app-header::after {
 }
 
 .hw-pumpkin svg {
-  filter: drop-shadow(0 10px 14px rgba(0, 0, 0, 0.35));
+  filter: none;
 }
 
 .hw-bat-1 { top: 20%; animation-delay: -2s; }
@@ -6285,6 +6297,7 @@ body.halloween .app-header::after {
 
 @media print {
   .hw-bg,
+  .hw-ground,
   .hw-fly { display: none !important; }
 }
 
