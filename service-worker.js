@@ -1,4 +1,4 @@
-const CACHE_NAME = "elis-panel-v25";
+const CACHE_NAME = "elis-panel-v51";
 const ASSETS = [
   "./",
   "./index.html",
@@ -35,6 +35,7 @@ self.addEventListener("fetch", (event) => {
   const isOwnAsset = request.method === "GET" && new URL(request.url).origin === self.location.origin;
 
   if (!isOwnAsset) return;
+  if (new URL(request.url).pathname.includes('/program/')) return;
 
   event.respondWith(
     fetch(request, { cache: "no-cache" })

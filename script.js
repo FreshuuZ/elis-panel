@@ -1,5 +1,18 @@
 document.addEventListener("DOMContentLoaded", () => {
-  
+  if (window.elisDesktop && window.elisDesktop.isDesktop) {
+    document.body.classList.add('elis-desktop');
+    document.getElementById('desktopDownloadRow')?.remove();
+  }
+
+  document.getElementById('desktopDownloadBtn')?.addEventListener('click', () => {
+    const link = document.createElement('a');
+    link.href = 'program/Elis-ServiceHub-Setup.exe';
+    link.download = 'Elis-ServiceHub-Setup.exe';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  });
+
   // ==================== ZMIENNE POWIADOMIEŃ ====================
   let unreadReportIds = new Set();
   let titleBlinkInterval = null;
@@ -126,14 +139,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function verifyPin(pin) {
     try {
-      const { data, error } = await window.supabase
-        .from('archive_pins')
-        .select('id')
-        .eq('pin_code', pin)
-        .limit(1);
-      
+      const { data, error } = await window.supabase.rpc('verify_admin_pin', { candidate: pin });
       if (error) throw error;
-      return data && data.length > 0;
+      return data === true;
     } catch (error) {
       console.error('Błąd weryfikacji PIN:', error);
       return false;
@@ -170,6 +178,10 @@ document.addEventListener("DOMContentLoaded", () => {
         renderSeasonalMats();
       } else if (currentView === 'recent') {
         renderRecentMats();
+      } else if (currentView === 'customLists') {
+        renderCustomLists();
+      } else if (currentView === 'customList') {
+        renderCustomListMats();
       }
     } else {
       pinError.style.display = 'flex';
@@ -201,6 +213,10 @@ document.addEventListener("DOMContentLoaded", () => {
         renderSeasonalMats();
       } else if (currentView === 'recent') {
         renderRecentMats();
+      } else if (currentView === 'customLists') {
+        renderCustomLists();
+      } else if (currentView === 'customList') {
+        renderCustomListMats();
       }
     }
   }
@@ -218,6 +234,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (seasonalAddMatSection) {
       seasonalAddMatSection.style.display = isAdmin ? 'block' : 'none';
     }
+    const customListsAdmin = document.getElementById('customListsAdmin');
+    if (customListsAdmin) customListsAdmin.style.display = isAdmin ? 'block' : 'none';
+    const customListAddSection = document.getElementById('customListAddSection');
+    if (customListAddSection) customListAddSection.style.display = isAdmin ? 'block' : 'none';
     
     // Pokaż przycisk kopiowania zapasów u admina w Liście Mat Logo
     const adminImportFromInventoryBtn = document.getElementById('adminImportFromInventoryBtn');
@@ -309,7 +329,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Zwraca { location, error } na podstawie pól formularza (prefix: 'add' | 'edit')
   function readLocationFromForm(prefix) {
-    if (matFormTarget === 'seasonal') {
+    if (isSeasonalLike(matFormTarget)) {
       const text = document.getElementById(`${prefix}MatSeasonalLocation`).value.trim() || 'Wózek';
       return { location: LocationFormat.normalizeLocation(text), error: null };
     }
@@ -338,7 +358,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Maty sezonowe leżą na wózku – zamiast regału/palety jedno opcjonalne pole
   function setLocationLayout(prefix, target) {
-    const isSeasonal = target === 'seasonal';
+    const isSeasonal = isSeasonalLike(target);
     document.getElementById(`${prefix}SeasonalLocationFields`).style.display = isSeasonal ? 'block' : 'none';
     document.getElementById(`${prefix}LocationTypeGroup`).style.display = isSeasonal ? 'none' : '';
     if (isSeasonal) {
@@ -374,13 +394,29 @@ document.addEventListener("DOMContentLoaded", () => {
   // 'logo' = główna lista (logo_mats), 'seasonal' = maty sezonowe (seasonal_logo_mats)
   let matFormTarget = 'logo';
 
+  function isCustomListTarget(target) {
+    return typeof target === 'string' && target.indexOf('custom:') === 0;
+  }
+
+  function isSeasonalLike(target) {
+    return target === 'seasonal' || isCustomListTarget(target);
+  }
+
+  function customListIdFromTarget(target) {
+    return String(target).slice('custom:'.length);
+  }
+
   function getMatTable(target) {
-    return target === 'seasonal' ? 'seasonal_logo_mats' : 'logo_mats';
+    if (target === 'seasonal') return 'seasonal_logo_mats';
+    if (isCustomListTarget(target)) return 'custom_list_mats';
+    return 'logo_mats';
   }
 
   async function refreshMatList(target) {
     if (target === 'seasonal') {
       await loadSeasonalMats();
+    } else if (isCustomListTarget(target)) {
+      await loadCustomListMats(customListIdFromTarget(target));
     } else {
       allLogoMats = [];
       const newMats = await fetchAndCacheLogoMats();
@@ -394,7 +430,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function openAddMatModal(target) {
     matFormTarget = target;
-    addMatModal.querySelector('h3').textContent = target === 'seasonal' ? '➕ Dodaj matę sezonową' : '➕ Dodaj nową matę';
+    addMatModal.querySelector('h3').textContent = target === 'seasonal'
+      ? '➕ Dodaj matę sezonową'
+      : (isCustomListTarget(target) ? '➕ Dodaj matę do listy' : '➕ Dodaj nową matę');
 
     // Reset formularza
     addMatName.value = '';
@@ -450,15 +488,17 @@ document.addEventListener("DOMContentLoaded", () => {
       let lastError = null;
 
       for (let i = 0; i < 10; i++) {
+        const row = {
+          name: finalName,
+          mat_number: matNumber || null,
+          location: location,
+          size: size,
+          quantity: qty
+        };
+        if (isCustomListTarget(target)) row.list_id = customListIdFromTarget(target);
         const { data, error } = await window.supabase
           .from(getMatTable(target))
-          .insert([{
-            name: finalName,
-            mat_number: matNumber || null,  // 🆕 DODANE
-            location: location,
-            size: size,
-            quantity: qty
-          }])
+          .insert([row])
           .select();
         
         if (error) {
@@ -671,6 +711,8 @@ document.addEventListener("DOMContentLoaded", () => {
     panel: document.getElementById('panelView'),
     mats: document.getElementById('matsView'),
     seasonal: document.getElementById('seasonalView'),
+    customLists: document.getElementById('customListsView'),
+    customList: document.getElementById('customListView'),
     recent: document.getElementById('recentView'),
     washing: document.getElementById('washingView'),
     archive: document.getElementById('archiveView'), // Przedsionek
@@ -688,6 +730,8 @@ document.addEventListener("DOMContentLoaded", () => {
     'panel': 'home',
     'mats': 'home',
     'seasonal': 'mats',
+    'customLists': 'home',
+    'customList': 'customLists',
     'recent': 'mats',
     'washing': 'home',
     'archive': 'home',
@@ -714,12 +758,20 @@ document.addEventListener("DOMContentLoaded", () => {
       backBtn.style.display = 'flex';
       (async () => {
           const mats = await fetchAndCacheLogoMats();
-          renderMats(mats, matsSearch.value);
+          renderMats(mats, matsSearch.value, true);
       })();
     } else if (viewName === 'seasonal') {
       headerTitle.textContent = 'Maty Logo Sezonowe';
       backBtn.style.display = 'flex';
       loadSeasonalMats();
+    } else if (viewName === 'customLists') {
+      headerTitle.textContent = 'Pozostałe listy';
+      backBtn.style.display = 'flex';
+      loadCustomLists();
+    } else if (viewName === 'customList') {
+      headerTitle.textContent = activeCustomList ? activeCustomList.name : 'Lista';
+      backBtn.style.display = 'flex';
+      if (activeCustomList) loadCustomListMats(activeCustomList.id);
     } else if (viewName === 'recent') {
       headerTitle.textContent = 'Ostatnio dodane';
       backBtn.style.display = 'flex';
@@ -753,10 +805,6 @@ document.addEventListener("DOMContentLoaded", () => {
       headerTitle.textContent = 'Zgłoszenia';
       backBtn.style.display = 'flex';
       
-      // LOKALNE wyzerowanie powiadomień
-      unreadReportIds.clear();
-      const reportsTileBadge = document.getElementById('reportsTileBadge');
-      if (reportsTileBadge) reportsTileBadge.style.display = 'none';
       if (titleBlinkInterval) {
         clearInterval(titleBlinkInterval);
         titleBlinkInterval = null;
@@ -784,7 +832,21 @@ document.addEventListener("DOMContentLoaded", () => {
       })();
     }
     
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (document.body.classList.contains('elis-desktop')) {
+      const parent = viewParents[viewName];
+      backBtn.style.display = parent && parent !== 'home' ? 'flex' : 'none';
+      let marked = viewName;
+      while (marked && marked !== 'home' && !document.querySelector('.desktop-nav-item[data-navigate="' + marked + '"]')) {
+        marked = viewParents[marked];
+      }
+      document.querySelectorAll('.desktop-nav-item').forEach(item => {
+        item.classList.toggle('active', item.dataset.navigate === marked);
+      });
+      const scroller = document.getElementById('app');
+      if (scroller) scroller.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   }
 
   backBtn.addEventListener('click', () => {
@@ -798,6 +860,48 @@ document.addEventListener("DOMContentLoaded", () => {
       navigateTo(target);
     });
   });
+
+  if (document.body.classList.contains('elis-desktop')) {
+    const sidebar = document.createElement('aside');
+    sidebar.id = 'desktopSidebar';
+    sidebar.innerHTML = '<div class="desktop-side-brand"><img src="icons/icon-192.png" alt=""><span>Elis ServiceHub</span></div><nav class="desktop-nav"></nav>';
+    const nav = sidebar.querySelector('.desktop-nav');
+    document.querySelectorAll('#homeView .home-tile').forEach(tile => {
+      if (tile.style.display === 'none') return;
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'desktop-nav-item';
+      item.dataset.navigate = tile.dataset.navigate;
+      const icon = tile.querySelector('.home-tile-icon svg');
+      if (icon) item.appendChild(icon.cloneNode(true));
+      const label = document.createElement('span');
+      const heading = tile.querySelector('h2');
+      label.textContent = [...heading.childNodes]
+        .filter(node => node.nodeType === Node.TEXT_NODE)
+        .map(node => node.textContent)
+        .join('')
+        .trim();
+      item.appendChild(label);
+      const badge = heading.querySelector('.tab-badge');
+      if (badge) item.appendChild(badge);
+      item.addEventListener('click', () => navigateTo(item.dataset.navigate));
+      nav.appendChild(item);
+    });
+    const settingsBtn = document.createElement('button');
+    settingsBtn.id = 'desktopSettingsBtn';
+    settingsBtn.type = 'button';
+    settingsBtn.className = 'desktop-settings-btn';
+    settingsBtn.textContent = 'Ustawienia programu';
+    settingsBtn.addEventListener('click', () => {
+      if (window.elisDesktop.openSettings) window.elisDesktop.openSettings();
+    });
+    sidebar.appendChild(settingsBtn);
+    document.body.appendChild(sidebar);
+    const subtitle = document.querySelector('.home-subtitle');
+    if (subtitle) subtitle.textContent = 'Wybierz moduł z listy po lewej.';
+    document.querySelector('.home-welcome').textContent = 'Elis ServiceHub';
+    navigateTo('home');
+  }
   
   // ==================== MOTYWY ====================
   const HALLOWEEN_END = new Date(2026, 10, 2); // 2.11.2026 00:00 – motyw działa do 23:59 1.11
@@ -817,7 +921,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if (theme === 'halloween' && !isHalloweenAvailable()) theme = 'dark';
     if (!THEME_CLASSES[theme]) theme = 'light';
 
+    const keepDesktop = document.body.classList.contains('elis-desktop');
     document.body.className = THEME_CLASSES[theme];
+    if (keepDesktop) document.body.classList.add('elis-desktop');
     localStorage.setItem("theme", theme);
     if (themeColorMeta) themeColorMeta.setAttribute('content', THEME_COLORS[theme]);
 
@@ -2569,6 +2675,27 @@ document.addEventListener("DOMContentLoaded", () => {
   // ==================== LISTA MAT LOGO (SUPABASE) ====================
   const matsSearch = document.getElementById('matsSearch');
   const matsList = document.getElementById('matsList');
+  matsList?.addEventListener('click', (e) => {
+    const toggle = e.target.closest('.mat-presence-toggle');
+    if (toggle) {
+      e.stopPropagation();
+      toggleMatPresence(toggle.dataset.matId);
+      return;
+    }
+    const editBtn = e.target.closest('.btn-edit-mat');
+    if (editBtn) {
+      e.stopPropagation();
+      const mat = allLogoMats.find(item => String(item.id) === String(editBtn.dataset.matId));
+      if (mat) openEditMatModal(mat);
+      return;
+    }
+    const deleteBtn = e.target.closest('.btn-delete-mat');
+    if (deleteBtn) {
+      e.stopPropagation();
+      const mat = allLogoMats.find(item => String(item.id) === String(deleteBtn.dataset.matId));
+      if (mat) openDeleteMatModal(mat);
+    }
+  });
   const matsCount = document.getElementById('matsCount');
   const matsFiltered = document.getElementById('matsFiltered');
   const printMatsBtn = document.getElementById('printMatsBtn');
@@ -2615,27 +2742,46 @@ document.addEventListener("DOMContentLoaded", () => {
   /**
    * Główna funkcja renderowania mat z lazy loading
    */
-  function renderMats(matsData, filter = '') {
-    // Anuluj poprzedni debounce
+  function renderMats(matsData, filter = '', resetScroll = false) {
     if (searchDebounceTimer) {
       clearTimeout(searchDebounceTimer);
     }
     
-    // Debounce dla wyszukiwania (nie dla pierwszego ładowania)
+    const run = () => executeRenderMats(matsData, filter, resetScroll);
     if (filter !== '' && matsData === allLogoMats) {
-      searchDebounceTimer = setTimeout(() => {
-        executeRenderMats(matsData, filter);
-      }, SEARCH_DEBOUNCE_MS);
+      searchDebounceTimer = setTimeout(run, SEARCH_DEBOUNCE_MS);
     } else {
-      executeRenderMats(matsData, filter);
+      run();
     }
   }
 
   /**
    * Wykonuje faktyczne renderowanie
    */
-  function executeRenderMats(matsData, filter = '') {
-    // Filtruj dane
+  const MAT_ROW_HEIGHT = 86;
+  const MAT_ROW_GAP = 12;
+  const MAT_ROW_STRIDE = MAT_ROW_HEIGHT + MAT_ROW_GAP;
+  let matsVirtualStart = -1;
+  let matsVirtualEnd = -1;
+  let matsScrollScheduled = 0;
+  let matsScrollBound = false;
+
+  function getMatsScroller() {
+    if (document.body.classList.contains('elis-desktop')) {
+      return document.getElementById('app') || document.scrollingElement || document.documentElement;
+    }
+    return document.scrollingElement || document.documentElement;
+  }
+
+  function setMatsScroll(scroller, value) {
+    const root = document.documentElement;
+    const previous = root.style.scrollBehavior;
+    root.style.scrollBehavior = 'auto';
+    scroller.scrollTop = value;
+    root.style.scrollBehavior = previous;
+  }
+
+  function executeRenderMats(matsData, filter = '', resetScroll = false) {
     const search = filter.toLowerCase().trim();
     
     if (search) {
@@ -2649,67 +2795,165 @@ document.addEventListener("DOMContentLoaded", () => {
       filteredMatsCache = [...matsData];
     }
     
-    // Reset paginacji
     currentMatsPage = 0;
     isLoadingMoreMats = false;
-    
-    // Aktualizuj statystyki
+    if (matsObserver) matsObserver.disconnect();
+    hideMatsLoadMore();
     updateMatsStats(matsData, filteredMatsCache, filter);
+    matsVirtualStart = -1;
+    matsVirtualEnd = -1;
     
-    // Wyczyść listę
-    matsList.innerHTML = '';
-    
-    // Sprawdź czy są wyniki
     if (filteredMatsCache.length === 0) {
+      matsList.classList.remove('mats-virtual');
       renderMatsEmptyState(filter);
-      hideMatsLoadMore();
       return;
     }
     
-    // Renderuj pierwszą partię
-    renderMatsChunk(true);
-    
-    // Ustaw observer dla lazy loading
-    setupMatsObserver();
+    matsList.classList.add('mats-virtual');
+    if (resetScroll && currentView === 'mats') {
+      const scroller = getMatsScroller();
+      if (scroller) setMatsScroll(scroller, 0);
+    }
+    renderMatsWindow();
+    ensureMatsScrollListener();
   }
 
-  /**
-   * Renderuje partię mat
-   */
-  function renderMatsChunk(isFirstChunk = false) {
-    const start = currentMatsPage * MATS_PER_PAGE;
-    const end = start + MATS_PER_PAGE;
-    const matsToRender = filteredMatsCache.slice(start, end);
-    
-    if (matsToRender.length === 0) {
-      hideMatsLoadMore();
+  function renderMatsWindow() {
+    const count = filteredMatsCache.length;
+    if (!count || !matsList) return;
+    const scroller = getMatsScroller();
+    const viewHeight = scroller.clientHeight || window.innerHeight;
+    const scrollerIsPage = scroller === document.documentElement || scroller === document.body || scroller === document.scrollingElement;
+    const scrollerTop = scrollerIsPage ? 0 : scroller.getBoundingClientRect().top;
+    const scrollTop = scroller.scrollTop || 0;
+    const listTop = matsList.getBoundingClientRect().top - scrollerTop + scrollTop;
+    let start = Math.floor((scrollTop - listTop) / MAT_ROW_STRIDE) - 6;
+    if (start < 0 || scrollTop + viewHeight < listTop) start = 0;
+    const visibleCount = Math.ceil(viewHeight / MAT_ROW_STRIDE) + 14;
+    let end = Math.min(count, start + visibleCount);
+    if (start === matsVirtualStart && end === matsVirtualEnd && matsList.querySelector('.mats-virtual-window')) return;
+    matsVirtualStart = start;
+    matsVirtualEnd = end;
+
+    let spacer = matsList.querySelector('.mats-virtual-spacer');
+    let windowEl = spacer?.querySelector('.mats-virtual-window');
+    if (!spacer || !windowEl) {
+      spacer = document.createElement('div');
+      spacer.className = 'mats-virtual-spacer';
+      windowEl = document.createElement('div');
+      windowEl.className = 'mats-virtual-window';
+      spacer.appendChild(windowEl);
+      matsList.replaceChildren(spacer);
+    }
+    spacer.style.height = (count * MAT_ROW_HEIGHT + Math.max(0, count - 1) * MAT_ROW_GAP) + 'px';
+    const savedScroll = scroller.scrollTop || 0;
+    windowEl.style.transform = 'translateY(' + (start * MAT_ROW_STRIDE) + 'px)';
+    windowEl.replaceChildren();
+    for (let i = start; i < end; i++) {
+      const mat = filteredMatsCache[i];
+      const matElement = createMatElement(mat);
+      decorateMatPresence(matElement, mat);
+      windowEl.appendChild(matElement);
+    }
+    if (Math.abs((scroller.scrollTop || 0) - savedScroll) > 1) setMatsScroll(scroller, savedScroll);
+  }
+
+  function ensureMatsScrollListener() {
+    if (matsScrollBound) return;
+    matsScrollBound = true;
+    const onScroll = () => {
+      if (matsScrollScheduled) return;
+      matsScrollScheduled = requestAnimationFrame(() => {
+        matsScrollScheduled = 0;
+        if (currentView !== 'mats' || !matsList.classList.contains('mats-virtual')) return;
+        renderMatsWindow();
+      });
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    document.getElementById('app')?.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+  }
+
+  const MAT_PRESENT_KEY = 'elisMatPresent';
+  let matPresentColumn = null;
+
+  function readPresentMap() {
+    try { return JSON.parse(localStorage.getItem(MAT_PRESENT_KEY) || '{}'); }
+    catch { return {}; }
+  }
+
+  function matIsPresent(mat) {
+    if (mat && typeof mat.present === 'boolean') return mat.present;
+    return !!readPresentMap()[mat.id];
+  }
+
+  function presenceIcon(present) {
+    return present
+      ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>'
+      : '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+  }
+
+  function decorateMatPresence(el, mat) {
+    const present = matIsPresent(mat);
+    el.classList.toggle('presence-here', present);
+    el.classList.toggle('presence-missing', !present);
+    let slot = el.querySelector('.mat-presence-slot');
+    if (!slot) {
+      slot = document.createElement('div');
+      slot.className = 'mat-presence-slot';
+      const numberSlot = el.querySelector('.mat-number-slot');
+      if (numberSlot) el.insertBefore(slot, numberSlot);
+      else el.appendChild(slot);
+    }
+    if (slot.querySelector('.mat-presence-toggle')) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'mat-presence-toggle';
+    btn.dataset.matId = mat.id;
+    btn.setAttribute('aria-pressed', present ? 'true' : 'false');
+    btn.setAttribute('aria-label', present ? 'Mata jest na miejscu' : 'Maty nie ma na miejscu');
+    btn.innerHTML = presenceIcon(present);
+    slot.appendChild(btn);
+  }
+
+  function paintMatPresence(id, present) {
+    const el = matsList.querySelector(`[data-mat-id="${id}"]`);
+    if (!el) return;
+    el.classList.toggle('presence-here', present);
+    el.classList.toggle('presence-missing', !present);
+    const btn = el.querySelector('.mat-presence-toggle');
+    if (!btn) return;
+    btn.setAttribute('aria-pressed', present ? 'true' : 'false');
+    btn.setAttribute('aria-label', present ? 'Mata jest na miejscu' : 'Maty nie ma na miejscu');
+    btn.innerHTML = presenceIcon(present);
+  }
+
+  async function toggleMatPresence(id) {
+    const mat = allLogoMats.find(item => item.id === id);
+    if (!mat) return;
+    const next = !matIsPresent(mat);
+    mat.present = next;
+    const map = readPresentMap();
+    if (next) map[id] = true;
+    else delete map[id];
+    localStorage.setItem(MAT_PRESENT_KEY, JSON.stringify(map));
+    paintMatPresence(id, next);
+    if (matPresentColumn === false) return;
+    const { error } = await window.supabase.from('logo_mats').update({ present: next }).eq('id', id);
+    if (error) {
+      if (error.code === '42703' || (error.message || '').includes('present')) {
+        matPresentColumn = false;
+        return;
+      }
+      mat.present = !next;
+      if (next) delete map[id];
+      else map[id] = true;
+      localStorage.setItem(MAT_PRESENT_KEY, JSON.stringify(map));
+      paintMatPresence(id, !next);
+      showToast('Nie udało się zapisać oznaczenia maty.', 'error');
       return;
     }
-    
-    // Użyj DocumentFragment dla lepszej wydajności
-    const fragment = document.createDocumentFragment();
-    
-    matsToRender.forEach(mat => {
-      const matElement = createMatElement(mat);
-      fragment.appendChild(matElement);
-    });
-    
-    // Dodaj do DOM w jednej operacji
-    matsList.appendChild(fragment);
-    
-    // Podłącz event listenery dla przycisków admina
-    if (isAdmin) {
-      attachMatAdminListeners(matsToRender);
-    }
-    
-    // Sprawdź czy są kolejne strony
-    const hasMore = end < filteredMatsCache.length;
-    
-    if (hasMore) {
-      showMatsLoadMore();
-    } else {
-      hideMatsLoadMore();
-    }
+    matPresentColumn = true;
   }
 
   /**
@@ -2754,12 +2998,10 @@ document.addEventListener("DOMContentLoaded", () => {
           ${mat.size ? `<div class="mat-detail-item">📏 ${escapeHtml(mat.size)}</div>` : ''}
         </div>
       </div>
-      <div class="mat-actions" style="align-items: center; justify-content: space-between;">
-        ${matNumberBadge}
-        <div style="display:flex; align-items:center; gap:8px;">
-          ${adminActionsHtml}
-          <div class="mat-qty-badge">${mat.quantity}</div>
-        </div>
+      <div class="mat-number-slot">${matNumberBadge}</div>
+      <div class="mat-end">
+        ${adminActionsHtml}
+        <div class="mat-qty-badge">${mat.quantity}</div>
       </div>
     `;
     
@@ -2834,67 +3076,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /**
-   * Ustawia Intersection Observer dla lazy loading
-   */
-  function setupMatsObserver() {
-    const sentinel = document.getElementById('matsLoadMoreSentinel');
-    if (!sentinel) return;
-    
-    // Odłącz poprzedni observer
-    if (matsObserver) {
-      matsObserver.disconnect();
-    }
-    
-    // Utwórz nowy observer
-    matsObserver = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting && !isLoadingMoreMats) {
-          loadMoreMats();
-        }
-      });
-    }, {
-      root: null,
-      rootMargin: '200px', // Zacznij ładować 200px przed końcem
-      threshold: 0
-    });
-    
-    matsObserver.observe(sentinel);
-  }
-
-  /**
-   * Ładuje kolejną partię mat
-   */
-  function loadMoreMats() {
-    const nextStart = (currentMatsPage + 1) * MATS_PER_PAGE;
-    
-    // Sprawdź czy są jeszcze maty do załadowania
-    if (nextStart >= filteredMatsCache.length) {
-      hideMatsLoadMore();
-      return;
-    }
-    
-    isLoadingMoreMats = true;
-    showMatsLoadMore();
-    
-    // Użyj requestAnimationFrame dla płynności
-    requestAnimationFrame(() => {
-      currentMatsPage++;
-      renderMatsChunk(false);
-      isLoadingMoreMats = false;
-    });
-  }
-
-  /**
-   * Pokazuje wskaźnik ładowania
-   */
-  function showMatsLoadMore() {
-    const sentinel = document.getElementById('matsLoadMoreSentinel');
-    if (sentinel) {
-      sentinel.style.display = 'flex';
-    }
-  }
-
-  /**
    * Ukrywa wskaźnik ładowania
    */
   function hideMatsLoadMore() {
@@ -2910,7 +3091,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Pokaż wskaźnik wyszukiwania
     matsSearch.classList.toggle('searching', value.length > 0);
     
-    renderMats(allLogoMats, value);
+    renderMats(allLogoMats, value, true);
   });
 
   // Obsługa klawisza Escape - wyczyść wyszukiwanie
@@ -2918,7 +3099,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.key === 'Escape') {
       matsSearch.value = '';
       matsSearch.classList.remove('searching');
-      renderMats(allLogoMats, '');
+      renderMats(allLogoMats, '', true);
     }
   });
 
@@ -3067,6 +3248,214 @@ document.addEventListener("DOMContentLoaded", () => {
     printHTML += `</tbody></table><div class="print-mats-footer"><p>Dokument wygenerowany automatycznie przez system Elis</p></div>`;
     printOutput.innerHTML = printHTML;
     setTimeout(() => { try { window.print(); } catch (error) { console.error("Błąd drukowania:", error); showToast("Błąd podczas otwierania okna drukowania.", "error"); } }, 100);
+  });
+
+  let customLists = [];
+  let allCustomListMats = [];
+  let activeCustomList = null;
+  let customListPendingDelete = null;
+
+  function customListsMissingMessage() {
+    return 'List nie da się jeszcze pobrać. W Supabase trzeba raz uruchomić polecenie SQL, które tworzy tabele pozostałych list.';
+  }
+
+  async function loadCustomLists() {
+    const grid = document.getElementById('customListsGrid');
+    if (customLists.length === 0 && grid) {
+      grid.innerHTML = `<div class="empty-state"><div class="empty-state-text">Pobieranie list...</div></div>`;
+    }
+    try {
+      const { data, error } = await window.supabase
+        .from('custom_mat_lists')
+        .select('*')
+        .order('name', { ascending: true });
+      if (error) throw error;
+      customLists = data || [];
+      renderCustomLists();
+    } catch (error) {
+      console.error('Błąd pobierania list:', error);
+      if (grid) {
+        grid.innerHTML = `<div class="empty-state error"><div class="empty-state-text">${customListsMissingMessage()}</div></div>`;
+      }
+    }
+  }
+
+  function renderCustomLists() {
+    const grid = document.getElementById('customListsGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    if (customLists.length === 0) {
+      grid.innerHTML = `<div class="empty-state"><div class="empty-state-text">${isAdmin ? 'Nie ma jeszcze żadnej listy. Utwórz pierwszą przyciskiem powyżej.' : 'Nie ma jeszcze żadnej listy.'}</div></div>`;
+      return;
+    }
+    customLists.forEach(list => {
+      const card = document.createElement('div');
+      card.className = 'home-tile custom-list-card';
+      card.innerHTML = `
+        <div class="home-tile-content">
+          <h2>${escapeHtml(list.name)}</h2>
+          <p>Otwórz listę mat</p>
+        </div>
+      `;
+      card.addEventListener('click', () => {
+        activeCustomList = list;
+        const title = document.getElementById('customListTitle');
+        if (title) title.textContent = list.name;
+        navigateTo('customList');
+      });
+      if (isAdmin) {
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'custom-list-delete';
+        remove.textContent = 'Usuń';
+        remove.addEventListener('click', (event) => {
+          event.stopPropagation();
+          customListPendingDelete = list;
+          const nameEl = document.getElementById('customListDeleteName');
+          if (nameEl) nameEl.textContent = list.name;
+          openModal(document.getElementById('customListDeleteModal'));
+        });
+        card.appendChild(remove);
+      }
+      grid.appendChild(card);
+    });
+  }
+
+  async function loadCustomListMats(listId) {
+    const listEl = document.getElementById('customListMats');
+    try {
+      const { data, error } = await window.supabase
+        .from('custom_list_mats')
+        .select('*')
+        .eq('list_id', listId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      allCustomListMats = data || [];
+      renderCustomListMats();
+    } catch (error) {
+      console.error('Błąd pobierania mat listy:', error);
+      allCustomListMats = [];
+      if (listEl) {
+        listEl.innerHTML = `<div class="empty-state error"><div class="empty-state-text">${customListsMissingMessage()}</div></div>`;
+      }
+    }
+  }
+
+  function renderCustomListMats() {
+    if (!activeCustomList) return;
+    const title = document.getElementById('customListTitle');
+    if (title) title.textContent = activeCustomList.name;
+    renderDatedMats({
+      mats: allCustomListMats,
+      listEl: document.getElementById('customListMats'),
+      searchEl: document.getElementById('customListSearch'),
+      countEl: document.getElementById('customListCount'),
+      filteredEl: document.getElementById('customListFiltered'),
+      target: 'custom:' + activeCustomList.id,
+      emptyText: 'Brak mat na tej liście.'
+    });
+  }
+
+  document.getElementById('createCustomListBtn')?.addEventListener('click', () => {
+    if (!isAdmin) return;
+    const input = document.getElementById('customListName');
+    if (input) input.value = '';
+    openModal(document.getElementById('customListFormModal'));
+    setTimeout(() => input?.focus(), 100);
+  });
+
+  document.getElementById('customListFormCancel')?.addEventListener('click', () => {
+    closeModal(document.getElementById('customListFormModal'));
+  });
+
+  document.getElementById('customListFormSave')?.addEventListener('click', async () => {
+    if (!isAdmin) return;
+    const input = document.getElementById('customListName');
+    const name = (input?.value || '').trim();
+    if (!name) {
+      showToast('Podaj nazwę listy.', 'error');
+      input?.focus();
+      return;
+    }
+    const button = document.getElementById('customListFormSave');
+    button.disabled = true;
+    try {
+      const { error } = await window.supabase.from('custom_mat_lists').insert([{ name }]);
+      if (error) throw error;
+      closeModal(document.getElementById('customListFormModal'));
+      showToast('Lista utworzona.', 'success');
+      await loadCustomLists();
+    } catch (error) {
+      console.error('Błąd tworzenia listy:', error);
+      showToast('Nie udało się utworzyć listy.', 'error');
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  document.getElementById('customListDeleteCancel')?.addEventListener('click', () => {
+    customListPendingDelete = null;
+    closeModal(document.getElementById('customListDeleteModal'));
+  });
+
+  document.getElementById('customListDeleteConfirm')?.addEventListener('click', async () => {
+    if (!isAdmin || !customListPendingDelete) return;
+    const button = document.getElementById('customListDeleteConfirm');
+    button.disabled = true;
+    try {
+      const { error } = await window.supabase
+        .from('custom_mat_lists')
+        .delete()
+        .eq('id', customListPendingDelete.id);
+      if (error) throw error;
+      if (activeCustomList && activeCustomList.id === customListPendingDelete.id) activeCustomList = null;
+      customListPendingDelete = null;
+      closeModal(document.getElementById('customListDeleteModal'));
+      showToast('Lista usunięta.', 'success');
+      await loadCustomLists();
+    } catch (error) {
+      console.error('Błąd usuwania listy:', error);
+      showToast('Nie udało się usunąć listy.', 'error');
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  document.getElementById('addCustomListMatBtn')?.addEventListener('click', () => {
+    if (!isAdmin || !activeCustomList) return;
+    openAddMatModal('custom:' + activeCustomList.id);
+  });
+
+  document.getElementById('customListSearch')?.addEventListener('input', renderCustomListMats);
+  document.getElementById('printCustomListBtn')?.addEventListener('click', () => {
+    if (!activeCustomList || allCustomListMats.length === 0) {
+      showToast('Brak mat do wydrukowania.', 'error');
+      return;
+    }
+    const printDate = new Date().toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const totalQuantity = allCustomListMats.reduce((sum, mat) => sum + (mat.quantity || 0), 0);
+    let printHTML = `
+      <div class="print-mats-header">
+        <img src="icons/icon-192.png" alt="Elis Logo">
+        <div class="title-block">
+          <h1>${escapeHtml(activeCustomList.name)}</h1>
+          <p>Data wydruku: ${printDate}</p>
+        </div>
+      </div>
+      <div class="print-mats-summary">
+        <p><strong>Łączna liczba pozycji:</strong> ${allCustomListMats.length}</p>
+        <p><strong>Suma wszystkich mat:</strong> ${totalQuantity} szt.</p>
+      </div>
+      <table class="print-mats-table print-seasonal-table">
+        <thead><tr><th>Nazwa</th><th>Lokalizacja</th><th>Rozmiar</th><th>Ilość</th><th>Data dodania</th></tr></thead>
+        <tbody>
+    `;
+    allCustomListMats.forEach(mat => {
+      printHTML += `<tr><td>${escapeHtml(mat.name)}</td><td>${escapeHtml(LocationFormat.describeLocation(mat.location)) || '—'}</td><td>${escapeHtml(mat.size) || '—'}</td><td>${mat.quantity}</td><td>${formatAddedDate(mat.created_at) || '—'}</td></tr>`;
+    });
+    printHTML += `</tbody></table><div class="print-mats-footer"><p>Dokument wygenerowany automatycznie przez system Elis</p></div>`;
+    printOutput.innerHTML = printHTML;
+    setTimeout(() => { try { window.print(); } catch (error) { console.error('Błąd drukowania:', error); showToast('Błąd podczas otwierania okna drukowania.', 'error'); } }, 100);
   });
 
   seasonalSearch.addEventListener('input', renderSeasonalMats);
@@ -5979,6 +6368,16 @@ document.addEventListener("DOMContentLoaded", () => {
       })
       .subscribe();
 
+    window.supabase
+      .channel('custom-lists-updates')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'custom_mat_lists' }, () => {
+        if (currentView === 'customLists') loadCustomLists();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'custom_list_mats' }, () => {
+        if (currentView === 'customList' && activeCustomList) loadCustomListMats(activeCustomList.id);
+      })
+      .subscribe();
+
     // 🔥 NOWE: Realtime dla archiwum zamienników
     const replacementsArchiveChannel = window.supabase
       .channel('replacements-archive-updates')
@@ -6037,63 +6436,39 @@ document.addEventListener("DOMContentLoaded", () => {
         schema: 'public', 
         table: 'reports' 
       }, async (payload) => {
-        console.log('✨ Zmiana w zgłoszeniach!', payload);
-        if (currentView === 'reports') {
-          await fetchReports();
+        const incoming = payload.new || {};
+        const fromThisDevice = reportCreatorId(incoming) === getDeviceId();
+        const isNewFromSomeoneElse = payload.eventType === 'INSERT' && !fromThisDevice;
+        if (currentView === 'reports' || (reportDetailModal && reportDetailModal.style.display === 'flex')) {
+          await fetchReports({ silent: true });
+        } else {
+          await refreshReportAlerts(isNewFromSomeoneElse);
         }
-        
-        const isNew = (payload.eventType === 'INSERT');
-        const isResolved = (payload.eventType === 'UPDATE' && payload.new.status === 'resolved' && payload.old.status !== 'resolved');
-        const isDeleted = (payload.eventType === 'DELETE');
+        if (!isNewFromSomeoneElse) return;
 
-        if (isDeleted) {
-            unreadReportIds.delete(payload.old.id);
-        } else if ((isNew || isResolved) && currentView !== 'reports') {
-            unreadReportIds.add(payload.new.id);
+        const reportBody = incoming.mat_name ? "Nowa mata: " + incoming.mat_name : "W systemie pojawiło się nowe zgłoszenie.";
+        if (window.elisDesktop && window.elisDesktop.setReportAlert) {
+          const badge = document.getElementById('reportsUnansweredBadge');
+          const count = badge && badge.style.display !== 'none' ? Number(badge.textContent) || 1 : 1;
+          window.elisDesktop.setReportAlert({ count, flash: true, notify: true, body: reportBody });
+        } else if ("Notification" in window && Notification.permission === "granted") {
+          const notif = new Notification("Nowe zgłoszenie", {
+            body: incoming.mat_name ? "Nowa mata: " + incoming.mat_name : "W systemie pojawiło się nowe zgłoszenie.",
+            icon: "icons/icon-192.png"
+          });
+          notif.onclick = () => {
+            window.focus();
+            navigateTo('reports');
+          };
         }
 
-        const reportsTileBadge = document.getElementById('reportsTileBadge');
-        if (reportsTileBadge && currentView !== 'reports') {
-            if (unreadReportIds.size > 0) {
-                reportsTileBadge.textContent = unreadReportIds.size;
-                reportsTileBadge.style.display = 'inline-block';
-                // Ostatnia akcja definiuje nowy kolor
-                if (isResolved || isNew) {
-                    reportsTileBadge.style.backgroundColor = isResolved ? 'var(--success, #10b981)' : 'var(--danger, #ef4444)';
-                }
-            } else {
-                reportsTileBadge.style.display = 'none';
-                if (titleBlinkInterval) {
-                    clearInterval(titleBlinkInterval);
-                    titleBlinkInterval = null;
-                }
-                isTitleBlinking = false;
-                document.title = originalDocumentTitle;
-            }
-        }
-        
-        if ((isNew || isResolved) && currentView !== 'reports') {
-            if ("Notification" in window && Notification.permission === "granted") {
-                const notifTitle = isNew ? "Nowe zgłoszenie" : "Zgłoszenie sprawdzone";
-                const notifBody = isNew ? "W systemie pojawiło się nowe zgłoszenie." : "Zgłoszenie zostało oznaczone jako sprawdzone.";
-                const notif = new Notification(notifTitle, {
-                    body: notifBody,
-                    icon: "icons/icon-192.png"
-                });
-                notif.onclick = () => {
-                    window.focus();
-                    navigateTo('reports');
-                };
-            }
-            
-            if (document.hidden && !isTitleBlinking) {
-                isTitleBlinking = true;
-                let titleState = false;
-                titleBlinkInterval = setInterval(() => {
-                    document.title = titleState ? "🔔 Nowe zgłoszenie!" : originalDocumentTitle;
-                    titleState = !titleState;
-                }, 1000);
-            }
+        if (document.hidden && !isTitleBlinking) {
+          isTitleBlinking = true;
+          let titleState = false;
+          titleBlinkInterval = setInterval(() => {
+            document.title = titleState ? "🔔 Nowe zgłoszenie!" : originalDocumentTitle;
+            titleState = !titleState;
+          }, 1000);
         }
       })
       .subscribe();
@@ -6101,6 +6476,10 @@ document.addEventListener("DOMContentLoaded", () => {
       window.reportsChannel = reportsChannel;
 
     initPalletSystem();
+    if (window.elisDesktop && "Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+    refreshReportAlerts(false);
     navigateTo('home');
   }
 
@@ -6125,7 +6504,9 @@ document.addEventListener("DOMContentLoaded", () => {
   if (toggleNotificationsBtn) {
       toggleNotificationsBtn.addEventListener('click', async () => {
           if (!("Notification" in window)) {
-             alert("Twoja przeglądarka nie obsługuje powiadomień.");
+             alert(window.elisDesktop
+               ? "Ten program nie może pokazać powiadomień systemowych."
+               : "Twoja przeglądarka nie obsługuje powiadomień.");
              return;
           }
           if (Notification.permission === 'default' || Notification.permission === 'denied') {
@@ -6138,7 +6519,9 @@ document.addEventListener("DOMContentLoaded", () => {
                   document.getElementById('notifIconOn').style.display = 'inline-block';
                   new Notification('Elis ServiceHub', { body: 'Powiadomienia pomyślnie uruchomione!', icon: 'icons/icon-192.png' });
               } else {
-                  alert("Powiadomienia zablokowane. Kliknij w kłódkę obok pola adresu strony, by zezwolić na powiadomienia ręcznie.");
+                  alert(window.elisDesktop
+                    ? "Powiadomienia zablokowane w ustawieniach Windows."
+                    : "Powiadomienia zablokowane. Kliknij w kłódkę obok pola adresu strony, by zezwolić na powiadomienia ręcznie.");
               }
           } else {
               alert("Masz już włączone powiadomienia! Jeśli nie pojawiają się w rogu ekranu sprawdź, czy w systemie Windows/Android nie masz włączonej opcji 'Nie przeszkadzać'.");
@@ -6198,10 +6581,105 @@ document.addEventListener("DOMContentLoaded", () => {
     return '';
   }
 
+  function getDeviceId() {
+    try {
+      let id = localStorage.getItem('elisDeviceId');
+      if (!id) {
+        id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : generateUuid();
+        localStorage.setItem('elisDeviceId', id);
+      }
+      return id;
+    } catch (err) {
+      return 'device';
+    }
+  }
+
+  function parseReportThread(report) {
+    const empty = { v: 1, creator: null, messages: [] };
+    if (!report || !report.response_text) return empty;
+    try {
+      const data = JSON.parse(report.response_text);
+      if (data && data.v === 1 && Array.isArray(data.messages)) {
+        return { v: 1, creator: data.creator || null, messages: data.messages };
+      }
+    } catch (err) {}
+    return empty;
+  }
+
+  function hasOfficeReply(report) {
+    const thread = parseReportThread(report);
+    return thread.messages.some(message => {
+      if (message.kind === 'decision') return true;
+      if (!message.device) return false;
+      if (!thread.creator) return true;
+      return message.device !== thread.creator;
+    });
+  }
+
+  function isUnansweredReport(report) {
+    return !!report && report.status === 'pending' && !hasOfficeReply(report);
+  }
+
+  function decisionLabel(action) {
+    if (action === 'repair') return 'Naprawa maty';
+    if (action === 'utilize') return 'Utylizacja maty';
+    if (action === 'replace_set') return 'Wymiana kompletu';
+    if (action === 'over_quantity_ok') return 'Nad stan (akceptacja)';
+    return 'Rozwiązanie';
+  }
+
+  function messageRole(thread, device) {
+    if (thread.creator && device === thread.creator) return 'Zgłaszający';
+    return 'Odpowiadający';
+  }
+
+  function formatChatTime(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function applyReportBadges(count, flash) {
+    const text = count > 99 ? '99+' : String(count);
+    [document.getElementById('reportsTileBadge'), document.getElementById('reportsUnansweredBadge')].forEach(el => {
+      if (!el) return;
+      if (count > 0) {
+        el.textContent = text;
+        el.style.display = 'inline-flex';
+        el.style.backgroundColor = '#e30613';
+        el.style.color = '#fff';
+      } else {
+        el.style.display = 'none';
+      }
+    });
+    if (window.elisDesktop && window.elisDesktop.setReportAlert) {
+      window.elisDesktop.setReportAlert({ count, flash: !!flash });
+    }
+  }
+
+  async function refreshReportAlerts(flash) {
+    try {
+      const { data, error } = await window.supabase
+        .from('reports')
+        .select('id,status,response_text');
+      if (error) throw error;
+      applyReportBadges((data || []).filter(isUnansweredReport).length, flash);
+    } catch (err) {
+      console.error('Błąd licznika zgłoszeń:', err);
+    }
+  }
+
+  function reportCreatorId(report) {
+    return parseReportThread(report).creator;
+  }
+
   // Pobieranie zgłoszeń z Supabase
-  async function fetchReports() {
-    reportsList.innerHTML = `<div class="empty-state"><div class="empty-state-text">Pobieranie zgłoszeń...</div></div>`;
-    hideReportsLoadMore();
+  async function fetchReports(options) {
+    const silent = options && options.silent;
+    if (!silent) {
+      reportsList.innerHTML = `<div class="empty-state"><div class="empty-state-text">Pobieranie zgłoszeń...</div></div>`;
+      hideReportsLoadMore();
+    }
     try {
       const { data, error } = await window.supabase
         .from('reports')
@@ -6211,6 +6689,12 @@ document.addEventListener("DOMContentLoaded", () => {
       if (error) throw error;
       allReports = data || [];
       renderReports();
+      applyReportBadges(allReports.filter(isUnansweredReport).length, false);
+      if (reportDetailModal && reportDetailModal.style.display === 'flex' && currentlyViewedReportId) {
+        const openReport = allReports.find(item => item.id === currentlyViewedReportId);
+        if (openReport) renderReportDetail(openReport);
+        else closeModal(reportDetailModal);
+      }
     } catch (error) {
       console.error("Błąd pobierania zgłoszeń:", error);
       showToast("Nie udało się pobrać zgłoszeń.", "error");
@@ -6489,15 +6973,37 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  async function compressReportImage(file) {
+    try {
+      if (!file || !file.type || !file.type.startsWith('image/')) return file;
+      const bitmap = await createImageBitmap(file);
+      const maxEdge = 1600;
+      const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
+      const width = Math.max(1, Math.round(bitmap.width * scale));
+      const height = Math.max(1, Math.round(bitmap.height * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d').drawImage(bitmap, 0, 0, width, height);
+      if (bitmap.close) bitmap.close();
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.72));
+      if (!blob || blob.size >= file.size) return file;
+      return new File([blob], 'zgloszenie.jpg', { type: 'image/jpeg' });
+    } catch (err) {
+      return file;
+    }
+  }
+
   async function uploadReportImage(file) {
     if (!file) return null;
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Date.now()}_${generateUuid()}.${fileExt}`;
+      const prepared = await compressReportImage(file);
+      const ext = (prepared.type === 'image/jpeg') ? 'jpg' : ((file.name.split('.').pop() || 'jpg').toLowerCase());
+      const fileName = `${Date.now()}_${generateUuid()}.${ext}`;
 
       const { data, error } = await window.supabase.storage
         .from('report-attachments')
-        .upload(fileName, file);
+        .upload(fileName, prepared, { contentType: prepared.type || file.type || 'image/jpeg', cacheControl: '3600' });
 
       if (error) throw error;
       
@@ -6543,7 +7049,8 @@ document.addEventListener("DOMContentLoaded", () => {
           report_type: reportType,
           description: description || null,
           attachment_url: attachmentUrl,
-          status: 'pending'
+          status: 'pending',
+          response_text: JSON.stringify({ v: 1, creator: getDeviceId(), messages: [] })
         }]);
 
       if (error) throw error;
@@ -6564,22 +7071,24 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Szczegóły zgłoszenia
-  reportsList?.addEventListener('click', (e) => {
-    const card = e.target.closest('.report-card');
-    if (!card) return;
+  const reportChatLog = document.getElementById('reportChatLog');
+  const reportChatSend = document.getElementById('reportChatSend');
+  const reportOfficeBox = document.getElementById('reportOfficeBox');
+  const reportRoleHint = document.getElementById('reportRoleHint');
+  let selectedResolution = null;
 
-    const id = card.dataset.reportId;
-    const report = allReports.find(r => r.id === id);
+  function viewerIsReporter(thread) {
+    return !!(thread.creator && thread.creator === getDeviceId());
+  }
+
+  function renderReportDetail(report) {
     if (!report) return;
-
-    currentlyViewedReportId = id;
-
-    quickActionBtns.forEach(b => b.classList.remove('selected'));
-    reportResponseText.value = '';
-
+    currentlyViewedReportId = report.id;
+    const thread = parseReportThread(report);
     const dateStr = new Date(report.created_at).toLocaleString('pl-PL');
-    
+    const pending = report.status !== 'resolved';
+    const decision = [...thread.messages].reverse().find(message => message.kind === 'decision');
+
     let html = `
       <div class="report-detail-row">
         <span class="report-detail-label">Mata</span>
@@ -6594,14 +7103,6 @@ document.addEventListener("DOMContentLoaded", () => {
       </div>
       <div style="margin-bottom: 8px;">${getReportBadgeHtml(report.report_type)}</div>
     `;
-
-    if (report.description) {
-      html += `
-        <div class="report-detail-label" style="margin-top: 8px; margin-bottom: 4px;">Opis dodatkowy</div>
-        <div class="report-detail-desc">${escapeHtml(report.description)}</div>
-      `;
-    }
-
     if (report.attachment_url) {
       html += `
         <div class="report-detail-label" style="margin-top: 12px; margin-bottom: 4px;">Załączone zdjęcie</div>
@@ -6610,35 +7111,82 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
       `;
     }
-
     reportDetailBody.innerHTML = html;
 
-    if (report.status === 'resolved') {
-      reportDetailActions.style.display = 'none';
-      reportDetailResolved.style.display = 'block';
-      const resDate = report.resolved_at ? new Date(report.resolved_at).toLocaleString('pl-PL') : '';
-      let actionLabel = report.response_type;
-      if (actionLabel === 'repair') actionLabel = '🔧 Naprawa maty';
-      if (actionLabel === 'utilize') actionLabel = '🗑️ Utylizacja maty';
-      if (actionLabel === 'replace_set') actionLabel = '🔄 Wymiana kompletu';
-      if (actionLabel === 'over_quantity_ok') actionLabel = '✅ Nad stan (Akceptacja)';
-      if (actionLabel === 'custom') actionLabel = 'Własna odpowiedź';
+    let chat = '';
+    if (report.description) {
+      chat += `<article class="report-chat-note"><div class="report-chat-kicker">Informacja ze zgłoszenia</div><p>${escapeHtml(report.description)}</p></article>`;
+    }
+    thread.messages.forEach(message => {
+      const time = formatChatTime(message.at);
+      if (message.kind === 'decision') {
+        chat += `<article class="report-chat-decision"><div class="report-chat-kicker">Rozwiązanie</div><p>${escapeHtml(decisionLabel(message.action))}</p><time>${time}</time></article>`;
+        return;
+      }
+      if (message.kind === 'closed') {
+        chat += `<p class="report-chat-closed">Zamknięte i przeniesione do sprawdzonych <time>${time}</time></p>`;
+        return;
+      }
+      const fromReporter = !!(thread.creator && message.device === thread.creator);
+      chat += `<article class="report-chat-msg ${fromReporter ? 'is-reporter' : 'is-office'}"><header><strong>${escapeHtml(messageRole(thread, message.device))}</strong><time>${time}</time></header><p>${escapeHtml(message.text || '')}</p></article>`;
+    });
+    if (!chat) chat = '<p class="report-chat-empty">Napisz wiadomość. Osoba odpowiadająca może też zamknąć zgłoszenie.</p>';
+    reportChatLog.innerHTML = chat;
+    requestAnimationFrame(() => {
+      reportChatLog.scrollTop = reportChatLog.scrollHeight;
+    });
 
-      reportDetailResolved.innerHTML = `
-        <h4>Wykonana akcja: ${actionLabel}</h4>
-        ${report.response_text ? `<p><strong>Notatka:</strong> ${escapeHtml(report.response_text)}</p>` : ''}
-        <p style="font-size: 0.8rem; margin-top: 8px; color: var(--muted);">Sprawdzono: ${resDate}</p>
-      `;
-      // Przywracam pokazanie jak jest RESOLVED
+    const reporter = viewerIsReporter(thread);
+    reportDetailActions.style.display = pending ? 'block' : 'none';
+    if (reportRoleHint) {
+      reportRoleHint.textContent = !pending
+        ? ''
+        : reporter
+          ? 'Piszesz jako zgłaszający. Biuro może odpisać, wskazać rozwiązanie i zamknąć zgłoszenie.'
+          : 'Piszesz jako odpowiadający. Możesz dopisać wiadomość, wskazać rozwiązanie i zamknąć zgłoszenie.';
+    }
+    if (reportOfficeBox) reportOfficeBox.style.display = pending && !reporter ? 'block' : 'none';
+    quickActionBtns.forEach(btn => btn.classList.toggle('selected', btn.dataset.action === selectedResolution));
+    if (report.status === 'resolved') {
+      const resDate = report.resolved_at ? new Date(report.resolved_at).toLocaleString('pl-PL') : '';
+      reportDetailResolved.style.display = 'block';
+      reportDetailResolved.innerHTML = `<h4>Zgłoszenie zamknięte${decision ? ': ' + escapeHtml(decisionLabel(decision.action)) : ''}</h4><p style="font-size: 0.8rem; margin-top: 8px; color: var(--muted);">Sprawdzono: ${resDate}</p>`;
       document.getElementById('reportDetailDelete').style.display = 'block';
     } else {
-      reportDetailActions.style.display = 'block';
       reportDetailResolved.style.display = 'none';
-      reportResolveBtn.disabled = true;
-      // Wymuszam ukrycie jak jest PENDING
       document.getElementById('reportDetailDelete').style.display = 'none';
     }
+  }
 
+  async function appendReportEvent(reportId, message) {
+    const { data, error } = await window.supabase
+      .from('reports')
+      .select('response_text,status')
+      .eq('id', reportId)
+      .single();
+    if (error) throw error;
+    if (data.status === 'resolved') throw new Error('closed');
+    const thread = parseReportThread({ response_text: data.response_text });
+    thread.messages.push(message);
+    const { error: updateError } = await window.supabase
+      .from('reports')
+      .update({ response_text: JSON.stringify(thread) })
+      .eq('id', reportId);
+    if (updateError) throw updateError;
+  }
+
+  // Szczegóły zgłoszenia
+  reportsList?.addEventListener('click', (e) => {
+    const card = e.target.closest('.report-card');
+    if (!card) return;
+
+    const id = card.dataset.reportId;
+    const report = allReports.find(r => r.id === id);
+    if (!report) return;
+
+    selectedResolution = null;
+    reportResponseText.value = '';
+    renderReportDetail(report);
     openModal(reportDetailModal);
   });
 
@@ -6685,58 +7233,96 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Obsługa przycisków
+  async function sendReportChat() {
+    if (!currentlyViewedReportId) return;
+    const text = reportResponseText.value.trim();
+    if (!text) return;
+    reportChatSend.disabled = true;
+    try {
+      await appendReportEvent(currentlyViewedReportId, {
+        id: generateUuid(),
+        kind: 'chat',
+        text,
+        device: getDeviceId(),
+        at: new Date().toISOString()
+      });
+      reportResponseText.value = '';
+      await fetchReports();
+    } catch (err) {
+      console.error('Błąd wiadomości:', err);
+      showToast('Nie udało się wysłać wiadomości.', 'error');
+    } finally {
+      reportChatSend.disabled = false;
+    }
+  }
+
+  reportChatSend?.addEventListener('click', sendReportChat);
+  reportResponseText?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendReportChat();
+    }
+  });
+
   quickActionBtns.forEach(btn => {
     btn.addEventListener('click', () => {
-      if (btn.classList.contains('selected')) {
-        btn.classList.remove('selected');
-      } else {
-        quickActionBtns.forEach(b => b.classList.remove('selected'));
-        btn.classList.add('selected');
-      }
-      checkResolveBtnState();
+      selectedResolution = selectedResolution === btn.dataset.action ? null : btn.dataset.action;
+      quickActionBtns.forEach(item => item.classList.toggle('selected', item.dataset.action === selectedResolution));
     });
   });
 
-  reportResponseText?.addEventListener('input', () => {
-    checkResolveBtnState();
-  });
-
-  function checkResolveBtnState() {
-    const hasQuickAction = document.querySelector('.quick-action-btn.selected');
-    const hasText = reportResponseText.value.trim().length > 0;
-    reportResolveBtn.disabled = !(hasQuickAction || hasText);
-  }
-
   reportResolveBtn?.addEventListener('click', async () => {
     if (!currentlyViewedReportId) return;
-
-    const quickBtn = document.querySelector('.quick-action-btn.selected');
-    const responseType = quickBtn ? quickBtn.dataset.action : 'custom';
-    const responseText = reportResponseText.value.trim();
+    const report = allReports.find(item => item.id === currentlyViewedReportId);
+    if (report && viewerIsReporter(parseReportThread(report))) return;
 
     const origText = reportResolveBtn.innerText;
-    reportResolveBtn.innerText = 'Zapisywanie...';
+    reportResolveBtn.innerText = 'Zamykanie...';
     reportResolveBtn.disabled = true;
 
     try {
-      const { error } = await window.supabase
+      const { data, error } = await window.supabase
+        .from('reports')
+        .select('response_text,status')
+        .eq('id', currentlyViewedReportId)
+        .single();
+      if (error) throw error;
+      if (data.status === 'resolved') throw new Error('closed');
+      const thread = parseReportThread({ response_text: data.response_text });
+      const now = new Date().toISOString();
+      if (selectedResolution) {
+        thread.messages.push({
+          id: generateUuid(),
+          kind: 'decision',
+          action: selectedResolution,
+          device: getDeviceId(),
+          at: now
+        });
+      }
+      thread.messages.push({
+        id: generateUuid(),
+        kind: 'closed',
+        device: getDeviceId(),
+        at: now
+      });
+      const { error: updateError } = await window.supabase
         .from('reports')
         .update({
           status: 'resolved',
-          response_type: responseType,
-          response_text: responseText || null,
-          resolved_at: new Date().toISOString()
+          response_type: selectedResolution || 'custom',
+          response_text: JSON.stringify(thread),
+          resolved_at: now
         })
         .eq('id', currentlyViewedReportId);
+      if (updateError) throw updateError;
 
-      if (error) throw error;
-
-      showToast("Zgłoszenie rozwiązane!", "success");
+      selectedResolution = null;
+      showToast('Zgłoszenie przeniesione do sprawdzonych.', 'success');
       closeModal(reportDetailModal);
+      await fetchReports();
     } catch (err) {
-      console.error("Błąd oznaczania zgłoszenia:", err);
-      showToast("Nie udało się rozwiązać zgłoszenia.", "error");
+      console.error('Błąd zamykania zgłoszenia:', err);
+      showToast('Nie udało się zamknąć zgłoszenia.', 'error');
     } finally {
       reportResolveBtn.innerText = origText;
       reportResolveBtn.disabled = false;

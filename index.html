@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Elis ServiceHub — Centrum Główne</title>
-  <link rel="stylesheet" href="style.css?v=40">
+  <link rel="stylesheet" href="style.css?v=52">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0d1117">
   <meta name="mobile-web-app-capable" content="yes">
@@ -113,6 +113,9 @@
       <main class="home-main">
         <h1 class="home-welcome">Witaj w Systemie Elis ServiceHub</h1>
         <p class="home-subtitle">Wybierz moduł, z którego chcesz skorzystać</p>
+        <p class="home-desktop-download" id="desktopDownloadRow">
+          <button type="button" class="desktop-download-btn" id="desktopDownloadBtn">Pobierz program na komputer</button>
+        </p>
 
         <div class="home-grid">
           <button class="home-tile" data-navigate="panel" style="display: none;">
@@ -179,6 +182,24 @@
                 <span id="reportsTileBadge" class="tab-badge" style="display: none; background-color: var(--danger, #ef4444);">0</span>
               </h2>
               <p>Zgłaszanie problemów i śledzenie napraw</p>
+            </div>
+          </button>
+
+          <button class="home-tile" data-navigate="customLists">
+            <div class="home-tile-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="8" y1="6" x2="21" y2="6"></line>
+                <line x1="8" y1="12" x2="21" y2="12"></line>
+                <line x1="8" y1="18" x2="21" y2="18"></line>
+                <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                <line x1="3" y1="18" x2="3.01" y2="18"></line>
+              </svg>
+            </div>
+            <div class="home-tile-content">
+              <h2>Pozostałe listy</h2>
+              <p>Własne listy mat, tak jak sezonowe</p>
             </div>
           </button>
 
@@ -634,6 +655,73 @@
       </main>
     </div>
 
+    <!-- ==================== WIDOK: POZOSTAŁE LISTY ==================== -->
+    <div id="customListsView" class="view">
+      <main class="app-main">
+        <section class="card">
+          <div class="card-header">
+            <h2>Pozostałe listy</h2>
+          </div>
+          <p style="margin: 0 0 16px; color: var(--muted); font-size: 0.9rem;">Własne listy mat. Tworzenie, usuwanie oraz dodawanie mat jest dostępne po zalogowaniu kodem administratora.</p>
+          <div id="customListsAdmin" class="admin-add-mat-section" style="display: none;">
+            <button id="createCustomListBtn" class="btn-add-mat" type="button">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M12 5v14m-7-7h14" />
+              </svg>
+              <span>Nowa lista</span>
+            </button>
+          </div>
+        </section>
+        <section>
+          <div id="customListsGrid" class="custom-lists-grid"></div>
+        </section>
+      </main>
+    </div>
+
+    <div id="customListView" class="view">
+      <main class="app-main">
+        <section class="card">
+          <div class="card-header">
+            <h2 id="customListTitle">Lista</h2>
+            <div class="mats-actions-buttons">
+              <button id="printCustomListBtn" class="btn-print-mats" type="button" aria-label="Drukuj listę">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                  <rect x="6" y="14" width="12" height="8"></rect>
+                </svg>
+                <span>Drukuj</span>
+              </button>
+            </div>
+          </div>
+          <div class="search-box">
+            <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <path d="m21 21-4.35-4.35"></path>
+            </svg>
+            <input type="text" id="customListSearch" placeholder="Wpisz nazwę, lokalizację lub rozmiar..." class="search-input">
+          </div>
+          <div id="customListAddSection" class="admin-add-mat-section" style="display: none;">
+            <button id="addCustomListMatBtn" class="btn-add-mat" type="button">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M12 5v14m-7-7h14" />
+              </svg>
+              <span>Dodaj matę</span>
+            </button>
+          </div>
+          <div class="mats-stats">
+            <span id="customListCount">Załadowano: 0 mat</span>
+            <span id="customListFiltered" style="display:none;"></span>
+          </div>
+        </section>
+        <section>
+          <div id="customListMats" class="mats-list"></div>
+        </section>
+      </main>
+    </div>
+
     <!-- ==================== WIDOK: OSTATNIO DODANE MATY ==================== -->
     <div id="recentView" class="view">
       <main class="app-main">
@@ -1010,7 +1098,7 @@
       <main class="app-main">
         <section class="card">
           <div class="card-header">
-            <h2>📢 Zgłoszenia</h2>
+            <h2>📢 Zgłoszenia <span id="reportsUnansweredBadge" class="reports-unanswered-badge" style="display: none;">0</span></h2>
             <div class="mats-actions-buttons">
               <button id="toggleNotificationsBtn" class="btn-secondary" style="margin-right: 8px;">
                 <svg id="notifIconOff" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="M13.73 21a2 2 0 0 1-3.46 0"></path><path d="M18.63 13A17.89 17.89 0 0 1 18 8"></path><path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14"></path><path d="M18 8a6 6 0 0 0-9.33-5"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
@@ -1113,21 +1201,30 @@
 
   <!-- ==================== MODAL: SZCZEGÓŁY ZGŁOSZENIA ==================== -->
   <div id="reportDetailModal" class="modal">
-    <div class="modal-content large">
+    <div class="modal-content large report-ticket">
       <h3 id="reportDetailTitle">Szczegóły zgłoszenia</h3>
       <div id="reportDetailBody" class="report-detail-body"></div>
+      <div id="reportChatLog" class="report-chat-log"></div>
       
       <div id="reportDetailActions" class="report-detail-actions">
-        <label class="form-label">Szybkie akcje</label>
-        <div class="quick-actions">
-          <button class="quick-action-btn" data-action="repair">🔧 Naprawa</button>
-          <button class="quick-action-btn" data-action="utilize">🗑️ Utylizacja</button>
-          <button class="quick-action-btn" data-action="replace_set">🔄 Wymiana</button>
-          <button class="quick-action-btn" data-action="over_quantity_ok">✅ Nad stan</button>
+        <p id="reportRoleHint" class="report-role-hint"></p>
+        <div class="report-chat-compose">
+          <textarea id="reportResponseText" class="form-textarea" placeholder="Napisz wiadomość..." rows="2"></textarea>
+          <button id="reportChatSend" class="btn-primary" type="button">Wyślij</button>
         </div>
-        <label class="form-label" style="margin-top: 12px;">Lub wpisz własną odpowiedź</label>
-        <textarea id="reportResponseText" class="form-textarea" placeholder="Wpisz odpowiedź..." rows="2"></textarea>
-        <button id="reportResolveBtn" class="btn-primary" style="margin-top: 12px; width: 100%;">Oznacz jako sprawdzone</button>
+        <div id="reportOfficeBox" class="report-office-box">
+          <div class="report-office-head">
+            <strong>Rozwiązanie</strong>
+            <span>Opcjonalne. Zgłoszenie można zamknąć także bez wyboru.</span>
+          </div>
+          <div class="quick-actions">
+            <button class="quick-action-btn" data-action="repair" type="button">Naprawa</button>
+            <button class="quick-action-btn" data-action="utilize" type="button">Utylizacja</button>
+            <button class="quick-action-btn" data-action="replace_set" type="button">Wymiana kompletu</button>
+            <button class="quick-action-btn" data-action="over_quantity_ok" type="button">Nad stan</button>
+          </div>
+          <button id="reportResolveBtn" class="btn-primary" type="button">Zamknij i przenieś do sprawdzonych</button>
+        </div>
       </div>
 
       <div id="reportDetailResolved" class="report-resolved-info" style="display: none;"></div>
@@ -1135,6 +1232,29 @@
       <div class="modal-actions">
         <button id="reportDetailDelete" class="btn-secondary" style="flex: 1; background: #ff4b4b; color: white;">Usuń trwale</button>
         <button id="reportDetailClose" class="btn-secondary" style="flex: 1;">Zamknij</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="customListFormModal" class="modal">
+    <div class="modal-content">
+      <h3>Nowa lista</h3>
+      <label class="form-label" for="customListName">Nazwa listy</label>
+      <input type="text" id="customListName" class="form-input" placeholder="Np. Maty na event">
+      <div class="modal-actions">
+        <button id="customListFormCancel" class="btn-secondary" type="button">Anuluj</button>
+        <button id="customListFormSave" class="btn-primary" type="button">Utwórz</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="customListDeleteModal" class="modal">
+    <div class="modal-content">
+      <h3>Usuń listę</h3>
+      <p>Czy na pewno usunąć listę <strong id="customListDeleteName"></strong> razem z jej matami? Tej operacji nie da się cofnąć.</p>
+      <div class="modal-actions">
+        <button id="customListDeleteCancel" class="btn-secondary" type="button">Anuluj</button>
+        <button id="customListDeleteConfirm" class="btn-primary" type="button" style="background: #ff4b4b;">Usuń listę</button>
       </div>
     </div>
   </div>
@@ -1640,7 +1760,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script src="logoData.js?v=33"></script>
   <script src="locationFormat.js?v=1"></script>
-  <script src="script.js?v=48"></script>
+  <script src="script.js?v=61"></script>
 </body>
 
 </html>
