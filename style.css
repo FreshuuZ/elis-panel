@@ -37,7 +37,8 @@ body.dark {
 }
 
 * { box-sizing: border-box; }
-html { font-size: 16px; scroll-behavior: smooth; }
+html { font-size: 16px; scroll-behavior: smooth; overflow-anchor: none; }
+body { overflow-anchor: none; }
 
 body {
   margin: 0;
@@ -4673,7 +4674,7 @@ body.dark .mat-number-badge {
   position: absolute;
   left: 0;
   right: 0;
-  height: 86px;
+  height: 112px;
   margin: 0;
   box-sizing: border-box;
   overflow: hidden;
@@ -4681,15 +4682,55 @@ body.dark .mat-number-badge {
   content-visibility: visible;
   contain: layout style;
 }
+.mat-item:has(.mat-presence-slot) {
+  grid-template-columns: minmax(0, 1fr) 44px 84px max-content;
+  grid-template-areas:
+    "name presence number end"
+    "details details details details";
+  align-items: center;
+  row-gap: 6px;
+  column-gap: 8px;
+  padding: 10px 12px;
+}
+.mat-item:has(.mat-presence-slot) .mat-info {
+  display: contents;
+}
+.mat-item:has(.mat-presence-slot) .mat-name {
+  grid-area: name;
+  align-self: center;
+}
+.mat-item:has(.mat-presence-slot) .mat-details {
+  grid-area: details;
+  flex-wrap: wrap;
+  overflow: visible;
+}
+.mat-item:has(.mat-presence-slot) .mat-detail-item {
+  min-width: 0;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+}
+.mat-item:has(.mat-presence-slot) .mat-presence-slot,
+.mat-item:has(.mat-presence-slot) .mat-number-slot,
+.mat-item:has(.mat-presence-slot) .mat-end {
+  align-self: center;
+}
+.mat-item:has(.mat-presence-slot) .mat-presence-slot { grid-area: presence; }
+.mat-item:has(.mat-presence-slot) .mat-number-slot {
+  grid-area: number;
+  width: 84px;
+  min-width: 84px;
+}
+.mat-item:has(.mat-presence-slot) .mat-end { grid-area: end; }
 .mats-virtual .mat-details {
-  flex-wrap: nowrap;
-  overflow: hidden;
+  flex-wrap: wrap;
+  overflow: visible;
 }
 .mats-virtual .mat-detail-item {
   min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
 }
 .custom-lists-grid {
   display: grid;
@@ -4848,7 +4889,46 @@ body.dark .mat-number-badge {
 /* ==================== INWENTARYZACJA MAT ==================== */
 
 .inventory-item {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  height: auto;
+  overflow: visible;
+  contain: none;
   transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+.inventory-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+.inventory-item .inventory-actions {
+  margin-right: 0;
+  flex: 0 0 auto;
+}
+.inventory-item .mat-number-badge {
+  margin: 0;
+}
+.inventory-item .inventory-qty-control {
+  margin-left: auto;
+}
+@media (max-width: 420px) {
+  .inventory-toolbar { flex-wrap: nowrap; }
+  .inventory-item .mat-number-badge {
+    padding: 4px 8px;
+    font-size: 14px;
+  }
+  .inventory-item .inventory-qty-control button {
+    width: 28px;
+    min-width: 28px;
+  }
+  .inventory-item .inventory-qty-control input {
+    width: 36px;
+  }
 }
 
 /* Statusy z lekkim gradientem lub odcieniem, by pasowało do ciemnego motywu w dark mode */
@@ -6049,16 +6129,13 @@ body.halloween .app-header::after {
   overflow: visible;
 }
 
-/* Duszki i nietoperze są w miejscu strony, w którym wyleciały.
-   Poziomy clip ucina wylot za krawędź, żeby nie pojawiał się pasek w bok. */
+/* Duszki i nietoperze lecą po ekranie, a nie po wysokości całej strony. */
 .hw-fly {
-  position: absolute;
-  top: 0;
-  left: 0;
+  position: fixed;
+  inset: 0;
   width: 100%;
-  height: 0;
-  overflow-x: clip;
-  overflow-y: visible;
+  height: 100%;
+  overflow: hidden;
   pointer-events: none;
   z-index: 999;
 }

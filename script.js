@@ -834,6 +834,12 @@ document.addEventListener("DOMContentLoaded", () => {
       })();
     }
     
+    if (viewName !== 'mats') {
+      document.querySelectorAll('.mats-virtual-spacer').forEach(spacer => {
+        spacer.style.height = '0px';
+      });
+    }
+
     if (document.body.classList.contains('elis-desktop')) {
       const parent = viewParents[viewName];
       backBtn.style.display = parent && parent !== 'home' ? 'flex' : 'none';
@@ -844,11 +850,15 @@ document.addEventListener("DOMContentLoaded", () => {
       document.querySelectorAll('.desktop-nav-item').forEach(item => {
         item.classList.toggle('active', item.dataset.navigate === marked);
       });
-      const scroller = document.getElementById('app');
-      if (scroller) scroller.scrollTo({ top: 0, behavior: 'smooth' });
-    } else {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
+
+    const root = document.documentElement;
+    const previousScroll = root.style.scrollBehavior;
+    root.style.scrollBehavior = 'auto';
+    window.scrollTo(0, 0);
+    const appScroller = document.getElementById('app');
+    if (appScroller) appScroller.scrollTop = 0;
+    root.style.scrollBehavior = previousScroll;
   }
 
   backBtn.addEventListener('click', () => {
@@ -1017,7 +1027,7 @@ document.addEventListener("DOMContentLoaded", () => {
     function pageTopInView() {
       const margin = 80;
       const span = Math.max(140, window.innerHeight - margin * 2);
-      return window.scrollY + margin + Math.random() * span;
+      return margin + Math.random() * span;
     }
 
     function launchFlyer(kind) {
@@ -1062,7 +1072,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const bat = document.createElement('div');
         bat.className = 'hw-swarm-bat';
         bat.innerHTML = BAT_SVG;
-        bat.style.top = (window.scrollY + window.innerHeight * (0.15 + Math.random() * 0.7)) + 'px';
+        bat.style.top = (window.innerHeight * (0.15 + Math.random() * 0.7)) + 'px';
         bat.style.animationDelay = `${i * 0.12}s`;
         flyLayer.appendChild(bat);
         setTimeout(() => bat.remove(), 3400 + i * 120);
@@ -2502,9 +2512,8 @@ document.addEventListener("DOMContentLoaded", () => {
             ${mat.size ? `<div class="mat-detail-item">📏 ${escapeHtml(mat.size)}</div>` : ''}
           </div>
         </div>
-        <div class="mat-actions" style="align-items: center; justify-content: space-between;">
-          ${matNumberBadge}
-          <div class="inventory-actions" style="display: flex; align-items: center; gap: 8px;">
+        <div class="inventory-toolbar">
+          <div class="inventory-actions">
             <button class="btn-inventory-ok" data-id="${mat.id}" aria-label="Zgodność">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="20 6 9 17 4 12"></polyline>
@@ -2517,6 +2526,7 @@ document.addEventListener("DOMContentLoaded", () => {
               </svg>
             </button>
           </div>
+          ${matNumberBadge}
           <div class="inventory-qty-control">
             <button class="inv-qty-dec" data-id="${mat.id}">−</button>
             <input type="number" class="inv-qty-input" data-id="${mat.id}" value="${mat.quantity}" min="0">
@@ -2770,7 +2780,7 @@ document.addEventListener("DOMContentLoaded", () => {
   /**
    * Wykonuje faktyczne renderowanie
    */
-  const MAT_ROW_HEIGHT = 86;
+  const MAT_ROW_HEIGHT = 112;
   const MAT_ROW_GAP = 12;
   const MAT_ROW_STRIDE = MAT_ROW_HEIGHT + MAT_ROW_GAP;
   let matsVirtualStart = -1;
