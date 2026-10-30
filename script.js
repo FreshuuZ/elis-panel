@@ -224,6 +224,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function updateAdminUI() {
+    document.body.classList.toggle('is-admin', isAdmin);
     // Aktualizuj przycisk w headerze
     adminBtn.classList.toggle('admin-logged', isAdmin);
     
@@ -2781,8 +2782,11 @@ document.addEventListener("DOMContentLoaded", () => {
    * Wykonuje faktyczne renderowanie
    */
   const MAT_ROW_HEIGHT = 112;
+  const MAT_ROW_HEIGHT_ADMIN = 164;
   const MAT_ROW_GAP = 12;
-  const MAT_ROW_STRIDE = MAT_ROW_HEIGHT + MAT_ROW_GAP;
+  function matRowStride() {
+    return (document.body.classList.contains('is-admin') ? MAT_ROW_HEIGHT_ADMIN : MAT_ROW_HEIGHT) + MAT_ROW_GAP;
+  }
   let matsVirtualStart = -1;
   let matsVirtualEnd = -1;
   let matsScrollScheduled = 0;
@@ -2849,9 +2853,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const scrollerTop = scrollerIsPage ? 0 : scroller.getBoundingClientRect().top;
     const scrollTop = scroller.scrollTop || 0;
     const listTop = matsList.getBoundingClientRect().top - scrollerTop + scrollTop;
-    let visibleStart = Math.floor((scrollTop - listTop) / MAT_ROW_STRIDE);
+    const rowStride = matRowStride();
+    let visibleStart = Math.floor((scrollTop - listTop) / rowStride);
     if (visibleStart < 0 || scrollTop + viewHeight < listTop) visibleStart = 0;
-    const visibleCount = Math.ceil(viewHeight / MAT_ROW_STRIDE) + 1;
+    const visibleCount = Math.ceil(viewHeight / rowStride) + 1;
     const visibleEnd = Math.min(count, visibleStart + visibleCount);
     const nearTop = visibleStart - matsVirtualStart < 6 && matsVirtualStart > 0;
     const nearBottom = matsVirtualEnd - visibleEnd < 6 && matsVirtualEnd < count;
@@ -2873,7 +2878,7 @@ document.addEventListener("DOMContentLoaded", () => {
       spacer.appendChild(windowEl);
       matsList.replaceChildren(spacer);
     }
-    spacer.style.height = (count * MAT_ROW_STRIDE) + 'px';
+    spacer.style.height = (count * rowStride) + 'px';
     if (force) windowEl.replaceChildren();
     const keep = new Set();
     for (let i = renderStart; i < renderEnd; i++) keep.add(i);
@@ -2886,7 +2891,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const matElement = createMatElement(mat);
       decorateMatPresence(matElement, mat);
       matElement.dataset.virtualIndex = String(i);
-      matElement.style.top = (i * MAT_ROW_STRIDE) + 'px';
+      matElement.style.top = (i * rowStride) + 'px';
       windowEl.appendChild(matElement);
     }
   }
@@ -3038,8 +3043,8 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
       </div>
       <div class="mat-number-slot">${matNumberBadge}</div>
+      ${adminActionsHtml}
       <div class="mat-end">
-        ${adminActionsHtml}
         <div class="mat-qty-badge">${mat.quantity}</div>
       </div>
     `;

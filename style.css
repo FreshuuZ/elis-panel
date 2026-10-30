@@ -4675,6 +4675,11 @@ body.dark .mat-number-badge {
   left: 0;
   right: 0;
   height: 112px;
+}
+body.is-admin .mats-virtual .mat-item {
+  height: 164px;
+}
+.mats-virtual .mat-item {
   margin: 0;
   box-sizing: border-box;
   overflow: hidden;
@@ -4722,6 +4727,38 @@ body.dark .mat-number-badge {
   min-width: 84px;
 }
 .mat-item:has(.mat-presence-slot) .mat-end { grid-area: end; }
+.mat-item:has(.mat-presence-slot):has(.mat-admin-actions) {
+  grid-template-columns: 44px 84px max-content minmax(0, 1fr);
+  grid-template-areas:
+    "name name name name"
+    "presence number end admin"
+    "details details details details";
+}
+.mat-item:has(.mat-admin-actions):not(:has(.mat-presence-slot)) {
+  grid-template-columns: minmax(0, 1fr) max-content auto;
+  grid-template-areas:
+    "name name name"
+    "number end admin"
+    "details details details";
+}
+.mat-item:has(.mat-admin-actions):not(:has(.mat-presence-slot)) .mat-info {
+  display: contents;
+}
+.mat-item:has(.mat-admin-actions) .mat-name {
+  grid-area: name;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  line-height: 1.25;
+}
+.mat-item:has(.mat-admin-actions) .mat-admin-actions {
+  grid-area: admin;
+  margin: 0;
+  justify-self: end;
+}
+.mat-item:has(.mat-admin-actions):not(:has(.mat-presence-slot)) .mat-number-slot { grid-area: number; }
+.mat-item:has(.mat-admin-actions):not(:has(.mat-presence-slot)) .mat-end { grid-area: end; }
+.mat-item:has(.mat-admin-actions):not(:has(.mat-presence-slot)) .mat-details { grid-area: details; }
 .mats-virtual .mat-details {
   flex-wrap: wrap;
   overflow: visible;
