@@ -4641,6 +4641,10 @@ body.dark .mat-number-badge {
   background: rgba(0, 210, 106, 0.12);
   border-left: 4px solid #00d26a;
 }
+.mat-item.presence-qty {
+  background: rgba(245, 158, 11, 0.16);
+  border-left: 4px solid #f59e0b;
+}
 .mat-presence-toggle {
   width: 46px;
   height: 46px;
@@ -4805,6 +4809,14 @@ body.is-admin .mats-virtual .mat-item {
   background: rgba(0, 210, 106, 0.16);
   border-color: #00d26a;
   color: #00a854;
+}
+.presence-qty .mat-presence-toggle {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: #f59e0b;
+  color: #d97706;
+}
+body.dark .presence-qty .mat-presence-toggle {
+  color: #ffb020;
 }
 @media print {
   .mat-presence-toggle { display: none !important; }

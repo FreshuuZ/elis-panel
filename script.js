@@ -2916,26 +2916,99 @@ document.addEventListener("DOMContentLoaded", () => {
   let matPresentColumn = null;
   const presencePending = new Set();
 
+  let matPresenceStateColumn = null;
+
   function readPresentMap() {
-    try { return JSON.parse(localStorage.getItem(MAT_PRESENT_KEY) || '{}'); }
-    catch { return {}; }
+    try {
+      const raw = JSON.parse(localStorage.getItem(MAT_PRESENT_KEY) || '{}');
+      const map = {};
+      Object.entries(raw).forEach(([id, value]) => {
+        if (value === true || value === 1 || value === '1') map[id] = 1;
+        else if (value === 2 || value === '2') map[id] = 2;
+      });
+      return map;
+    } catch {
+      return {};
+    }
   }
 
-  function matIsPresent(mat) {
-    if (mat && typeof mat.present === 'boolean') return mat.present;
-    return !!readPresentMap()[mat.id];
+  function writePresentMap(map) {
+    const compact = {};
+    Object.entries(map).forEach(([id, value]) => {
+      if (value === 1 || value === 2) compact[id] = value;
+    });
+    localStorage.setItem(MAT_PRESENT_KEY, JSON.stringify(compact));
   }
 
-  function presenceIcon(present) {
-    return present
-      ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>'
-      : '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+  function presenceStateNumber(raw, present) {
+    if (raw !== 0 && raw !== 1 && raw !== 2 && raw !== '0' && raw !== '1' && raw !== '2') return null;
+    const state = Number(raw);
+    if (state === 0 && present === true) return 1;
+    return state;
+  }
+
+  function matPresenceState(mat) {
+    if (!mat) return 0;
+    const fromRow = presenceStateNumber(mat.presence_state, mat.present);
+    if (fromRow !== null) return fromRow;
+    const stored = readPresentMap()[mat.id];
+    if (stored === 1 || stored === 2) return stored;
+    if (typeof mat.present === 'boolean') return mat.present ? 1 : 0;
+    return 0;
+  }
+
+  function remotePresenceState(row) {
+    if (!row) return null;
+    const fromRow = presenceStateNumber(row.presence_state, row.present);
+    if (fromRow !== null) return fromRow;
+    if (typeof row.present !== 'boolean') return null;
+    if (!row.present) return 0;
+    if (matPresenceStateColumn === true) return 1;
+    const mat = allLogoMats.find(item => item.id === row.id);
+    if (mat && matPresenceState(mat) === 2) return 2;
+    return 1;
+  }
+
+  const PRESENCE_LABELS = {
+    0: 'Maty nie ma na miejscu',
+    1: 'Mata jest na miejscu',
+    2: 'Niezgodna ilość'
+  };
+
+  function presenceIcon(state) {
+    if (state === 1) {
+      return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+    }
+    if (state === 2) {
+      return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 9h14"/><path d="M5 15h14"/><path d="M8 19 16 5"/></svg>';
+    }
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+  }
+
+  function applyPresenceState(mat, state) {
+    if (!mat) return;
+    mat.presence_state = state;
+    mat.present = state !== 0;
+  }
+
+  function storePresenceState(id, state) {
+    const mat = allLogoMats.find(item => item.id === id);
+    const cached = filteredMatsCache.find(item => item.id === id);
+    applyPresenceState(mat, state);
+    if (cached && cached !== mat) applyPresenceState(cached, state);
+    const map = readPresentMap();
+    if (state === 0) delete map[id];
+    else map[id] = state;
+    writePresentMap(map);
+    paintMatPresence(id, state);
   }
 
   function decorateMatPresence(el, mat) {
-    const present = matIsPresent(mat);
-    el.classList.toggle('presence-here', present);
-    el.classList.toggle('presence-missing', !present);
+    const state = matPresenceState(mat);
+    el.classList.toggle('presence-here', state === 1);
+    el.classList.toggle('presence-missing', state === 0);
+    el.classList.toggle('presence-qty', state === 2);
+    el.dataset.presence = String(state);
     let slot = el.querySelector('.mat-presence-slot');
     if (!slot) {
       slot = document.createElement('div');
@@ -2949,48 +3022,62 @@ document.addEventListener("DOMContentLoaded", () => {
     btn.type = 'button';
     btn.className = 'mat-presence-toggle';
     btn.dataset.matId = mat.id;
-    btn.setAttribute('aria-pressed', present ? 'true' : 'false');
-    btn.setAttribute('aria-label', present ? 'Mata jest na miejscu' : 'Maty nie ma na miejscu');
-    btn.innerHTML = presenceIcon(present);
+    btn.setAttribute('aria-pressed', state === 1 ? 'true' : state === 2 ? 'mixed' : 'false');
+    btn.setAttribute('aria-label', PRESENCE_LABELS[state]);
+    btn.title = PRESENCE_LABELS[state];
+    btn.innerHTML = presenceIcon(state);
     slot.appendChild(btn);
   }
 
-  function paintMatPresence(id, present) {
+  function paintMatPresence(id, state) {
     const el = matsList.querySelector(`[data-mat-id="${id}"]`);
     if (!el) return;
-    el.classList.toggle('presence-here', present);
-    el.classList.toggle('presence-missing', !present);
+    el.classList.toggle('presence-here', state === 1);
+    el.classList.toggle('presence-missing', state === 0);
+    el.classList.toggle('presence-qty', state === 2);
+    el.dataset.presence = String(state);
     const btn = el.querySelector('.mat-presence-toggle');
     if (!btn) return;
-    btn.setAttribute('aria-pressed', present ? 'true' : 'false');
-    btn.setAttribute('aria-label', present ? 'Mata jest na miejscu' : 'Maty nie ma na miejscu');
-    btn.innerHTML = presenceIcon(present);
+    btn.setAttribute('aria-pressed', state === 1 ? 'true' : state === 2 ? 'mixed' : 'false');
+    btn.setAttribute('aria-label', PRESENCE_LABELS[state]);
+    btn.title = PRESENCE_LABELS[state];
+    btn.innerHTML = presenceIcon(state);
   }
 
   async function toggleMatPresence(id) {
     const mat = allLogoMats.find(item => item.id === id);
     if (!mat) return;
-    const next = !matIsPresent(mat);
+    const previous = matPresenceState(mat);
+    const next = (previous + 1) % 3;
     presencePending.add(id);
-    mat.present = next;
-    const map = readPresentMap();
-    if (next) map[id] = true;
-    else delete map[id];
-    localStorage.setItem(MAT_PRESENT_KEY, JSON.stringify(map));
-    paintMatPresence(id, next);
+    storePresenceState(id, next);
     try {
+      if (matPresenceStateColumn !== false) {
+        const { error } = await window.supabase.from('logo_mats').update({
+          presence_state: next,
+          present: next !== 0
+        }).eq('id', id);
+        if (!error) {
+          matPresenceStateColumn = true;
+          matPresentColumn = true;
+          return;
+        }
+        const missingState = error.code === '42703' || (error.message || '').includes('presence_state');
+        if (!missingState) {
+          storePresenceState(id, previous);
+          showToast('Nie udało się zapisać oznaczenia maty.', 'error');
+          return;
+        }
+        matPresenceStateColumn = false;
+      }
       if (matPresentColumn === false) return;
-      const { error } = await window.supabase.from('logo_mats').update({ present: next }).eq('id', id);
+      const { error } = await window.supabase.from('logo_mats').update({ present: next !== 0 }).eq('id', id);
       if (error) {
         if (error.code === '42703' || (error.message || '').includes('present')) {
           matPresentColumn = false;
           return;
         }
-        mat.present = !next;
-        if (next) delete map[id];
-        else map[id] = true;
-        localStorage.setItem(MAT_PRESENT_KEY, JSON.stringify(map));
-        paintMatPresence(id, !next);
+        storePresenceState(id, previous);
         showToast('Nie udało się zapisać oznaczenia maty.', 'error');
         return;
       }
@@ -6390,28 +6477,41 @@ document.addEventListener("DOMContentLoaded", () => {
       })
       .subscribe();
 
-    function applyRemotePresence(id, present) {
-      if (presencePending.has(id) || typeof present !== 'boolean') return;
+    function applyRemotePresence(id, state) {
+      if (presencePending.has(id) || (state !== 0 && state !== 1 && state !== 2)) return;
       const mat = allLogoMats.find(item => item.id === id);
       const cached = filteredMatsCache.find(item => item.id === id);
-      if (mat && mat.present === present && (!cached || cached.present === present)) return;
-      if (mat) mat.present = present;
-      if (cached) cached.present = present;
-      const map = readPresentMap();
-      if (present) map[id] = true;
-      else delete map[id];
-      localStorage.setItem(MAT_PRESENT_KEY, JSON.stringify(map));
-      paintMatPresence(id, present);
+      if (mat && matPresenceState(mat) === state && (!cached || matPresenceState(cached) === state)) return;
+      storePresenceState(id, state);
     }
 
     async function syncMatPresence() {
-      if (currentView !== 'mats' || matPresentColumn === false || !allLogoMats.length) return;
+      if (currentView !== 'mats' || !allLogoMats.length) return;
+      if (matPresenceStateColumn !== false) {
+        const { data, error } = await window.supabase.from('logo_mats').select('id,presence_state,present');
+        if (!error) {
+          matPresenceStateColumn = true;
+          (data || []).forEach(row => {
+            const state = remotePresenceState(row);
+            if (state !== null) applyRemotePresence(row.id, state);
+          });
+          return;
+        }
+        const missingState = error.code === '42703' || (error.message || '').includes('presence_state');
+        if (!missingState) return;
+        matPresenceStateColumn = false;
+      }
+      if (matPresentColumn === false) return;
       const { data, error } = await window.supabase.from('logo_mats').select('id,present');
       if (error) {
         if (error.code === '42703' || (error.message || '').includes('present')) matPresentColumn = false;
         return;
       }
-      (data || []).forEach(row => applyRemotePresence(row.id, row.present));
+      matPresentColumn = true;
+      (data || []).forEach(row => {
+        const state = remotePresenceState(row);
+        if (state !== null) applyRemotePresence(row.id, state);
+      });
     }
     setInterval(syncMatPresence, 3000);
 
@@ -6426,7 +6526,8 @@ document.addEventListener("DOMContentLoaded", () => {
         if (payload.eventType === 'UPDATE' && row && row.id) {
           const mat = allLogoMats.find(item => item.id === row.id);
           const structural = mat && ['name', 'mat_number', 'location', 'size', 'quantity'].some(key => row[key] !== undefined && row[key] !== mat[key]);
-          if (typeof row.present === 'boolean') applyRemotePresence(row.id, row.present);
+          const remoteState = remotePresenceState(row);
+          if (remoteState !== null) applyRemotePresence(row.id, remoteState);
           if (!structural && mat) return;
         }
         allLogoMats = [];
