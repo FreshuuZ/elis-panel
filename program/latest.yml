@@ -1,8 +1,8 @@
-version: 1.0.6
+version: 1.0.7
 files:
   - url: Elis-ServiceHub-Setup.exe
-    sha512: fbzDA6lKzW3BK6FrVCFkMNKLhHHGfvX0fEPr7jsL1Wa5t295jw4pGe8Lls54QtuiRnaaxXOesSGBSsS2ug5ysA==
-    size: 102382960
+    sha512: FSBZn8zyTdhnTxR0TpzfHh6IQBm7mAxm17LS0enrcAB2J/OYQpn1u7vHpfGqr6g6hrJpKrmP66eBjAxx/IelNw==
+    size: 102383191
 path: Elis-ServiceHub-Setup.exe
-sha512: fbzDA6lKzW3BK6FrVCFkMNKLhHHGfvX0fEPr7jsL1Wa5t295jw4pGe8Lls54QtuiRnaaxXOesSGBSsS2ug5ysA==
-releaseDate: '2026-10-30T10:17:42.768Z'
+sha512: FSBZn8zyTdhnTxR0TpzfHh6IQBm7mAxm17LS0enrcAB2J/OYQpn1u7vHpfGqr6g6hrJpKrmP66eBjAxx/IelNw==
+releaseDate: '2026-10-30T23:03:51.139Z'
