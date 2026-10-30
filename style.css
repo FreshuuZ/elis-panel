@@ -6622,27 +6622,142 @@ body.elis-desktop #reportsTileBadge {
   gap: 8px;
 }
 
-.report-ticket {
-  width: min(760px, 100%);
-  max-height: min(920px, 92vh);
+.modal-content.report-ticket {
+  width: min(860px, 100%);
+  max-width: 860px;
+  height: calc(100vh - 24px);
+  max-height: calc(100vh - 24px);
   overflow: hidden;
+  padding: 16px 16px 12px;
+  gap: 10px;
 }
-.report-ticket h3,
-.report-ticket .report-detail-body,
-.report-ticket .report-detail-actions,
-.report-ticket .modal-actions { flex: 0 0 auto; }
-.report-ticket .report-detail-image img { max-height: 120px; }
+.report-ticket-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+.report-ticket-head h3 {
+  margin: 0;
+  text-align: left;
+  font-size: 1.25rem;
+}
+.report-ticket-x,
+.report-photo-close {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-body);
+  color: var(--text);
+  font-size: 1.7rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.report-ticket-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.report-ticket-foot {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--border-color);
+  padding-top: 10px;
+}
+.report-ticket .modal-actions { margin-top: 0; }
+.report-ticket .modal-actions button { padding: 10px; }
+.report-photo-open {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+}
+.report-photo-open img {
+  width: 72px;
+  height: 56px;
+  max-height: 56px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-body);
+  flex: 0 0 72px;
+}
+.report-photo-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 11000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 64px 16px 16px;
+  background: rgba(0, 0, 0, 0.86);
+}
+.report-photo-lightbox[hidden] { display: none !important; }
+.report-photo-lightbox img {
+  max-width: min(1100px, 100%);
+  max-height: calc(100vh - 96px);
+  object-fit: contain;
+  border-radius: 12px;
+  background: #111;
+}
+.report-photo-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: #fff;
+  color: #111;
+}
 .report-chat-log {
   display: flex;
   flex-direction: column;
   gap: 8px;
   flex: 1 1 auto;
-  min-height: 120px;
+  min-height: 140px;
   overflow-y: auto;
-  margin-top: 4px;
+  margin: 0;
   padding: 12px;
   border-radius: 12px;
   background: color-mix(in srgb, var(--text) 4%, var(--bg-body));
+}
+.report-ticket .report-detail-body {
+  gap: 6px;
+  flex: 0 1 auto;
+  max-height: 112px;
+  overflow-y: auto;
+}
+.report-ticket .report-detail-row { padding: 4px 0; }
+.report-ticket .report-role-hint { margin: 0; line-height: 1.3; }
+.report-ticket .report-office-head { margin-bottom: 6px; }
+.report-ticket .report-office-box {
+  margin: 0;
+  padding: 8px;
+}
+.report-ticket .report-office-box .quick-action-btn {
+  min-height: 42px;
+  padding: 8px 10px;
+}
+.report-ticket .report-office-box .btn-primary {
+  min-height: 42px;
+  margin-top: 8px;
+  padding: 8px 12px;
 }
 
 .report-chat-note,
@@ -6761,7 +6876,8 @@ body.elis-desktop #reportsTileBadge {
   flex: 1 1 auto;
   width: auto;
   min-width: 0;
-  min-height: 44px;
+  min-height: 64px;
+  max-height: 140px;
 }
 
 .report-chat-compose .btn-primary {

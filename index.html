@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Elis ServiceHub — Centrum Główne</title>
-  <link rel="stylesheet" href="style.css?v=61">
+  <link rel="stylesheet" href="style.css?v=68">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0d1117">
   <meta name="mobile-web-app-capable" content="yes">
@@ -1202,20 +1202,20 @@
   <!-- ==================== MODAL: SZCZEGÓŁY ZGŁOSZENIA ==================== -->
   <div id="reportDetailModal" class="modal">
     <div class="modal-content large report-ticket">
-      <h3 id="reportDetailTitle">Szczegóły zgłoszenia</h3>
-      <div id="reportDetailBody" class="report-detail-body"></div>
-      <div id="reportChatLog" class="report-chat-log"></div>
-      
-      <div id="reportDetailActions" class="report-detail-actions">
-        <p id="reportRoleHint" class="report-role-hint"></p>
-        <div class="report-chat-compose">
-          <textarea id="reportResponseText" class="form-textarea" placeholder="Napisz wiadomość..." rows="2"></textarea>
-          <button id="reportChatSend" class="btn-primary" type="button">Wyślij</button>
-        </div>
+      <div class="report-ticket-head">
+        <h3 id="reportDetailTitle">Szczegóły zgłoszenia</h3>
+        <button id="reportDetailDismiss" class="report-ticket-x" type="button" aria-label="Zamknij szczegóły">×</button>
+      </div>
+      <div id="reportTicketScroll" class="report-ticket-scroll">
+        <div id="reportDetailBody" class="report-detail-body"></div>
+        <div id="reportChatLog" class="report-chat-log"></div>
+        <div id="reportDetailResolved" class="report-resolved-info" style="display: none;"></div>
+      </div>
+      <div class="report-ticket-foot">
         <div id="reportOfficeBox" class="report-office-box">
           <div class="report-office-head">
             <strong>Rozwiązanie</strong>
-            <span>Opcjonalne. Zgłoszenie można zamknąć także bez wyboru.</span>
+            <span>Można zamknąć też bez wyboru.</span>
           </div>
           <div class="quick-actions">
             <button class="quick-action-btn" data-action="repair" type="button">Naprawa</button>
@@ -1223,17 +1223,23 @@
             <button class="quick-action-btn" data-action="replace_set" type="button">Wymiana kompletu</button>
             <button class="quick-action-btn" data-action="over_quantity_ok" type="button">Nad stan</button>
           </div>
-          <button id="reportResolveBtn" class="btn-primary" type="button">Zamknij i przenieś do sprawdzonych</button>
+          <button id="reportResolveBtn" class="btn-primary" type="button">Do sprawdzonych</button>
+        </div>
+        <p id="reportRoleHint" class="report-role-hint"></p>
+        <div id="reportChatCompose" class="report-chat-compose">
+          <textarea id="reportResponseText" class="form-textarea" placeholder="Napisz wiadomość..." rows="3"></textarea>
+          <button id="reportChatSend" class="btn-primary" type="button">Wyślij</button>
+        </div>
+        <div class="modal-actions">
+          <button id="reportDetailDelete" class="btn-secondary" style="flex: 1; background: #ff4b4b; color: white;">Usuń trwale</button>
+          <button id="reportDetailClose" class="btn-secondary" style="flex: 1;">Zamknij</button>
         </div>
       </div>
-
-      <div id="reportDetailResolved" class="report-resolved-info" style="display: none;"></div>
-
-      <div class="modal-actions">
-        <button id="reportDetailDelete" class="btn-secondary" style="flex: 1; background: #ff4b4b; color: white;">Usuń trwale</button>
-        <button id="reportDetailClose" class="btn-secondary" style="flex: 1;">Zamknij</button>
-      </div>
     </div>
+  </div>
+  <div id="reportPhotoLightbox" class="report-photo-lightbox" hidden>
+    <button id="reportPhotoClose" class="report-photo-close" type="button" aria-label="Zamknij zdjęcie">×</button>
+    <img id="reportPhotoFull" alt="Powiększone zdjęcie">
   </div>
 
   <div id="customListFormModal" class="modal">
@@ -1760,7 +1766,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script src="logoData.js?v=33"></script>
   <script src="locationFormat.js?v=1"></script>
-  <script src="script.js?v=68"></script>
+  <script src="script.js?v=70"></script>
 </body>
 
 </html>

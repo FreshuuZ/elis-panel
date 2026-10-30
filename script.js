@@ -6626,17 +6626,9 @@ document.addEventListener("DOMContentLoaded", () => {
         if (window.elisDesktop && window.elisDesktop.setReportAlert) {
           const badge = document.getElementById('reportsUnansweredBadge');
           const count = badge && badge.style.display !== 'none' ? Number(badge.textContent) || 1 : 1;
-          window.elisDesktop.setReportAlert({ count, flash: true, notify: true, body: reportBody });
-        } else if ("Notification" in window && Notification.permission === "granted") {
-          const notif = new Notification("Nowe zgłoszenie", {
-            body: incoming.mat_name ? "Nowa mata: " + incoming.mat_name : "W systemie pojawiło się nowe zgłoszenie.",
-            icon: "icons/icon-192.png"
-          });
-          notif.onclick = () => {
-            window.focus();
-            navigateTo('reports');
-          };
+          window.elisDesktop.setReportAlert({ count, flash: true });
         }
+        showPanelNotification(reportBody);
 
         if (document.hidden && !isTitleBlinking) {
           isTitleBlinking = true;
@@ -6734,7 +6726,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const reportDetailModal = document.getElementById('reportDetailModal');
   const reportDetailBody = document.getElementById('reportDetailBody');
-  const reportDetailActions = document.getElementById('reportDetailActions');
   const reportDetailResolved = document.getElementById('reportDetailResolved');
   const reportDetailClose = document.getElementById('reportDetailClose');
   const reportResponseText = document.getElementById('reportResponseText');
@@ -7269,6 +7260,43 @@ document.addEventListener("DOMContentLoaded", () => {
     return !!(thread.creator && thread.creator === getDeviceId());
   }
 
+  const reportChatCompose = document.getElementById('reportChatCompose');
+  const reportPhotoLightbox = document.getElementById('reportPhotoLightbox');
+  const reportPhotoFull = document.getElementById('reportPhotoFull');
+
+  function openReportPhoto(url) {
+    if (!reportPhotoLightbox || !reportPhotoFull || !url) return;
+    reportPhotoFull.src = url;
+    reportPhotoLightbox.hidden = false;
+  }
+
+  function closeReportPhoto() {
+    if (reportPhotoLightbox) reportPhotoLightbox.hidden = true;
+    if (reportPhotoFull) reportPhotoFull.removeAttribute('src');
+  }
+
+  async function showPanelNotification(body) {
+    if (!('Notification' in window)) return;
+    let permission = Notification.permission;
+    if (permission === 'default' && window.elisDesktop) {
+      try { permission = await Notification.requestPermission(); }
+      catch { return; }
+    }
+    if (permission !== 'granted') return;
+    try {
+      const notif = new Notification('Nowe zgłoszenie', {
+        body: body || 'W systemie pojawiło się nowe zgłoszenie.',
+        icon: 'icons/icon-192.png'
+      });
+      notif.onclick = () => {
+        window.focus();
+        navigateTo('reports');
+      };
+    } catch (err) {
+      console.error('Nie udało się pokazać powiadomienia', err);
+    }
+  }
+
   function renderReportDetail(report) {
     if (!report) return;
     currentlyViewedReportId = report.id;
@@ -7293,10 +7321,10 @@ document.addEventListener("DOMContentLoaded", () => {
     `;
     if (report.attachment_url) {
       html += `
-        <div class="report-detail-label" style="margin-top: 12px; margin-bottom: 4px;">Załączone zdjęcie</div>
-        <div class="report-detail-image">
-          <img src="${report.attachment_url}" alt="Załącznik">
-        </div>
+        <button type="button" class="report-photo-open" data-full="${escapeHtml(report.attachment_url)}">
+          <img src="${escapeHtml(report.attachment_url)}" alt="Załącznik">
+          <span>Powiększ zdjęcie</span>
+        </button>
       `;
     }
     reportDetailBody.innerHTML = html;
@@ -7325,13 +7353,14 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     const reporter = viewerIsReporter(thread);
-    reportDetailActions.style.display = pending ? 'block' : 'none';
+    if (reportChatCompose) reportChatCompose.style.display = pending ? 'flex' : 'none';
     if (reportRoleHint) {
+      reportRoleHint.style.display = pending ? 'block' : 'none';
       reportRoleHint.textContent = !pending
         ? ''
         : reporter
-          ? 'Piszesz jako zgłaszający. Biuro może odpisać, wskazać rozwiązanie i zamknąć zgłoszenie.'
-          : 'Piszesz jako odpowiadający. Możesz dopisać wiadomość, wskazać rozwiązanie i zamknąć zgłoszenie.';
+          ? 'Piszesz jako zgłaszający.'
+          : 'Piszesz jako odpowiadający. Możesz zamknąć zgłoszenie.';
     }
     if (reportOfficeBox) reportOfficeBox.style.display = pending && !reporter ? 'block' : 'none';
     quickActionBtns.forEach(btn => btn.classList.toggle('selected', btn.dataset.action === selectedResolution));
@@ -7378,8 +7407,36 @@ document.addEventListener("DOMContentLoaded", () => {
     openModal(reportDetailModal);
   });
 
-  reportDetailClose?.addEventListener('click', () => {
+  function closeReportDetail() {
+    closeReportPhoto();
     closeModal(reportDetailModal);
+  }
+
+  reportDetailClose?.addEventListener('click', closeReportDetail);
+  document.getElementById('reportDetailDismiss')?.addEventListener('click', closeReportDetail);
+  reportDetailModal?.addEventListener('click', (e) => {
+    if (e.target === reportDetailModal) closeReportDetail();
+  });
+  reportDetailBody?.addEventListener('click', (e) => {
+    const opener = e.target.closest('.report-photo-open');
+    if (!opener) return;
+    openReportPhoto(opener.dataset.full || opener.querySelector('img')?.src);
+  });
+  document.getElementById('reportPhotoClose')?.addEventListener('click', closeReportPhoto);
+  reportPhotoLightbox?.addEventListener('click', (e) => {
+    if (e.target === reportPhotoLightbox) closeReportPhoto();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (reportPhotoLightbox && !reportPhotoLightbox.hidden) {
+      closeReportPhoto();
+      return;
+    }
+    if (reportDeleteConfirmModal && reportDeleteConfirmModal.style.display === 'flex') {
+      closeModal(reportDeleteConfirmModal);
+      return;
+    }
+    if (reportDetailModal && reportDetailModal.style.display === 'flex') closeReportDetail();
   });
 
   const reportDetailDelete = document.getElementById('reportDetailDelete');
