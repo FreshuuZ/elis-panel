@@ -2767,8 +2767,8 @@ document.addEventListener("DOMContentLoaded", () => {
   /**
    * Wykonuje faktyczne renderowanie
    */
-  const MAT_ROW_HEIGHT = 112;
-  const MAT_ROW_HEIGHT_ADMIN = 164;
+  const MAT_ROW_HEIGHT = 200;
+  const MAT_ROW_HEIGHT_ADMIN = 228;
   const MAT_ROW_GAP = 12;
   function matRowStride() {
     return (document.body.classList.contains('is-admin') ? MAT_ROW_HEIGHT_ADMIN : MAT_ROW_HEIGHT) + MAT_ROW_GAP;
@@ -6599,6 +6599,7 @@ document.addEventListener("DOMContentLoaded", () => {
         table: 'reports' 
       }, async (payload) => {
         const incoming = payload.new || {};
+        const previousReport = allReports.find(item => item.id === incoming.id) || null;
         const fromThisDevice = reportCreatorId(incoming) === getDeviceId();
         const isNewFromSomeoneElse = payload.eventType === 'INSERT' && !fromThisDevice;
         if (currentView === 'reports' || (reportDetailModal && reportDetailModal.style.display === 'flex')) {
@@ -6606,14 +6607,12 @@ document.addEventListener("DOMContentLoaded", () => {
         } else {
           await refreshReportAlerts(isNewFromSomeoneElse);
         }
+        if (payload.eventType === 'UPDATE') notifyReportReply(previousReport, incoming);
         if (!isNewFromSomeoneElse) return;
 
-        if (window.elisDesktop && window.elisDesktop.setReportAlert) {
-          const badge = document.getElementById('reportsUnansweredBadge');
-          const count = badge && badge.style.display !== 'none' ? Number(badge.textContent) || 1 : 1;
-          window.elisDesktop.setReportAlert({ count, flash: true });
-        }
-        showReportNotice(reportNoticeText(incoming));
+        const badge = document.getElementById('reportsUnansweredBadge');
+        const count = badge && badge.style.display !== 'none' ? Number(badge.textContent) || 1 : 1;
+        showWindowsReportNotice('Nowe zgłoszenie', reportNoticeText(incoming), { flash: true, count });
       })
       .subscribe();
       
@@ -7221,28 +7220,49 @@ document.addEventListener("DOMContentLoaded", () => {
     if (reportPhotoFull) reportPhotoFull.removeAttribute('src');
   }
 
-  let pendingReportNotice = '';
+  function reportProblemLabel(type) {
+    if (type === 'damaged') return 'Zniszczona';
+    if (type === 'over_quantity') return 'Nad stan';
+    return 'Zgłoszenie';
+  }
   function reportNoticeText(report) {
     const mat = report && report.mat_name ? report.mat_name : 'Bez nazwy';
-    let problem = 'Zgłoszenie';
-    if (report && report.report_type === 'damaged') problem = 'Zniszczona';
-    else if (report && report.report_type === 'over_quantity') problem = 'Nad stan';
-    return 'Nowe zgłoszenie · ' + mat + ' · ' + problem;
+    return mat + ' · ' + reportProblemLabel(report && report.report_type);
   }
-  function showReportNotice(text) {
-    if (document.hidden) {
-      pendingReportNotice = text;
+  function showWindowsReportNotice(title, body, options) {
+    const flash = !!(options && options.flash);
+    if (window.elisDesktop && window.elisDesktop.setReportAlert) {
+      const badge = document.getElementById('reportsUnansweredBadge');
+      const badgeCount = badge && badge.style.display !== 'none' ? Number(badge.textContent) || 0 : 0;
+      const count = options && typeof options.count === 'number' ? options.count : badgeCount;
+      window.elisDesktop.setReportAlert({ count, flash, notify: true, title, body });
       return;
     }
-    pendingReportNotice = '';
-    showToast(text, 'notice');
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    try {
+      const note = new Notification(title, { body });
+      note.onclick = () => {
+        window.focus();
+        navigateTo('reports');
+      };
+    } catch (err) {}
   }
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden || !pendingReportNotice) return;
-    const text = pendingReportNotice;
-    pendingReportNotice = '';
-    showToast(text, 'notice');
-  });
+  function notifyReportReply(previous, incoming) {
+    if (!previous || !incoming) return;
+    const thread = parseReportThread(incoming);
+    if (!viewerIsReporter(thread)) return;
+    const seen = new Set(parseReportThread(previous).messages.map(message => message.id));
+    const added = thread.messages.filter(message => {
+      if (!message || !message.id || seen.has(message.id)) return false;
+      if (!message.device || message.device === getDeviceId()) return false;
+      if (message.kind === 'decision' || message.kind === 'closed') return false;
+      return !!(message.text && String(message.text).trim());
+    });
+    if (!added.length) return;
+    const snippet = String(added[added.length - 1].text).replace(/\s+/g, ' ').trim().slice(0, 80);
+    const mat = incoming.mat_name || 'Bez nazwy';
+    showWindowsReportNotice('Wiadomość w zgłoszeniu', 'Wiadomość · ' + mat + ' · ' + snippet);
+  }
 
   function renderReportDetail(report) {
     if (!report) return;
@@ -7254,7 +7274,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let photo = '';
     if (report.attachment_url) {
-      photo = `<button type="button" class="report-photo-open" data-full="${escapeHtml(report.attachment_url)}" aria-label="Powiększ zdjęcie"><img src="${escapeHtml(report.attachment_url)}" alt=""></button>`;
+      photo = `<button type="button" class="report-photo-open" data-full="${escapeHtml(report.attachment_url)}" aria-label="Kliknij, aby powiększyć"><img src="${escapeHtml(report.attachment_url)}" alt=""><span>Kliknij, aby powiększyć</span></button>`;
     }
     reportDetailBody.innerHTML = `
       <div class="report-summary-name">${escapeHtml(report.mat_name || '—')}</div>
