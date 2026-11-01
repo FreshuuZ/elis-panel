@@ -815,21 +815,6 @@ document.addEventListener("DOMContentLoaded", () => {
       isTitleBlinking = false;
       document.title = originalDocumentTitle;
 
-
-      // Odśwież UI przycisku powiadomień 
-      const notifBtnText = document.getElementById('toggleNotificationsText');
-      if (notifBtnText && "Notification" in window) {
-          if (Notification.permission === 'granted') {
-              notifBtnText.textContent = 'Powiadomienia (wł.)';
-              document.getElementById('notifIconOff').style.display = 'none';
-              document.getElementById('notifIconOn').style.display = 'inline-block';
-          } else {
-              notifBtnText.textContent = 'Włącz powiadomienia';
-              document.getElementById('notifIconOff').style.display = 'inline-block';
-              document.getElementById('notifIconOn').style.display = 'none';
-          }
-      }
-
       (async () => {
           await fetchReports();
       })();
@@ -1147,12 +1132,13 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   
   // ==================== TOAST ====================
+  let toastTimer = 0;
   function showToast(message, type = "success") {
     const toast = document.getElementById("toast");
     toast.textContent = message;
-    toast.className = `toast ${type}`;
-    toast.classList.add("show");
-    setTimeout(() => toast.classList.remove("show"), 3000);
+    toast.className = `toast ${type} show`;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove("show"), type === "notice" ? 6500 : 3000);
   }
   
     // ==================== PDF GENERATOR ====================
@@ -6622,31 +6608,18 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         if (!isNewFromSomeoneElse) return;
 
-        const reportBody = incoming.mat_name ? "Nowa mata: " + incoming.mat_name : "W systemie pojawiło się nowe zgłoszenie.";
         if (window.elisDesktop && window.elisDesktop.setReportAlert) {
           const badge = document.getElementById('reportsUnansweredBadge');
           const count = badge && badge.style.display !== 'none' ? Number(badge.textContent) || 1 : 1;
           window.elisDesktop.setReportAlert({ count, flash: true });
         }
-        showPanelNotification(reportBody);
-
-        if (document.hidden && !isTitleBlinking) {
-          isTitleBlinking = true;
-          let titleState = false;
-          titleBlinkInterval = setInterval(() => {
-            document.title = titleState ? "🔔 Nowe zgłoszenie!" : originalDocumentTitle;
-            titleState = !titleState;
-          }, 1000);
-        }
+        showReportNotice(reportNoticeText(incoming));
       })
       .subscribe();
       
       window.reportsChannel = reportsChannel;
 
     initPalletSystem();
-    if (window.elisDesktop && "Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission();
-    }
     refreshReportAlerts(false);
     navigateTo('home');
   }
@@ -6666,42 +6639,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const reportsSearch = document.getElementById('reportsSearch');
   const reportsList = document.getElementById('reportsList');
   const reportsPendingCount = document.getElementById('reportsPendingCount');
-  
-  // Zmienne do przycisku powiadomień
-  const toggleNotificationsBtn = document.getElementById('toggleNotificationsBtn');
-  
-  if (toggleNotificationsBtn) {
-      toggleNotificationsBtn.addEventListener('click', async () => {
-          if (!("Notification" in window)) {
-             alert(window.elisDesktop
-               ? "Ten program nie może pokazać powiadomień systemowych."
-               : "Twoja przeglądarka nie obsługuje powiadomień.");
-             return;
-          }
-          if (Notification.permission === 'default' || Notification.permission === 'denied') {
-              const perm = await Notification.requestPermission();
-              // Aktualizuj UI na podstawie odpowiedzi
-              const notifBtnText = document.getElementById('toggleNotificationsText');
-              if (perm === 'granted') {
-                  if(notifBtnText) notifBtnText.textContent = 'Powiadomienia (wł.)';
-                  document.getElementById('notifIconOff').style.display = 'none';
-                  document.getElementById('notifIconOn').style.display = 'inline-block';
-                  new Notification('Elis ServiceHub', { body: 'Powiadomienia pomyślnie uruchomione!', icon: 'icons/icon-192.png' });
-              } else {
-                  alert(window.elisDesktop
-                    ? "Powiadomienia zablokowane w ustawieniach Windows."
-                    : "Powiadomienia zablokowane. Kliknij w kłódkę obok pola adresu strony, by zezwolić na powiadomienia ręcznie.");
-              }
-          } else {
-              alert("Masz już włączone powiadomienia! Jeśli nie pojawiają się w rogu ekranu sprawdź, czy w systemie Windows/Android nie masz włączonej opcji 'Nie przeszkadzać'.");
-          }
-      });
-  }
   const reportsResolvedCount = document.getElementById('reportsResolvedCount');
   const newReportBtn = document.getElementById('newReportBtn');
   const reportsTabs = document.querySelectorAll('.reports-tab');
-  const reportsDeleteOldContainer = document.getElementById('reportsDeleteOldContainer');
-  const reportsDeleteOldBtn = document.getElementById('reportsDeleteOldBtn');
+  const reportsArchiveNote = document.getElementById('reportsArchiveNote');
 
   const reportsDeleteOldModal = document.getElementById('reportsDeleteOldModal');
   const reportsDeleteOldCancel = document.getElementById('reportsDeleteOldCancel');
@@ -6841,6 +6782,20 @@ document.addEventListener("DOMContentLoaded", () => {
     return parseReportThread(report).creator;
   }
 
+  let reportsPurgedAt = 0;
+  async function purgeArchivedReports() {
+    const now = Date.now();
+    if (now - reportsPurgedAt < 60 * 60 * 1000) return;
+    reportsPurgedAt = now;
+    const cutoff = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
+    try {
+      await window.supabase.from('reports').delete().eq('status', 'resolved').lt('resolved_at', cutoff);
+      await window.supabase.from('reports').delete().eq('status', 'resolved').is('resolved_at', null).lt('created_at', cutoff);
+    } catch (err) {
+      reportsPurgedAt = 0;
+    }
+  }
+
   // Pobieranie zgłoszeń z Supabase
   async function fetchReports(options) {
     const silent = options && options.silent;
@@ -6849,6 +6804,7 @@ document.addEventListener("DOMContentLoaded", () => {
       hideReportsLoadMore();
     }
     try {
+      await purgeArchivedReports();
       const { data, error } = await window.supabase
         .from('reports')
         .select('*')
@@ -6905,7 +6861,7 @@ document.addEventListener("DOMContentLoaded", () => {
     hideReportsLoadMore();
 
     if (filteredReportsCache.length === 0) {
-      const typeText = currentReportTab === 'pending' ? 'oczekujących' : 'sprawdzonych';
+      const typeText = currentReportTab === 'pending' ? 'oczekujących' : 'w archiwum';
       reportsList.innerHTML = `<div class="empty-state"><div class="empty-state-text">Brak ${typeText} zgłoszeń.</div></div>`;
       return;
     }
@@ -7025,11 +6981,7 @@ document.addEventListener("DOMContentLoaded", () => {
       tab.classList.add('active');
       currentReportTab = tab.dataset.tab;
       
-      if (currentReportTab === 'resolved') {
-        reportsDeleteOldContainer.style.display = 'flex';
-      } else {
-        reportsDeleteOldContainer.style.display = 'none';
-      }
+      if (reportsArchiveNote) reportsArchiveNote.style.display = currentReportTab === 'resolved' ? 'block' : 'none';
       
       renderReports();
     });
@@ -7039,11 +6991,6 @@ document.addEventListener("DOMContentLoaded", () => {
     renderReports(e.target.value);
   });
 
-  // Usuwanie starych zgłoszeń (> 24h)
-  reportsDeleteOldBtn?.addEventListener('click', () => {
-    openModal(reportsDeleteOldModal);
-  });
-
   reportsDeleteOldCancel?.addEventListener('click', () => {
     closeModal(reportsDeleteOldModal);
   });
@@ -7051,7 +6998,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let selectedReportType = 'over_quantity';
 
   reportsDeleteOldConfirm?.addEventListener('click', async () => {
-    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const twentyFourHoursAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     
     const origText = reportsDeleteOldConfirm.innerText;
     reportsDeleteOldConfirm.innerText = 'Usuwanie...';
@@ -7253,7 +7200,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const reportChatLog = document.getElementById('reportChatLog');
   const reportChatSend = document.getElementById('reportChatSend');
   const reportOfficeBox = document.getElementById('reportOfficeBox');
-  const reportRoleHint = document.getElementById('reportRoleHint');
   let selectedResolution = null;
 
   function viewerIsReporter(thread) {
@@ -7275,27 +7221,28 @@ document.addEventListener("DOMContentLoaded", () => {
     if (reportPhotoFull) reportPhotoFull.removeAttribute('src');
   }
 
-  async function showPanelNotification(body) {
-    if (!('Notification' in window)) return;
-    let permission = Notification.permission;
-    if (permission === 'default' && window.elisDesktop) {
-      try { permission = await Notification.requestPermission(); }
-      catch { return; }
-    }
-    if (permission !== 'granted') return;
-    try {
-      const notif = new Notification('Nowe zgłoszenie', {
-        body: body || 'W systemie pojawiło się nowe zgłoszenie.',
-        icon: 'icons/icon-192.png'
-      });
-      notif.onclick = () => {
-        window.focus();
-        navigateTo('reports');
-      };
-    } catch (err) {
-      console.error('Nie udało się pokazać powiadomienia', err);
-    }
+  let pendingReportNotice = '';
+  function reportNoticeText(report) {
+    const mat = report && report.mat_name ? report.mat_name : 'Bez nazwy';
+    let problem = 'Zgłoszenie';
+    if (report && report.report_type === 'damaged') problem = 'Zniszczona';
+    else if (report && report.report_type === 'over_quantity') problem = 'Nad stan';
+    return 'Nowe zgłoszenie · ' + mat + ' · ' + problem;
   }
+  function showReportNotice(text) {
+    if (document.hidden) {
+      pendingReportNotice = text;
+      return;
+    }
+    pendingReportNotice = '';
+    showToast(text, 'notice');
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden || !pendingReportNotice) return;
+    const text = pendingReportNotice;
+    pendingReportNotice = '';
+    showToast(text, 'notice');
+  });
 
   function renderReportDetail(report) {
     if (!report) return;
@@ -7305,29 +7252,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const pending = report.status !== 'resolved';
     const decision = [...thread.messages].reverse().find(message => message.kind === 'decision');
 
-    let html = `
-      <div class="report-detail-row">
-        <span class="report-detail-label">Mata</span>
-        <span class="report-detail-value">${escapeHtml(report.mat_name)}</span>
-      </div>
-      <div class="report-detail-row">
-        <span class="report-detail-label">Data zgłoszenia</span>
-        <span class="report-detail-value" style="font-weight: 500;">${dateStr}</span>
-      </div>
-      <div class="report-detail-row" style="border-bottom: none; padding-bottom: 0;">
-        <span class="report-detail-label">Typ zgłoszenia</span>
-      </div>
-      <div style="margin-bottom: 8px;">${getReportBadgeHtml(report.report_type)}</div>
-    `;
+    let photo = '';
     if (report.attachment_url) {
-      html += `
-        <button type="button" class="report-photo-open" data-full="${escapeHtml(report.attachment_url)}">
-          <img src="${escapeHtml(report.attachment_url)}" alt="Załącznik">
-          <span>Powiększ zdjęcie</span>
-        </button>
-      `;
+      photo = `<button type="button" class="report-photo-open" data-full="${escapeHtml(report.attachment_url)}" aria-label="Powiększ zdjęcie"><img src="${escapeHtml(report.attachment_url)}" alt=""></button>`;
     }
-    reportDetailBody.innerHTML = html;
+    reportDetailBody.innerHTML = `
+      <div class="report-summary-name">${escapeHtml(report.mat_name || '—')}</div>
+      <div class="report-summary-meta">${getReportBadgeHtml(report.report_type)}<span class="report-summary-date">${dateStr}</span>${photo}</div>
+    `;
 
     let chat = '';
     if (report.description) {
@@ -7340,13 +7272,13 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
       if (message.kind === 'closed') {
-        chat += `<p class="report-chat-closed">Zamknięte i przeniesione do sprawdzonych <time>${time}</time></p>`;
+        chat += `<p class="report-chat-closed">Zgłoszenie zamknięte <time>${time}</time></p>`;
         return;
       }
       const fromReporter = !!(thread.creator && message.device === thread.creator);
       chat += `<article class="report-chat-msg ${fromReporter ? 'is-reporter' : 'is-office'}"><header><strong>${escapeHtml(messageRole(thread, message.device))}</strong><time>${time}</time></header><p>${escapeHtml(message.text || '')}</p></article>`;
     });
-    if (!chat) chat = '<p class="report-chat-empty">Napisz wiadomość. Osoba odpowiadająca może też zamknąć zgłoszenie.</p>';
+    if (!chat) chat = '<p class="report-chat-empty">Napisz wiadomość albo zamknij zgłoszenie.</p>';
     reportChatLog.innerHTML = chat;
     requestAnimationFrame(() => {
       reportChatLog.scrollTop = reportChatLog.scrollHeight;
@@ -7354,20 +7286,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const reporter = viewerIsReporter(thread);
     if (reportChatCompose) reportChatCompose.style.display = pending ? 'flex' : 'none';
-    if (reportRoleHint) {
-      reportRoleHint.style.display = pending ? 'block' : 'none';
-      reportRoleHint.textContent = !pending
-        ? ''
-        : reporter
-          ? 'Piszesz jako zgłaszający.'
-          : 'Piszesz jako odpowiadający. Możesz zamknąć zgłoszenie.';
-    }
+    if (reportResolveBtn) reportResolveBtn.style.display = pending ? '' : 'none';
     if (reportOfficeBox) reportOfficeBox.style.display = pending && !reporter ? 'block' : 'none';
     quickActionBtns.forEach(btn => btn.classList.toggle('selected', btn.dataset.action === selectedResolution));
     if (report.status === 'resolved') {
       const resDate = report.resolved_at ? new Date(report.resolved_at).toLocaleString('pl-PL') : '';
       reportDetailResolved.style.display = 'block';
-      reportDetailResolved.innerHTML = `<h4>Zgłoszenie zamknięte${decision ? ': ' + escapeHtml(decisionLabel(decision.action)) : ''}</h4><p style="font-size: 0.8rem; margin-top: 8px; color: var(--muted);">Sprawdzono: ${resDate}</p>`;
+      reportDetailResolved.innerHTML = `<h4>Zgłoszenie zamknięte${decision ? ': ' + escapeHtml(decisionLabel(decision.action)) : ''}</h4><p style="font-size: 0.8rem; margin-top: 8px; color: var(--muted);">W archiwum od: ${resDate}. Znika po 7 dniach.</p>`;
       document.getElementById('reportDetailDelete').style.display = 'block';
     } else {
       reportDetailResolved.style.display = 'none';
@@ -7405,11 +7330,36 @@ document.addEventListener("DOMContentLoaded", () => {
     reportResponseText.value = '';
     renderReportDetail(report);
     openModal(reportDetailModal);
+    fitReportTicket();
   });
+
+  function fitReportTicket() {
+    const ticket = reportDetailModal && reportDetailModal.querySelector('.report-ticket');
+    if (!ticket || !reportDetailModal) return;
+    if (reportDetailModal.style.display !== 'flex') {
+      ticket.style.height = '';
+      ticket.style.maxHeight = '';
+      ticket.style.marginTop = '';
+      return;
+    }
+    const vv = window.visualViewport;
+    const viewHeight = vv ? vv.height : window.innerHeight;
+    const offset = vv ? vv.offsetTop : 0;
+    const height = Math.max(240, Math.round(viewHeight - 12));
+    ticket.style.height = height + 'px';
+    ticket.style.maxHeight = height + 'px';
+    ticket.style.marginTop = Math.max(0, Math.round(offset)) + 'px';
+  }
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', fitReportTicket);
+    window.visualViewport.addEventListener('scroll', fitReportTicket);
+  }
+  window.addEventListener('resize', fitReportTicket);
 
   function closeReportDetail() {
     closeReportPhoto();
     closeModal(reportDetailModal);
+    fitReportTicket();
   }
 
   reportDetailClose?.addEventListener('click', closeReportDetail);
@@ -7518,8 +7468,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   reportResolveBtn?.addEventListener('click', async () => {
     if (!currentlyViewedReportId) return;
-    const report = allReports.find(item => item.id === currentlyViewedReportId);
-    if (report && viewerIsReporter(parseReportThread(report))) return;
 
     const origText = reportResolveBtn.innerText;
     reportResolveBtn.innerText = 'Zamykanie...';
@@ -7562,7 +7510,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (updateError) throw updateError;
 
       selectedResolution = null;
-      showToast('Zgłoszenie przeniesione do sprawdzonych.', 'success');
+      showToast('Zgłoszenie zamknięte. Jest w archiwum przez 7 dni.', 'success');
       closeModal(reportDetailModal);
       await fetchReports();
     } catch (err) {
