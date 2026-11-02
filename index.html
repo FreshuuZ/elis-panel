@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
   <title>Elis ServiceHub — Centrum Główne</title>
-  <link rel="stylesheet" href="style.css?v=70">
+  <link rel="stylesheet" href="style.css?v=80">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0d1117">
   <meta name="mobile-web-app-capable" content="yes">
@@ -21,6 +21,10 @@
     body.halloween #themeToggle .icon-sun,
     body.halloween #themeToggle .icon-moon { opacity: 0; }
     body.halloween #themeToggle .icon-pumpkin { opacity: 1; }
+    #themeToggle .icon-nordic { opacity: 0; }
+    body.nordic #themeToggle .icon-sun,
+    body.nordic #themeToggle .icon-moon { opacity: 0; }
+    body.nordic #themeToggle .icon-nordic { opacity: 1; }
   </style>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -47,6 +51,9 @@
       </div>
     </div>
     <div class="header-actions">
+    <div class="header-download" id="desktopDownloadRow">
+      <button type="button" class="desktop-download-btn" id="desktopDownloadBtn">Pobierz program</button>
+    </div>
     <button id="adminBtn" class="admin-btn" aria-label="Panel administratora">
       <svg class="admin-icon-locked" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -66,6 +73,11 @@
         <path d="M12 7c-1.5-2-1-4 1-5" />
         <path d="M12 7c-5 0-9 3-9 7.5S6.5 21 12 21s9-2 9-6.5S17 7 12 7z" />
         <path d="M8 7.8C6.5 10 6.5 17 8.5 20.5M16 7.8c1.5 2.2 1.5 9.2-.5 12.7" />
+      </svg>
+      <svg class="icon-nordic" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 3v3M12 18v3M3 12h3M18 12h3" />
+        <circle cx="12" cy="12" r="3.5" />
       </svg>
       <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
         stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -96,6 +108,11 @@
         <span class="theme-option-label">Ciemny</span>
         <span class="theme-option-check">✓</span>
       </button>
+      <button class="theme-option" role="menuitemradio" data-theme="nordic">
+        <span class="theme-option-icon">✦</span>
+        <span class="theme-option-label">Nordic</span>
+        <span class="theme-option-check">✓</span>
+      </button>
       <button class="theme-option" role="menuitemradio" data-theme="halloween">
         <span class="theme-option-icon">🎃</span>
         <span class="theme-option-label">Halloween <small>do 1.11</small></span>
@@ -113,9 +130,6 @@
       <main class="home-main">
         <h1 class="home-welcome">Witaj w Systemie Elis ServiceHub</h1>
         <p class="home-subtitle">Wybierz moduł, z którego chcesz skorzystać</p>
-        <p class="home-desktop-download" id="desktopDownloadRow">
-          <button type="button" class="desktop-download-btn" id="desktopDownloadBtn">Pobierz program na komputer</button>
-        </p>
 
         <div class="home-grid">
           <button class="home-tile" data-navigate="panel" style="display: none;">
@@ -521,16 +535,7 @@
           <div class="card-header">
             <h2 id="matsListTitle">Lista Mat</h2>
             <div class="mats-actions-buttons">
-              <!-- Przycisk kopiowania inwentaryzacji (widoczny tylko dla admina) -->
-              <button id="adminImportFromInventoryBtn" class="btn-secondary" style="display: none;">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;margin-right:6px;">
-                  <polyline points="8 17 12 21 16 17"></polyline>
-                  <line x1="12" y1="12" x2="12" y2="21"></line>
-                  <path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"></path>
-                </svg>
-                <span>Wczytaj z inwentaryzacji</span>
-              </button>
+              <button id="openRoutesBtn" class="btn-secondary" data-navigate="routesManage" style="display: none;">Zarządzanie trasami</button>
 
               <button id="openSeasonalMatsBtn" class="btn-print-mats" data-navigate="seasonal" aria-label="Maty logo sezonowe">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -580,6 +585,11 @@
             <input type="text" id="matsSearch" placeholder="Wpisz nazwę, lokalizację lub rozmiar..."
               class="search-input">
           </div>
+          <div class="mats-search-mode" role="group" aria-label="Szukaj">
+            <span class="mats-search-mode-label">Szukaj:</span>
+            <label class="mats-search-choice"><input type="checkbox" id="matsSearchByMat" checked> Maty</label>
+            <label class="mats-search-choice"><input type="checkbox" id="matsSearchByRoute"> Trasy</label>
+          </div>
           <div id="adminAddMatSection" class="admin-add-mat-section" style="display: none;">
             <button id="addNewMatBtn" class="btn-add-mat">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -604,6 +614,39 @@
           </div>
         </section>
       </main>
+    </div>
+
+    <div id="routesView" class="view">
+      <main class="app-main">
+        <section class="card">
+          <div class="card-header">
+            <h2>Zarządzanie trasami</h2>
+            <button type="button" id="routeCreateBtn" class="btn-primary">Nowa trasa</button>
+          </div>
+          <p class="routes-lead">Trasa grupuje maty. Na liście mat logo można potem szukać po nazwie trasy.</p>
+          <div id="routesList" class="routes-list"></div>
+        </section>
+      </main>
+    </div>
+
+    <div id="routePickView" class="view">
+      <main class="app-main route-pick-main">
+        <section class="card">
+          <div class="card-header">
+            <h2 id="routePickTitle">Wybór mat</h2>
+          </div>
+          <p id="routePickNameLabel" class="routes-lead"></p>
+          <div class="search-box">
+            <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+            <input type="text" id="routePickSearch" class="search-input" placeholder="Wpisz nazwę, lokalizację lub numer maty...">
+          </div>
+          <div class="mats-stats"><span id="routePickCount">Widoczne: 0</span></div>
+        </section>
+        <div id="routePickList" class="route-pick-list"></div>
+      </main>
+    </div>
+    <div class="route-pick-bar" id="routePickBar">
+      <button type="button" id="routePickSave" class="btn-primary">Dodaj wybrane do trasy</button>
     </div>
 
     <!-- ==================== WIDOK: MATY LOGO SEZONOWE ==================== -->
@@ -1700,6 +1743,57 @@
     </div>
   </div>
 
+  <div id="routeNameModal" class="modal">
+    <div class="modal-content">
+      <h3 id="routeNameTitle">Nowa trasa</h3>
+      <label class="mismatch-comment-label" for="routeNameInput">Nazwa trasy</label>
+      <input type="text" id="routeNameInput" class="form-input" maxlength="40" autocomplete="off" placeholder="Nazwa trasy">
+      <div class="modal-actions">
+        <button type="button" id="routeNameCancel" class="btn-secondary">Anuluj</button>
+        <button type="button" id="routeNameNext" class="btn-primary">Dalej</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="routeDeleteModal" class="modal">
+    <div class="modal-content">
+      <h3>Usuń trasę</h3>
+      <p style="text-align: center; line-height: 1.6;">Czy na pewno chcesz usunąć trasę?<br><strong id="routeDeleteName"></strong></p>
+      <div class="modal-actions">
+        <button type="button" id="routeDeleteCancel" class="btn-secondary">Anuluj</button>
+        <button type="button" id="routeDeleteConfirm" class="btn-danger">Usuń trasę</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="mismatchCommentModal" class="modal">
+    <div class="modal-content">
+      <h3>Niezgodność</h3>
+      <p id="mismatchCommentName" class="mismatch-modal-name"></p>
+      <label class="mismatch-comment-label" for="mismatchCommentInput">Komentarz dotyczący niezgodności</label>
+      <input type="text" id="mismatchCommentInput" class="form-input" maxlength="80" autocomplete="off" placeholder="O co chodzi z tą niezgodnością">
+      <p id="mismatchCommentCount" class="mismatch-comment-count">0/80</p>
+      <div class="modal-actions">
+        <button type="button" id="mismatchCommentCancel" class="btn-secondary">Anuluj</button>
+        <button type="button" id="mismatchCommentSave" class="btn-primary">Zapisz</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="mismatchResetModal" class="modal">
+    <div class="modal-content">
+      <h3>Zmiana statusu maty</h3>
+      <p id="mismatchResetText" style="text-align: center; line-height: 1.6;">
+        Czy na pewno chcesz zmienić status maty?<br>
+        <strong id="mismatchResetName"></strong>
+      </p>
+      <div class="modal-actions">
+        <button type="button" id="mismatchResetCancel" class="btn-secondary">Anuluj</button>
+        <button type="button" id="mismatchResetConfirm" class="btn-primary">Zmień status</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ==================== MODAL USUWANIA MATY ==================== -->
   <div id="deleteMatModal" class="modal">
     <div class="modal-content">
@@ -1749,7 +1843,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script src="logoData.js?v=33"></script>
   <script src="locationFormat.js?v=1"></script>
-  <script src="script.js?v=72"></script>
+  <script src="script.js?v=79"></script>
 </body>
 
 </html>

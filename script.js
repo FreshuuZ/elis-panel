@@ -219,6 +219,8 @@ document.addEventListener("DOMContentLoaded", () => {
         renderCustomLists();
       } else if (currentView === 'customList') {
         renderCustomListMats();
+      } else if (currentView === 'routesManage' || currentView === 'routePick') {
+        navigateTo('mats');
       }
     }
   }
@@ -242,11 +244,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const customListAddSection = document.getElementById('customListAddSection');
     if (customListAddSection) customListAddSection.style.display = isAdmin ? 'block' : 'none';
     
-    // Pokaż przycisk kopiowania zapasów u admina w Liście Mat Logo
-    const adminImportFromInventoryBtn = document.getElementById('adminImportFromInventoryBtn');
-    if (adminImportFromInventoryBtn) {
-      adminImportFromInventoryBtn.style.display = isAdmin ? 'flex' : 'none';
-    }
+    const openRoutesBtn = document.getElementById('openRoutesBtn');
+    if (openRoutesBtn) openRoutesBtn.style.display = isAdmin ? 'flex' : 'none';
+    if (!isAdmin && (currentView === 'routesManage' || currentView === 'routePick')) navigateTo('mats');
   }
 
   // ==================== EVENT LISTENERY ADMINA ====================
@@ -713,6 +713,8 @@ document.addEventListener("DOMContentLoaded", () => {
     home: document.getElementById('homeView'),
     panel: document.getElementById('panelView'),
     mats: document.getElementById('matsView'),
+    routesManage: document.getElementById('routesView'),
+    routePick: document.getElementById('routePickView'),
     seasonal: document.getElementById('seasonalView'),
     customLists: document.getElementById('customListsView'),
     customList: document.getElementById('customListView'),
@@ -732,6 +734,8 @@ document.addEventListener("DOMContentLoaded", () => {
     'home': null,
     'panel': 'home',
     'mats': 'home',
+    'routesManage': 'mats',
+    'routePick': 'routesManage',
     'seasonal': 'mats',
     'customLists': 'home',
     'customList': 'customLists',
@@ -745,6 +749,10 @@ document.addEventListener("DOMContentLoaded", () => {
   };
   
   function navigateTo(viewName) {
+    if ((viewName === 'routesManage' || viewName === 'routePick') && !isAdmin) {
+      showToast('Zarządzanie trasami jest dostępne po zalogowaniu administratora.', 'notice');
+      viewName = 'mats';
+    }
     Object.values(views).forEach(v => v?.classList.remove('active'));
     views[viewName]?.classList.add('active');
     currentView = viewName;
@@ -761,8 +769,17 @@ document.addEventListener("DOMContentLoaded", () => {
       backBtn.style.display = 'flex';
       (async () => {
           const mats = await fetchAndCacheLogoMats();
+          await ensureMatRoutes(false, true);
           renderMats(mats, matsSearch.value, true);
       })();
+    } else if (viewName === 'routesManage') {
+      headerTitle.textContent = 'Zarządzanie trasami';
+      backBtn.style.display = 'flex';
+      loadRoutesScreen();
+    } else if (viewName === 'routePick') {
+      headerTitle.textContent = routeDraft.id ? 'Edycja trasy' : 'Nowa trasa';
+      backBtn.style.display = 'flex';
+      openRoutePicker();
     } else if (viewName === 'seasonal') {
       headerTitle.textContent = 'Maty Logo Sezonowe';
       backBtn.style.display = 'flex';
@@ -820,6 +837,8 @@ document.addEventListener("DOMContentLoaded", () => {
       })();
     }
     
+    document.body.classList.toggle('is-route-pick', viewName === 'routePick');
+
     if (viewName !== 'mats') {
       document.querySelectorAll('.mats-virtual-spacer').forEach(spacer => {
         spacer.style.height = '0px';
@@ -906,8 +925,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const isHalloweenAvailable = () => new Date() < HALLOWEEN_END;
 
   // Halloween bazuje na ciemnym motywie – wszystkie style body.dark nadal działają
-  const THEME_CLASSES = { light: 'light', dark: 'dark', halloween: 'dark halloween' };
-  const THEME_COLORS = { light: '#e3e9f0', dark: '#0d1117', halloween: '#130b1c' };
+  const THEME_CLASSES = { light: 'light', dark: 'dark', halloween: 'dark halloween', nordic: 'dark nordic' };
+  const THEME_COLORS = { light: '#e3e9f0', dark: '#0d1117', halloween: '#130b1c', nordic: '#0B121A' };
 
   const themeToggle = document.getElementById("themeToggle");
   const themeMenu = document.getElementById("themeMenu");
@@ -2685,6 +2704,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const matsSearch = document.getElementById('matsSearch');
   const matsList = document.getElementById('matsList');
   matsList?.addEventListener('click', (e) => {
+    if (suppressMatClick) {
+      suppressMatClick = false;
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     const toggle = e.target.closest('.mat-presence-toggle');
     if (toggle) {
       e.stopPropagation();
@@ -2767,11 +2792,113 @@ document.addEventListener("DOMContentLoaded", () => {
   /**
    * Wykonuje faktyczne renderowanie
    */
-  const MAT_ROW_HEIGHT = 200;
-  const MAT_ROW_HEIGHT_ADMIN = 228;
   const MAT_ROW_GAP = 12;
-  function matRowStride() {
-    return (document.body.classList.contains('is-admin') ? MAT_ROW_HEIGHT_ADMIN : MAT_ROW_HEIGHT) + MAT_ROW_GAP;
+  let matHeights = [];
+  let matRowOffsets = [0];
+  let matHeightsWidth = -1;
+  let matMeasureCtx = null;
+
+  function matTextWidth(text, font) {
+    if (!matMeasureCtx) matMeasureCtx = document.createElement('canvas').getContext('2d');
+    matMeasureCtx.font = font;
+    return matMeasureCtx.measureText(text || '').width;
+  }
+
+  function matWrapLines(text, font, width) {
+    const source = String(text || '').trim();
+    if (!source || width < 40) return source ? 1 : 0;
+    const words = source.split(/\s+/);
+    let lines = 1;
+    let line = 0;
+    words.forEach(word => {
+      const wordWidth = matTextWidth(word, font);
+      const space = line > 0 ? matTextWidth(' ', font) : 0;
+      if (line > 0 && line + space + wordWidth > width) {
+        lines += 1;
+        line = 0;
+      }
+      if (wordWidth > width) lines += Math.ceil(wordWidth / width) - 1;
+      line += (line > 0 ? space : 0) + Math.min(wordWidth, width);
+    });
+    return lines;
+  }
+
+  let allMatRoutes = [];
+  let routeMatIndex = new Map();
+  let matRoutesByMat = new Map();
+  let matRoutesReady = false;
+  let matRoutesSchemaOk = true;
+  let routeSchemaWarned = false;
+
+  function routeNamesForMat(id) {
+    return matRoutesByMat.get(String(id)) || [];
+  }
+
+  function estimateMatBlock(mat) {
+    const width = Math.max(160, (matsList?.clientWidth || window.innerWidth) - 24);
+    const nameLines = Math.max(1, matWrapLines(mat?.name, '600 16.8px Inter, "Segoe UI", sans-serif', width));
+    const detail = [mat?.location, mat?.size].filter(Boolean).join('  ');
+    const detailLines = matWrapLines(detail, '500 13.6px Inter, "Segoe UI", sans-serif', width);
+    const noteText = matPresenceNote(mat);
+    const noteLines = noteText ? matWrapLines('Komentarz dot. niezgodności: ' + noteText, '600 13.6px Inter, "Segoe UI", sans-serif', width) : 0;
+    const routeNames = routeNamesForMat(mat?.id);
+    const routeLines = routeNames.length ? matWrapLines((routeNames.length > 1 ? 'Trasy: ' : 'Trasa: ') + routeNames.join(', '), '700 13.6px Inter, "Segoe UI", sans-serif', width) : 0;
+    let height = 20 + nameLines * 22 + 46;
+    if (detailLines) height += 6 + detailLines * 20;
+    if (routeLines) height += 6 + routeLines * 19;
+    if (noteLines) height += 6 + noteLines * 19;
+    return Math.ceil(height);
+  }
+
+  function rebuildMatOffsets() {
+    matRowOffsets = new Array(matHeights.length + 1);
+    matRowOffsets[0] = 0;
+    for (let i = 0; i < matHeights.length; i++) {
+      matRowOffsets[i + 1] = matRowOffsets[i] + matHeights[i] + MAT_ROW_GAP;
+    }
+  }
+
+  function ensureMatHeights() {
+    const width = matsList?.clientWidth || 0;
+    if (matHeights.length === filteredMatsCache.length && Math.abs(width - matHeightsWidth) < 8) return false;
+    matHeightsWidth = width;
+    matHeights = filteredMatsCache.map(estimateMatBlock);
+    rebuildMatOffsets();
+    return true;
+  }
+
+  function matIndexAt(offset) {
+    let lo = 0;
+    let hi = Math.max(0, matRowOffsets.length - 2);
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (matRowOffsets[mid] <= offset) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo;
+  }
+
+  function positionRenderedMats(windowEl) {
+    if (!windowEl) return;
+    for (const child of windowEl.children) {
+      const index = Number(child.dataset.virtualIndex);
+      if (Number.isFinite(index) && matRowOffsets[index] !== undefined) {
+        child.style.top = matRowOffsets[index] + 'px';
+      }
+    }
+    const spacer = matsList.querySelector('.mats-virtual-spacer');
+    if (spacer) spacer.style.height = (matRowOffsets[matHeights.length] || 0) + 'px';
+  }
+
+  function syncMatRowHeight(index, el) {
+    if (!el || index < 0 || index >= matHeights.length) return;
+    const next = el.offsetHeight;
+    if (!next || Math.abs(next - matHeights[index]) <= 1) return;
+    matHeights[index] = next;
+    for (let i = index; i < matHeights.length; i++) {
+      matRowOffsets[i + 1] = matRowOffsets[i] + matHeights[i] + MAT_ROW_GAP;
+    }
+    positionRenderedMats(el.parentElement);
   }
   let matsVirtualStart = -1;
   let matsVirtualEnd = -1;
@@ -2796,7 +2923,15 @@ document.addEventListener("DOMContentLoaded", () => {
   function executeRenderMats(matsData, filter = '', resetScroll = false) {
     const search = filter.toLowerCase().trim();
     
-    if (search) {
+    const routeSearch = document.getElementById('matsSearchByRoute')?.checked;
+    if (routeSearch && search) {
+      const matched = new Set();
+      allMatRoutes.forEach(route => {
+        if (!(route.name || '').toLowerCase().includes(search)) return;
+        (routeMatIndex.get(route.id) || []).forEach(matId => matched.add(String(matId)));
+      });
+      filteredMatsCache = matsData.filter(mat => matched.has(String(mat.id)));
+    } else if (search) {
       filteredMatsCache = matsData.filter(mat => {
         return (mat.name?.toLowerCase() || '').includes(search) ||
               (mat.location?.toLowerCase() || '').includes(search) ||
@@ -2814,6 +2949,8 @@ document.addEventListener("DOMContentLoaded", () => {
     updateMatsStats(matsData, filteredMatsCache, filter);
     matsVirtualStart = -1;
     matsVirtualEnd = -1;
+    matHeights = [];
+    matHeightsWidth = -1;
     
     if (filteredMatsCache.length === 0) {
       matsList.classList.remove('mats-virtual');
@@ -2839,15 +2976,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const scrollerTop = scrollerIsPage ? 0 : scroller.getBoundingClientRect().top;
     const scrollTop = scroller.scrollTop || 0;
     const listTop = matsList.getBoundingClientRect().top - scrollerTop + scrollTop;
-    const rowStride = matRowStride();
-    let visibleStart = Math.floor((scrollTop - listTop) / rowStride);
+    const heightsChanged = ensureMatHeights();
+    const listOffset = scrollTop - listTop;
+    let visibleStart = matIndexAt(Math.max(0, listOffset));
     if (visibleStart < 0 || scrollTop + viewHeight < listTop) visibleStart = 0;
-    const visibleCount = Math.ceil(viewHeight / rowStride) + 1;
-    const visibleEnd = Math.min(count, visibleStart + visibleCount);
+    let visibleEnd = matIndexAt(Math.max(0, listOffset + viewHeight)) + 1;
+    visibleEnd = Math.min(count, Math.max(visibleEnd, visibleStart + 1));
     const nearTop = visibleStart - matsVirtualStart < 6 && matsVirtualStart > 0;
     const nearBottom = matsVirtualEnd - visibleEnd < 6 && matsVirtualEnd < count;
     const covers = visibleStart >= matsVirtualStart && visibleEnd <= matsVirtualEnd;
-    if (!force && covers && !nearTop && !nearBottom && matsList.querySelector('.mats-virtual-window')) return;
+    if (!force && !heightsChanged && covers && !nearTop && !nearBottom && matsList.querySelector('.mats-virtual-window')) return;
 
     const renderStart = Math.max(0, visibleStart - 14);
     const renderEnd = Math.min(count, visibleEnd + 14);
@@ -2864,7 +3002,7 @@ document.addEventListener("DOMContentLoaded", () => {
       spacer.appendChild(windowEl);
       matsList.replaceChildren(spacer);
     }
-    spacer.style.height = (count * rowStride) + 'px';
+    spacer.style.height = (matRowOffsets[count] || 0) + 'px';
     if (force) windowEl.replaceChildren();
     const keep = new Set();
     for (let i = renderStart; i < renderEnd; i++) keep.add(i);
@@ -2876,10 +3014,14 @@ document.addEventListener("DOMContentLoaded", () => {
       const mat = filteredMatsCache[i];
       const matElement = createMatElement(mat);
       decorateMatPresence(matElement, mat);
+      wrapMatSwipe(matElement);
+      paintMatRouteLine(matElement, mat);
       matElement.dataset.virtualIndex = String(i);
-      matElement.style.top = (i * rowStride) + 'px';
+      matElement.style.top = (matRowOffsets[i] || 0) + 'px';
       windowEl.appendChild(matElement);
+      syncMatRowHeight(i, matElement);
     }
+    for (const child of windowEl.children) syncMatRowHeight(Number(child.dataset.virtualIndex), child);
   }
 
   function ensureMatsScrollListener() {
@@ -2971,22 +3113,71 @@ document.addEventListener("DOMContentLoaded", () => {
     return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
   }
 
-  function applyPresenceState(mat, state) {
+  const MAT_NOTE_KEY = 'elisMatPresenceNote';
+  const PRESENCE_NOTE_MAX = 80;
+  let matPresenceNoteColumn = null;
+  let presenceNoteWarned = false;
+  const presenceWrite = new Map();
+  let suppressMatClick = false;
+  let matSwipe = null;
+
+  function readNoteMap() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(MAT_NOTE_KEY) || '{}');
+      const map = {};
+      Object.entries(raw).forEach(([id, value]) => {
+        const text = String(value || '').trim();
+        if (text) map[id] = text.slice(0, PRESENCE_NOTE_MAX);
+      });
+      return map;
+    } catch {
+      return {};
+    }
+  }
+
+  function writeNoteMap(map) {
+    const compact = {};
+    Object.entries(map).forEach(([id, value]) => {
+      const text = String(value || '').trim();
+      if (text) compact[id] = text.slice(0, PRESENCE_NOTE_MAX);
+    });
+    localStorage.setItem(MAT_NOTE_KEY, JSON.stringify(compact));
+  }
+
+  function cleanPresenceNote(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim().slice(0, PRESENCE_NOTE_MAX);
+  }
+
+  function applyPresenceState(mat, state, note) {
     if (!mat) return;
     mat.presence_state = state;
     mat.present = state !== 0;
+    if (note !== undefined) mat.presence_note = state === 2 ? cleanPresenceNote(note) : '';
   }
 
-  function storePresenceState(id, state) {
-    const mat = allLogoMats.find(item => item.id === id);
-    const cached = filteredMatsCache.find(item => item.id === id);
-    applyPresenceState(mat, state);
-    if (cached && cached !== mat) applyPresenceState(cached, state);
+  function matPresenceNote(mat) {
+    if (!mat || matPresenceState(mat) !== 2) return '';
+    const fromRow = cleanPresenceNote(mat.presence_note);
+    if (fromRow) return fromRow;
+    return readNoteMap()[mat.id] || '';
+  }
+
+  function storePresenceState(id, state, note) {
+    const nextNote = state === 2 ? cleanPresenceNote(note) : '';
+    const key = String(id);
+    const mat = allLogoMats.find(item => String(item.id) === key);
+    const cached = filteredMatsCache.find(item => String(item.id) === key);
+    applyPresenceState(mat, state, nextNote);
+    if (cached && cached !== mat) applyPresenceState(cached, state, nextNote);
     const map = readPresentMap();
-    if (state === 0) delete map[id];
-    else map[id] = state;
+    if (state === 0) delete map[key];
+    else map[key] = state;
     writePresentMap(map);
-    paintMatPresence(id, state);
+    const notes = readNoteMap();
+    if (nextNote) notes[key] = nextNote;
+    else delete notes[key];
+    writeNoteMap(notes);
+    paintMatPresence(key, state, nextNote);
   }
 
   function decorateMatPresence(el, mat) {
@@ -3013,9 +3204,49 @@ document.addEventListener("DOMContentLoaded", () => {
     btn.title = PRESENCE_LABELS[state];
     btn.innerHTML = presenceIcon(state);
     slot.appendChild(btn);
+    paintPresenceNote(el, matPresenceNote(mat));
   }
 
-  function paintMatPresence(id, state) {
+  function paintPresenceNote(el, note) {
+    if (!el) return;
+    const host = el.querySelector('.mat-swipe-card') || el;
+    let node = host.querySelector('.mat-presence-note');
+    if (!note) {
+      node?.remove();
+      return;
+    }
+    if (!node) {
+      node = document.createElement('p');
+      node.className = 'mat-presence-note';
+      host.appendChild(node);
+    }
+    node.replaceChildren();
+    const label = document.createElement('span');
+    label.className = 'mat-presence-note-label';
+    label.textContent = 'Komentarz dot. niezgodności: ';
+    node.append(label, document.createTextNode(note));
+  }
+
+  function paintMatRouteLine(el, mat) {
+    if (!el) return;
+    const host = el.querySelector('.mat-swipe-card') || el;
+    let node = host.querySelector('.mat-route-line');
+    const names = routeNamesForMat(mat && mat.id);
+    if (!names.length) {
+      node?.remove();
+      return;
+    }
+    if (!node) {
+      node = document.createElement('p');
+      node.className = 'mat-route-line';
+      const note = host.querySelector('.mat-presence-note');
+      if (note) host.insertBefore(node, note);
+      else host.appendChild(node);
+    }
+    node.textContent = (names.length > 1 ? 'Trasy: ' : 'Trasa: ') + names.join(', ');
+  }
+
+  function paintMatPresence(id, state, note) {
     const el = matsList.querySelector(`[data-mat-id="${id}"]`);
     if (!el) return;
     el.classList.toggle('presence-here', state === 1);
@@ -3023,55 +3254,221 @@ document.addEventListener("DOMContentLoaded", () => {
     el.classList.toggle('presence-qty', state === 2);
     el.dataset.presence = String(state);
     const btn = el.querySelector('.mat-presence-toggle');
-    if (!btn) return;
-    btn.setAttribute('aria-pressed', state === 1 ? 'true' : state === 2 ? 'mixed' : 'false');
-    btn.setAttribute('aria-label', PRESENCE_LABELS[state]);
-    btn.title = PRESENCE_LABELS[state];
-    btn.innerHTML = presenceIcon(state);
+    if (btn) {
+      btn.setAttribute('aria-pressed', state === 1 ? 'true' : state === 2 ? 'mixed' : 'false');
+      btn.setAttribute('aria-label', PRESENCE_LABELS[state]);
+      btn.title = PRESENCE_LABELS[state];
+      btn.innerHTML = presenceIcon(state);
+    }
+    paintPresenceNote(el, state === 2 ? cleanPresenceNote(note) : '');
+    const index = Number(el.dataset.virtualIndex);
+    if (Number.isFinite(index)) requestAnimationFrame(() => syncMatRowHeight(index, el));
   }
 
-  async function toggleMatPresence(id) {
-    const mat = allLogoMats.find(item => item.id === id);
-    if (!mat) return;
+  function warnMissingPresenceNote() {
+    if (presenceNoteWarned) return;
+    presenceNoteWarned = true;
+    showToast('Komentarz jest na tym urządzeniu. Na pozostałych pojawi się po dodaniu kolumny w bazie.', 'notice');
+  }
+
+  async function persistPresence(id, state, note) {
+    const key = String(id);
+    const mat = allLogoMats.find(item => String(item.id) === key);
+    if (!mat) return false;
     const previous = matPresenceState(mat);
-    const next = (previous + 1) % 3;
-    presencePending.add(id);
-    storePresenceState(id, next);
+    const previousNote = matPresenceNote(mat);
+    const nextNote = state === 2 ? cleanPresenceNote(note) : '';
+    const seq = (presenceWrite.get(key) || 0) + 1;
+    presenceWrite.set(key, seq);
+    presencePending.add(key);
+    storePresenceState(key, state, nextNote);
     try {
       if (matPresenceStateColumn !== false) {
-        const { error } = await window.supabase.from('logo_mats').update({
-          presence_state: next,
-          present: next !== 0
-        }).eq('id', id);
+        const payload = { presence_state: state, present: state !== 0 };
+        if (matPresenceNoteColumn !== false) payload.presence_note = nextNote || null;
+        const { error } = await window.supabase.from('logo_mats').update(payload).eq('id', mat.id);
+        if (presenceWrite.get(key) !== seq) return true;
         if (!error) {
           matPresenceStateColumn = true;
           matPresentColumn = true;
-          return;
+          if (matPresenceNoteColumn !== false) matPresenceNoteColumn = true;
+          return true;
         }
-        const missingState = error.code === '42703' || (error.message || '').includes('presence_state');
-        if (!missingState) {
-          storePresenceState(id, previous);
+        const message = error.message || '';
+        const missingNote = matPresenceNoteColumn !== false && message.includes('presence_note');
+        if (missingNote) {
+          matPresenceNoteColumn = false;
+          warnMissingPresenceNote();
+          const retry = await window.supabase.from('logo_mats').update({
+            presence_state: state,
+            present: state !== 0
+          }).eq('id', mat.id);
+          if (presenceWrite.get(key) !== seq) return true;
+          if (!retry.error) {
+            matPresenceStateColumn = true;
+            matPresentColumn = true;
+            return true;
+          }
+        }
+        const missingState = message.includes('presence_state');
+        if (!missingState && !missingNote) {
+          storePresenceState(id, previous, previousNote);
           showToast('Nie udało się zapisać oznaczenia maty.', 'error');
-          return;
+          return false;
         }
-        matPresenceStateColumn = false;
+        if (missingState) matPresenceStateColumn = false;
       }
-      if (matPresentColumn === false) return;
-      const { error } = await window.supabase.from('logo_mats').update({ present: next !== 0 }).eq('id', id);
+      if (matPresentColumn === false) return true;
+      const { error } = await window.supabase.from('logo_mats').update({ present: state !== 0 }).eq('id', mat.id);
+      if (presenceWrite.get(key) !== seq) return true;
       if (error) {
         if (error.code === '42703' || (error.message || '').includes('present')) {
           matPresentColumn = false;
-          return;
+          return true;
         }
-        storePresenceState(id, previous);
+        storePresenceState(id, previous, previousNote);
         showToast('Nie udało się zapisać oznaczenia maty.', 'error');
-        return;
+        return false;
       }
       matPresentColumn = true;
+      return true;
     } finally {
-      presencePending.delete(id);
+      if (presenceWrite.get(key) === seq) presencePending.delete(key);
     }
   }
+
+  function toggleMatPresence(id) {
+    const mat = allLogoMats.find(item => String(item.id) === String(id));
+    if (!mat) return;
+    const previous = matPresenceState(mat);
+    if (previous === 2) {
+      openMismatchReset(mat);
+      return;
+    }
+    persistPresence(id, previous === 1 ? 0 : 1, '');
+  }
+
+  function wrapMatSwipe(el) {
+    if (!el || el.querySelector('.mat-swipe-card') || !el.querySelector('.mat-presence-slot')) return;
+    const reveal = document.createElement('div');
+    reveal.className = 'mat-swipe-reveal';
+    reveal.setAttribute('aria-hidden', 'true');
+    reveal.innerHTML = `<span class="mat-swipe-mark">${presenceIcon(2)}</span><span class="mat-swipe-word mat-swipe-hint">Przeciągnij</span><span class="mat-swipe-word mat-swipe-commit">Puść</span>`;
+    const card = document.createElement('div');
+    card.className = 'mat-swipe-card';
+    while (el.firstChild) card.appendChild(el.firstChild);
+    el.appendChild(reveal);
+    el.appendChild(card);
+  }
+
+  const mismatchCommentModal = document.getElementById('mismatchCommentModal');
+  const mismatchCommentInput = document.getElementById('mismatchCommentInput');
+  const mismatchCommentCount = document.getElementById('mismatchCommentCount');
+  const mismatchResetModal = document.getElementById('mismatchResetModal');
+  let mismatchCommentId = null;
+  let mismatchResetId = null;
+
+  function updateMismatchCount() {
+    if (!mismatchCommentCount || !mismatchCommentInput) return;
+    mismatchCommentCount.textContent = `${mismatchCommentInput.value.length}/${PRESENCE_NOTE_MAX}`;
+  }
+
+  function openMismatchComment(id) {
+    const mat = allLogoMats.find(item => String(item.id) === String(id));
+    if (!mat || !mismatchCommentModal) return;
+    mismatchCommentId = id;
+    const wasQty = matPresenceState(mat) === 2;
+    const note = wasQty ? matPresenceNote(mat) : '';
+    document.getElementById('mismatchCommentName').textContent = mat.name || '';
+    mismatchCommentInput.value = note;
+    updateMismatchCount();
+    openModal(mismatchCommentModal);
+    persistPresence(id, 2, note);
+    setTimeout(() => mismatchCommentInput.focus(), 60);
+  }
+
+  function openMismatchReset(mat) {
+    if (!mismatchResetModal) return;
+    mismatchResetId = mat.id;
+    document.getElementById('mismatchResetName').textContent = mat.name || '';
+    openModal(mismatchResetModal);
+  }
+
+  mismatchCommentInput?.addEventListener('input', updateMismatchCount);
+  document.getElementById('mismatchCommentCancel')?.addEventListener('click', () => {
+    closeModal(mismatchCommentModal);
+  });
+  document.getElementById('mismatchCommentSave')?.addEventListener('click', () => {
+    if (mismatchCommentId == null) return;
+    persistPresence(mismatchCommentId, 2, mismatchCommentInput.value);
+    closeModal(mismatchCommentModal);
+  });
+  document.getElementById('mismatchResetCancel')?.addEventListener('click', () => {
+    closeModal(mismatchResetModal);
+  });
+  document.getElementById('mismatchResetConfirm')?.addEventListener('click', () => {
+    if (mismatchResetId == null) return;
+    persistPresence(mismatchResetId, 0, '');
+    closeModal(mismatchResetModal);
+  });
+
+  function finishMatSwipe(commit) {
+    if (!matSwipe) return;
+    const swipe = matSwipe;
+    matSwipe = null;
+    swipe.item.classList.remove('is-swiping', 'swipe-ready');
+    swipe.card.style.transform = '';
+    if (swipe.locked === 'x') suppressMatClick = true;
+    if (commit && swipe.dx >= 72) openMismatchComment(swipe.id);
+  }
+
+  matsList.addEventListener('pointerdown', (e) => {
+    if (e.button !== undefined && e.button !== 0) return;
+    if (e.target.closest('button, a, input, textarea, select')) return;
+    const item = e.target.closest('.mat-item');
+    const card = item?.querySelector('.mat-swipe-card');
+    if (!item || !card) return;
+    matSwipe = {
+      id: item.dataset.matId,
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      dx: 0,
+      card,
+      item,
+      locked: ''
+    };
+  });
+
+  matsList.addEventListener('pointermove', (e) => {
+    if (!matSwipe || e.pointerId !== matSwipe.pointerId) return;
+    const dx = e.clientX - matSwipe.startX;
+    const dy = e.clientY - matSwipe.startY;
+    if (!matSwipe.locked) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      matSwipe.locked = Math.abs(dx) > Math.abs(dy) * 1.2 ? 'x' : 'y';
+      if (matSwipe.locked === 'y') {
+        matSwipe = null;
+        return;
+      }
+      matSwipe.item.classList.add('is-swiping');
+      try { matSwipe.item.setPointerCapture(e.pointerId); } catch (err) {}
+    }
+    const pull = Math.max(0, Math.min(dx, 108));
+    matSwipe.dx = pull;
+    matSwipe.card.style.transform = `translate3d(${pull}px,0,0)`;
+    matSwipe.item.classList.toggle('swipe-ready', pull >= 72);
+    if (e.cancelable) e.preventDefault();
+  }, { passive: false });
+
+  matsList.addEventListener('pointerup', (e) => {
+    if (!matSwipe || e.pointerId !== matSwipe.pointerId) return;
+    finishMatSwipe(true);
+  });
+  matsList.addEventListener('pointercancel', (e) => {
+    if (!matSwipe || e.pointerId !== matSwipe.pointerId) return;
+    finishMatSwipe(false);
+  });
 
   /**
    * Tworzy pojedynczy element maty (wydajniej niż innerHTML)
@@ -3217,6 +3614,292 @@ document.addEventListener("DOMContentLoaded", () => {
       matsSearch.value = '';
       matsSearch.classList.remove('searching');
       renderMats(allLogoMats, '', true);
+    }
+  });
+
+  const matsSearchByMat = document.getElementById('matsSearchByMat');
+  const matsSearchByRoute = document.getElementById('matsSearchByRoute');
+
+  function setMatSearchMode(mode) {
+    if (matsSearchByMat) matsSearchByMat.checked = mode !== 'routes';
+    if (matsSearchByRoute) matsSearchByRoute.checked = mode === 'routes';
+    if (matsSearch) {
+      matsSearch.placeholder = mode === 'routes'
+        ? 'Wpisz numer trasy...'
+        : 'Wpisz nazwę, lokalizację lub rozmiar...';
+    }
+    if (mode === 'routes') {
+      ensureMatRoutes().then(() => {
+        if (matsSearchByRoute?.checked) renderMats(allLogoMats, matsSearch?.value || '', true);
+      });
+    }
+    renderMats(allLogoMats, matsSearch?.value || '', true);
+  }
+
+  matsSearchByMat?.addEventListener('change', () => setMatSearchMode(matsSearchByMat.checked ? 'mats' : 'routes'));
+  matsSearchByRoute?.addEventListener('change', () => setMatSearchMode(matsSearchByRoute.checked ? 'routes' : 'mats'));
+
+  let routeDraft = { id: null, name: '', selected: new Set() };
+  let routeDeleteId = null;
+
+  function warnRouteSchema() {
+    if (routeSchemaWarned) return;
+    routeSchemaWarned = true;
+    showToast('Trasy wymagają nowych tabel w bazie. Wklej podany SQL w Supabase.', 'notice');
+  }
+
+  function routeErrorIsSchema(error) {
+    const message = (error && error.message) || '';
+    return error?.code === '42P01' || error?.code === 'PGRST205' || message.includes('mat_routes') || message.includes('mat_route_mats');
+  }
+
+  function indexMatRoutes(routes, links) {
+    allMatRoutes = (routes || []).slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'pl', { numeric: true }));
+    routeMatIndex = new Map();
+    matRoutesByMat = new Map();
+    const namesById = new Map(allMatRoutes.map(route => [route.id, route.name]));
+    (links || []).forEach(link => {
+      const routeName = namesById.get(link.route_id);
+      if (!routeName) return;
+      const list = routeMatIndex.get(link.route_id) || [];
+      list.push(link.mat_id);
+      routeMatIndex.set(link.route_id, list);
+      const key = String(link.mat_id);
+      const names = matRoutesByMat.get(key) || [];
+      names.push(routeName);
+      matRoutesByMat.set(key, names);
+    });
+    matRoutesByMat.forEach((names, key) => {
+      names.sort((a, b) => String(a).localeCompare(String(b), 'pl', { numeric: true }));
+      matRoutesByMat.set(key, names);
+    });
+  }
+
+  async function ensureMatRoutes(force = false, quiet = false) {
+    if (matRoutesReady && !force) return matRoutesSchemaOk;
+    const routesResult = await window.supabase.from('mat_routes').select('id,name');
+    if (routesResult.error) {
+      matRoutesSchemaOk = !routeErrorIsSchema(routesResult.error);
+      matRoutesReady = true;
+      if (!matRoutesSchemaOk && !quiet) warnRouteSchema();
+      return false;
+    }
+    const linksResult = await window.supabase.from('mat_route_mats').select('route_id,mat_id');
+    if (linksResult.error) {
+      matRoutesSchemaOk = !routeErrorIsSchema(linksResult.error);
+      matRoutesReady = true;
+      if (!matRoutesSchemaOk && !quiet) warnRouteSchema();
+      return false;
+    }
+    indexMatRoutes(routesResult.data, linksResult.data);
+    matRoutesSchemaOk = true;
+    matRoutesReady = true;
+    return true;
+  }
+
+  function renderRoutesList() {
+    const list = document.getElementById('routesList');
+    if (!list) return;
+    if (!allMatRoutes.length) {
+      list.innerHTML = '<div class="empty-state"><div class="empty-state-text">Nie ma jeszcze żadnej trasy.</div></div>';
+      return;
+    }
+    list.innerHTML = allMatRoutes.map(route => {
+      const count = (routeMatIndex.get(route.id) || []).length;
+      const mod10 = count % 10;
+      const mod100 = count % 100;
+      const countLabel = count === 1 ? '1 mata' : (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14) ? `${count} maty` : `${count} mat`);
+      return `<article class="route-row"><div><div class="route-row-name">${escapeHtml(route.name)}</div><div class="route-row-count">${countLabel}</div></div><div class="route-row-actions"><button type="button" class="btn-secondary route-edit-btn" data-route-id="${route.id}">Edytuj</button><button type="button" class="btn-danger route-delete-btn" data-route-id="${route.id}">Usuń</button></div></article>`;
+    }).join('');
+  }
+
+  async function loadRoutesScreen() {
+    const list = document.getElementById('routesList');
+    if (list) list.innerHTML = '<div class="empty-state"><div class="empty-state-text">Pobieranie tras...</div></div>';
+    await fetchAndCacheLogoMats();
+    const ok = await ensureMatRoutes(true);
+    if (!ok) {
+      if (list) list.innerHTML = '<div class="empty-state"><div class="empty-state-text">Trasy nie są jeszcze dostępne w bazie.</div></div>';
+      return;
+    }
+    renderRoutesList();
+  }
+
+  function openRouteNameModal(route) {
+    routeDraft = {
+      id: route ? route.id : null,
+      name: route ? route.name : '',
+      selected: new Set((route ? (routeMatIndex.get(route.id) || []) : []).map(id => String(id)))
+    };
+    const title = document.getElementById('routeNameTitle');
+    const input = document.getElementById('routeNameInput');
+    if (title) title.textContent = route ? 'Edytuj trasę' : 'Nowa trasa';
+    if (input) input.value = routeDraft.name;
+    openModal(document.getElementById('routeNameModal'));
+    setTimeout(() => input?.focus(), 60);
+  }
+
+  function openRoutePicker() {
+    const title = document.getElementById('routePickTitle');
+    const label = document.getElementById('routePickNameLabel');
+    const save = document.getElementById('routePickSave');
+    const search = document.getElementById('routePickSearch');
+    if (title) title.textContent = routeDraft.name || 'Wybór mat';
+    if (label) label.textContent = routeDraft.name ? `Trasa: ${routeDraft.name}` : '';
+    if (save) save.textContent = routeDraft.id ? 'Zapisz zmiany trasy' : 'Dodaj wybrane do trasy';
+    if (search) search.value = '';
+    buildRoutePicker();
+    filterRoutePicker('');
+  }
+
+  function buildRoutePicker() {
+    const list = document.getElementById('routePickList');
+    if (!list) return;
+    const fragment = document.createDocumentFragment();
+    allLogoMats.forEach(mat => {
+      const item = document.createElement('label');
+      item.className = 'route-pick-item';
+      const number = mat.mat_number ? String(mat.mat_number).replace(/^#/, '') : '';
+      item.dataset.search = [mat.name, number, mat.location, mat.size].join(' ').toLowerCase();
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.className = 'route-pick-check';
+      box.value = String(mat.id);
+      box.checked = routeDraft.selected.has(String(mat.id));
+      const body = document.createElement('span');
+      body.className = 'route-pick-body';
+      const name = document.createElement('span');
+      name.className = 'route-pick-name';
+      name.textContent = mat.name || '';
+      const meta = document.createElement('span');
+      meta.className = 'route-pick-meta';
+      const bits = [];
+      if (number) bits.push('Nr ' + number);
+      if (mat.location) bits.push(LocationFormat.describeLocation(mat.location));
+      if (mat.size) bits.push(String(mat.size));
+      if (mat.quantity !== undefined && mat.quantity !== null) bits.push(mat.quantity + ' szt.');
+      meta.textContent = bits.join(' · ');
+      body.append(name, meta);
+      item.append(box, body);
+      fragment.appendChild(item);
+    });
+    list.replaceChildren(fragment);
+  }
+
+  function filterRoutePicker(value) {
+    const search = String(value || '').toLowerCase().trim();
+    const list = document.getElementById('routePickList');
+    const count = document.getElementById('routePickCount');
+    let shown = 0;
+    list?.querySelectorAll('.route-pick-item').forEach(item => {
+      const visible = !search || (item.dataset.search || '').includes(search);
+      item.hidden = !visible;
+      if (visible) shown += 1;
+    });
+    if (count) count.textContent = `Widoczne: ${shown}`;
+  }
+
+  async function saveRouteDraft() {
+    const name = routeDraft.name.trim();
+    if (!name) {
+      showToast('Podaj nazwę trasy.', 'error');
+      return;
+    }
+    const save = document.getElementById('routePickSave');
+    if (save) save.disabled = true;
+    try {
+      let routeId = routeDraft.id;
+      if (!routeId) {
+        const created = await window.supabase.from('mat_routes').insert({ name }).select('id').single();
+        if (created.error) throw created.error;
+        routeId = created.data.id;
+      } else {
+        const renamed = await window.supabase.from('mat_routes').update({ name }).eq('id', routeId);
+        if (renamed.error) throw renamed.error;
+        const cleared = await window.supabase.from('mat_route_mats').delete().eq('route_id', routeId);
+        if (cleared.error) throw cleared.error;
+      }
+      const rows = [...routeDraft.selected].map(matId => ({ route_id: routeId, mat_id: matId }));
+      for (let i = 0; i < rows.length; i += 200) {
+        const inserted = await window.supabase.from('mat_route_mats').insert(rows.slice(i, i + 200));
+        if (inserted.error) throw inserted.error;
+      }
+      matRoutesReady = false;
+      await ensureMatRoutes(true);
+      showToast(routeDraft.id ? 'Trasa zapisana.' : 'Trasa dodana.');
+      navigateTo('routesManage');
+    } catch (error) {
+      if (routeErrorIsSchema(error)) warnRouteSchema();
+      else if (error?.code === '23505') showToast('Taka trasa już istnieje.', 'error');
+      else showToast('Nie udało się zapisać trasy.', 'error');
+    } finally {
+      if (save) save.disabled = false;
+    }
+  }
+
+  document.getElementById('routeCreateBtn')?.addEventListener('click', () => openRouteNameModal(null));
+  document.getElementById('routesList')?.addEventListener('click', (event) => {
+    const edit = event.target.closest('.route-edit-btn');
+    const remove = event.target.closest('.route-delete-btn');
+    if (edit) {
+      const route = allMatRoutes.find(item => item.id === edit.dataset.routeId);
+      if (route) openRouteNameModal(route);
+      return;
+    }
+    if (remove) {
+      const route = allMatRoutes.find(item => item.id === remove.dataset.routeId);
+      if (!route) return;
+      routeDeleteId = route.id;
+      const name = document.getElementById('routeDeleteName');
+      if (name) name.textContent = route.name;
+      openModal(document.getElementById('routeDeleteModal'));
+    }
+  });
+  document.getElementById('routeNameCancel')?.addEventListener('click', () => closeModal(document.getElementById('routeNameModal')));
+  document.getElementById('routeNameNext')?.addEventListener('click', () => {
+    const input = document.getElementById('routeNameInput');
+    const name = input?.value.trim() || '';
+    if (!name) {
+      showToast('Podaj nazwę trasy.', 'error');
+      input?.focus();
+      return;
+    }
+    routeDraft.name = name;
+    closeModal(document.getElementById('routeNameModal'));
+    navigateTo('routePick');
+  });
+  document.getElementById('routeNameInput')?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') document.getElementById('routeNameNext')?.click();
+  });
+  document.getElementById('routePickSearch')?.addEventListener('input', (event) => filterRoutePicker(event.target.value));
+  document.getElementById('routePickList')?.addEventListener('change', (event) => {
+    const box = event.target.closest('.route-pick-check');
+    if (!box) return;
+    if (box.checked) routeDraft.selected.add(box.value);
+    else routeDraft.selected.delete(box.value);
+  });
+  document.getElementById('routePickSave')?.addEventListener('click', saveRouteDraft);
+  document.getElementById('routeDeleteCancel')?.addEventListener('click', () => closeModal(document.getElementById('routeDeleteModal')));
+  document.getElementById('routeDeleteConfirm')?.addEventListener('click', async () => {
+    if (!routeDeleteId) return;
+    const button = document.getElementById('routeDeleteConfirm');
+    if (button) button.disabled = true;
+    try {
+      await window.supabase.from('mat_route_mats').delete().eq('route_id', routeDeleteId);
+      const removed = await window.supabase.from('mat_routes').delete().eq('id', routeDeleteId);
+      if (removed.error) throw removed.error;
+      routeDeleteId = null;
+      closeModal(document.getElementById('routeDeleteModal'));
+      matRoutesReady = false;
+      await ensureMatRoutes(true);
+      renderRoutesList();
+      if (currentView === 'mats') renderMats(allLogoMats, matsSearch?.value || '', true);
+      showToast('Trasa usunięta.');
+    } catch (error) {
+      if (routeErrorIsSchema(error)) warnRouteSchema();
+      else showToast('Nie udało się usunąć trasy.', 'error');
+    } finally {
+      if (button) button.disabled = false;
     }
   });
 
@@ -6463,23 +7146,41 @@ document.addEventListener("DOMContentLoaded", () => {
       })
       .subscribe();
 
-    function applyRemotePresence(id, state) {
-      if (presencePending.has(id) || (state !== 0 && state !== 1 && state !== 2)) return;
-      const mat = allLogoMats.find(item => item.id === id);
-      const cached = filteredMatsCache.find(item => item.id === id);
-      if (mat && matPresenceState(mat) === state && (!cached || matPresenceState(cached) === state)) return;
-      storePresenceState(id, state);
+    function applyRemotePresence(id, state, note) {
+      const key = String(id);
+      if (presencePending.has(key) || (state !== 0 && state !== 1 && state !== 2)) return;
+      const mat = allLogoMats.find(item => String(item.id) === key);
+      const cached = filteredMatsCache.find(item => String(item.id) === key);
+      const nextNote = state === 2
+        ? (note === undefined ? (mat ? matPresenceNote(mat) : '') : cleanPresenceNote(note))
+        : '';
+      const sameMat = mat && matPresenceState(mat) === state && matPresenceNote(mat) === nextNote;
+      const sameCache = !cached || (matPresenceState(cached) === state && matPresenceNote(cached) === nextNote);
+      if (sameMat && sameCache) return;
+      storePresenceState(key, state, nextNote);
     }
 
     async function syncMatPresence() {
       if (currentView !== 'mats' || !allLogoMats.length) return;
       if (matPresenceStateColumn !== false) {
-        const { data, error } = await window.supabase.from('logo_mats').select('id,presence_state,present');
+        const columns = matPresenceNoteColumn === false
+          ? 'id,presence_state,present'
+          : 'id,presence_state,present,presence_note';
+        const { data, error } = await window.supabase.from('logo_mats').select(columns);
+        if (error && matPresenceNoteColumn !== false && ((error.message || '').includes('presence_note'))) {
+          matPresenceNoteColumn = false;
+          return syncMatPresence();
+        }
         if (!error) {
           matPresenceStateColumn = true;
+          if (matPresenceNoteColumn !== false) matPresenceNoteColumn = true;
           (data || []).forEach(row => {
             const state = remotePresenceState(row);
-            if (state !== null) applyRemotePresence(row.id, state);
+            if (state === null) return;
+            const note = Object.prototype.hasOwnProperty.call(row, 'presence_note')
+              ? (row.presence_note || '')
+              : undefined;
+            applyRemotePresence(row.id, state, note);
           });
           return;
         }
@@ -6513,7 +7214,12 @@ document.addEventListener("DOMContentLoaded", () => {
           const mat = allLogoMats.find(item => item.id === row.id);
           const structural = mat && ['name', 'mat_number', 'location', 'size', 'quantity'].some(key => row[key] !== undefined && row[key] !== mat[key]);
           const remoteState = remotePresenceState(row);
-          if (remoteState !== null) applyRemotePresence(row.id, remoteState);
+          if (remoteState !== null) {
+            const note = Object.prototype.hasOwnProperty.call(row, 'presence_note')
+              ? (row.presence_note || '')
+              : undefined;
+            applyRemotePresence(row.id, remoteState, note);
+          }
           if (!structural && mat) return;
         }
         allLogoMats = [];
@@ -6782,14 +7488,38 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   let reportsPurgedAt = 0;
+  function reportAttachmentPath(url) {
+    const marker = '/report-attachments/';
+    const index = String(url || '').indexOf(marker);
+    if (index === -1) return '';
+    return decodeURIComponent(String(url).slice(index + marker.length).split('?')[0]);
+  }
+
+  async function removeReportAttachments(rows) {
+    const paths = [...new Set((rows || []).map(row => reportAttachmentPath(row && row.attachment_url)).filter(Boolean))];
+    for (let i = 0; i < paths.length; i += 50) {
+      const { error } = await window.supabase.storage.from('report-attachments').remove(paths.slice(i, i + 50));
+      if (error) return false;
+    }
+    return true;
+  }
+
   async function purgeArchivedReports() {
     const now = Date.now();
     if (now - reportsPurgedAt < 60 * 60 * 1000) return;
     reportsPurgedAt = now;
     const cutoff = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
     try {
-      await window.supabase.from('reports').delete().eq('status', 'resolved').lt('resolved_at', cutoff);
-      await window.supabase.from('reports').delete().eq('status', 'resolved').is('resolved_at', null).lt('created_at', cutoff);
+      const olderResolved = await window.supabase.from('reports').select('id,attachment_url').eq('status', 'resolved').lt('resolved_at', cutoff);
+      const olderUndated = await window.supabase.from('reports').select('id,attachment_url').eq('status', 'resolved').is('resolved_at', null).lt('created_at', cutoff);
+      if (olderResolved.error) throw olderResolved.error;
+      if (olderUndated.error) throw olderUndated.error;
+      const rows = [...(olderResolved.data || []), ...(olderUndated.data || [])];
+      if (!rows.length) return;
+      const filesCleared = await removeReportAttachments(rows);
+      if (!filesCleared) throw new Error('attachment');
+      const { error } = await window.supabase.from('reports').delete().in('id', rows.map(row => row.id));
+      if (error) throw error;
     } catch (err) {
       reportsPurgedAt = 0;
     }
@@ -7428,6 +8158,8 @@ document.addEventListener("DOMContentLoaded", () => {
     reportDeleteConfirmConfirm.disabled = true;
 
     try {
+      const viewed = allReports.find(item => item.id === currentlyViewedReportId);
+      await removeReportAttachments(viewed ? [viewed] : []);
       const { error } = await window.supabase
         .from('reports')
         .delete()
