@@ -3383,7 +3383,6 @@ document.addEventListener("DOMContentLoaded", () => {
     mismatchCommentInput.value = note;
     updateMismatchCount();
     openModal(mismatchCommentModal);
-    persistPresence(id, 2, note);
     setTimeout(() => mismatchCommentInput.focus(), 60);
   }
 
@@ -3396,6 +3395,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   mismatchCommentInput?.addEventListener('input', updateMismatchCount);
   document.getElementById('mismatchCommentCancel')?.addEventListener('click', () => {
+    mismatchCommentId = null;
     closeModal(mismatchCommentModal);
   });
   document.getElementById('mismatchCommentSave')?.addEventListener('click', () => {
