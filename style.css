@@ -4861,6 +4861,10 @@ body.dark .presence-qty .mat-presence-toggle {
   box-sizing: border-box;
   background: linear-gradient(180deg, #e7b15f, #d4892a);
   color: #3d2410;
+  visibility: hidden;
+}
+.mat-item.is-swiping .mat-swipe-reveal {
+  visibility: visible;
 }
 .mat-swipe-mark {
   width: 28px;
@@ -4905,7 +4909,9 @@ body.dark .presence-qty .mat-presence-toggle {
   row-gap: 6px;
   column-gap: 8px;
   padding: 10px 12px;
-  background: var(--bg-card);
+  background:
+    linear-gradient(var(--bg-card), var(--bg-card)),
+    var(--bg-app);
   touch-action: pan-y;
   transition: transform 0.18s ease;
 }
@@ -4919,13 +4925,19 @@ body.dark .presence-qty .mat-presence-toggle {
     "note note note note";
 }
 .presence-missing .mat-swipe-card {
-  background: color-mix(in srgb, #ff4b4b 14%, var(--bg-card));
+  background:
+    linear-gradient(color-mix(in srgb, #ff4b4b 14%, var(--bg-card)), color-mix(in srgb, #ff4b4b 14%, var(--bg-card))),
+    var(--bg-app);
 }
 .presence-here .mat-swipe-card {
-  background: color-mix(in srgb, #00d26a 14%, var(--bg-card));
+  background:
+    linear-gradient(color-mix(in srgb, #00d26a 14%, var(--bg-card)), color-mix(in srgb, #00d26a 14%, var(--bg-card))),
+    var(--bg-app);
 }
 .presence-qty .mat-swipe-card {
-  background: color-mix(in srgb, #f59e0b 18%, var(--bg-card));
+  background:
+    linear-gradient(color-mix(in srgb, #f59e0b 18%, var(--bg-card)), color-mix(in srgb, #f59e0b 18%, var(--bg-card))),
+    var(--bg-app);
 }
 .mat-presence-note {
   grid-area: note;
