@@ -777,7 +777,45 @@ document.addEventListener("DOMContentLoaded", () => {
     'reports': 'home'
   };
   
-  function navigateTo(viewName) {
+  const PLACE_KEY = 'elis-panel-place';
+  let placeReady = false;
+
+  function rememberPlace() {
+    if (!placeReady || !views[currentView]) return;
+    const place = { view: currentView === 'routePick' ? 'routesManage' : currentView };
+    if (place.view === 'customList' && activeCustomList) {
+      place.customListId = activeCustomList.id;
+      place.customListName = activeCustomList.name || '';
+    }
+    if (place.view === 'logoLocation' || place.view === 'logoRoutes') {
+      place.search = document.getElementById('matsSearch')?.value || '';
+    }
+    try { localStorage.setItem(PLACE_KEY, JSON.stringify(place)); } catch (error) {}
+  }
+
+  function restorePlace() {
+    let place = null;
+    try { place = JSON.parse(localStorage.getItem(PLACE_KEY) || 'null'); } catch (error) {}
+    let view = place && views[place.view] ? place.view : 'home';
+    if (view === 'routePick') view = 'routesManage';
+    if (view === 'routesManage' && !isAdmin) view = 'logoRoutes';
+    if (view === 'customList') {
+      if (!place.customListId) view = 'customLists';
+      else activeCustomList = { id: place.customListId, name: place.customListName || 'Lista' };
+    }
+    const keepSearch = (view === 'logoLocation' || view === 'logoRoutes') && !!(place && place.search);
+    if (keepSearch) {
+      const search = document.getElementById('matsSearch');
+      if (search) {
+        search.value = place.search;
+        search.classList.add('searching');
+      }
+    }
+    placeReady = true;
+    navigateTo(view, { keepSearch });
+  }
+
+  function navigateTo(viewName, options = {}) {
     if (viewName === 'mats') viewName = 'logo';
     if ((viewName === 'routesManage' || viewName === 'routePick') && !isAdmin) {
       showToast('Zarządzanie trasami jest dostępne po zalogowaniu administratora.', 'notice');
@@ -802,7 +840,7 @@ document.addEventListener("DOMContentLoaded", () => {
       headerTitle.textContent = logoListMode === 'routes' ? 'Trasy Logo' : 'Lokalizacja Logo';
       backBtn.style.display = 'flex';
       const search = document.getElementById('matsSearch');
-      if (search) {
+      if (search && !options.keepSearch) {
         search.value = '';
         search.classList.remove('searching');
       }
@@ -811,7 +849,7 @@ document.addEventListener("DOMContentLoaded", () => {
           const mats = await fetchAndCacheLogoMats();
           await ensureMatRoutes(false, logoListMode !== 'routes');
           if (currentView !== viewName) return;
-          renderMats(mats, '', true);
+          renderMats(mats, options.keepSearch ? (search?.value || '') : '', true);
       })();
     } else if (viewName === 'routesManage') {
       headerTitle.textContent = 'Zarządzanie trasami';
@@ -905,6 +943,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const appScroller = document.getElementById('app');
     if (appScroller) appScroller.scrollTop = 0;
     root.style.scrollBehavior = previousScroll;
+    rememberPlace();
   }
 
   backBtn.addEventListener('click', () => {
@@ -958,7 +997,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const subtitle = document.querySelector('.home-subtitle');
     if (subtitle) subtitle.textContent = 'Wybierz moduł z listy po lewej.';
     document.querySelector('.home-welcome').textContent = 'Elis ServiceHub';
-    navigateTo('home');
   }
   
   // ==================== MOTYWY ====================
@@ -3647,6 +3685,7 @@ document.addEventListener("DOMContentLoaded", () => {
     matsSearch.classList.toggle('searching', value.length > 0);
     
     renderMats(allLogoMats, value, true);
+    rememberPlace();
   });
 
   // Obsługa klawisza Escape - wyczyść wyszukiwanie
@@ -3655,6 +3694,7 @@ document.addEventListener("DOMContentLoaded", () => {
       matsSearch.value = '';
       matsSearch.classList.remove('searching');
       renderMats(allLogoMats, '', true);
+      rememberPlace();
     }
   });
 
@@ -7143,6 +7183,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // ==================== INICJALIZACJA ====================
   async function init() {
+    restorePlace();
     const logoMatsPromise = fetchAndCacheLogoMats();
     
     createCustomSelect(routeSelectWrapper, routesByDay, "— wybierz trasę —", "route", true);
@@ -7379,7 +7420,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     initPalletSystem();
     refreshReportAlerts(false);
-    navigateTo('home');
   }
 
   // ==================== ZGŁOSZENIA (LOGIKA JS) ====================
