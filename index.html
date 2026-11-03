@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
   <title>Elis ServiceHub — Centrum Główne</title>
-  <link rel="stylesheet" href="style.css?v=83">
+  <link rel="stylesheet" href="style.css?v=84">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0d1117">
   <meta name="mobile-web-app-capable" content="yes">
@@ -149,7 +149,7 @@
             </div>
           </button>
 
-          <button class="home-tile" data-navigate="mats">
+          <button class="home-tile" data-navigate="logo">
             <div class="home-tile-icon">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -161,7 +161,7 @@
               </svg>
             </div>
             <div class="home-tile-content">
-              <h2>Lista Mat Logo</h2>
+              <h2>Logo</h2>
               <p>Zarządzanie matami</p>
             </div>
           </button>
@@ -528,6 +528,43 @@
       </main>
     </div>
 
+    <!-- ==================== WIDOK: LOGO ==================== -->
+    <div id="logoHubView" class="view">
+      <main class="home-main logo-hub">
+        <div class="home-welcome">Logo</div>
+        <div class="home-subtitle">Co chcesz zrobić?</div>
+        <div class="logo-hub-grid">
+          <button class="home-tile" data-navigate="logoLocation">
+            <div class="home-tile-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                <circle cx="12" cy="10" r="3"></circle>
+              </svg>
+            </div>
+            <div class="home-tile-content">
+              <h2>Lokalizacja Logo</h2>
+              <p>Odkładam logo</p>
+            </div>
+          </button>
+          <button class="home-tile" data-navigate="logoRoutes">
+            <div class="home-tile-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="6" cy="19" r="3"></circle>
+                <path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"></path>
+                <circle cx="18" cy="5" r="3"></circle>
+              </svg>
+            </div>
+            <div class="home-tile-content">
+              <h2>Trasy Logo</h2>
+              <p>Składam trasę</p>
+            </div>
+          </button>
+        </div>
+      </main>
+    </div>
+
     <!-- ==================== WIDOK: LISTA MAT LOGO ==================== -->
     <div id="matsView" class="view">
       <main class="app-main">
@@ -590,13 +627,8 @@
               <circle cx="11" cy="11" r="8"></circle>
               <path d="m21 21-4.35-4.35"></path>
             </svg>
-            <input type="text" id="matsSearch" placeholder="Wpisz nazwę, lokalizację lub rozmiar..."
+            <input type="text" id="matsSearch" placeholder="Wpisz nazwę, numer, lokalizację lub rozmiar..."
               class="search-input">
-          </div>
-          <div class="mats-search-mode" role="group" aria-label="Szukaj">
-            <span class="mats-search-mode-label">Szukaj:</span>
-            <label class="mats-search-choice"><input type="checkbox" id="matsSearchByMat" checked> Maty</label>
-            <label class="mats-search-choice"><input type="checkbox" id="matsSearchByRoute"> Trasy</label>
           </div>
           <div id="adminAddMatSection" class="admin-add-mat-section" style="display: none;">
             <button id="addNewMatBtn" class="btn-add-mat">
@@ -614,7 +646,7 @@
         </section>
 
         <section>
-          <h2 class="section-title">📦 Lista Mat Logo</h2>
+          <h2 id="matsSectionTitle" class="section-title">Lokalizacja Logo</h2>
           <div id="matsList" class="mats-list"></div>
           <div id="matsLoadMoreSentinel" class="load-more-sentinel">
             <div class="load-more-spinner"></div>
@@ -631,7 +663,7 @@
             <h2>Zarządzanie trasami</h2>
             <button type="button" id="routeCreateBtn" class="btn-primary">Nowa trasa</button>
           </div>
-          <p class="routes-lead">Trasa grupuje maty. Na liście mat logo można potem szukać po nazwie trasy.</p>
+          <p class="routes-lead">Trasa grupuje maty. W panelu Trasy Logo można potem szukać po nazwie trasy.</p>
           <div id="routesList" class="routes-list"></div>
         </section>
       </main>
@@ -780,7 +812,7 @@
           <div class="card-header">
             <h2>🕒 Ostatnio dodane maty</h2>
           </div>
-          <p style="margin: 0 0 16px; color: var(--muted); font-size: 0.9rem;">Maty z Listy Mat Logo dodane w ciągu ostatnich 30 dni</p>
+          <p style="margin: 0 0 16px; color: var(--muted); font-size: 0.9rem;">Maty dodane w ciągu ostatnich 30 dni</p>
           <div class="search-box">
             <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1851,7 +1883,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script src="logoData.js?v=33"></script>
   <script src="locationFormat.js?v=1"></script>
-  <script src="script.js?v=80"></script>
+  <script src="script.js?v=81"></script>
 </body>
 
 </html>

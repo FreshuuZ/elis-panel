@@ -174,7 +174,7 @@ document.addEventListener("DOMContentLoaded", () => {
       showToast('✅ Zalogowano jako Administrator!', 'success');
       
       // Odśwież listę mat jeśli jesteśmy w widoku mat
-      if (currentView === 'mats') {
+      if (isLogoListView()) {
         renderMats(allLogoMats, matsSearch.value);
       } else if (currentView === 'seasonal') {
         renderSeasonalMats();
@@ -209,7 +209,7 @@ document.addEventListener("DOMContentLoaded", () => {
       showToast('🔒 Wylogowano z panelu administratora', 'error');
       
       // Odśwież listę mat jeśli jesteśmy w widoku mat
-      if (currentView === 'mats') {
+      if (isLogoListView()) {
         renderMats(allLogoMats, matsSearch.value);
       } else if (currentView === 'seasonal') {
         renderSeasonalMats();
@@ -244,9 +244,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const customListAddSection = document.getElementById('customListAddSection');
     if (customListAddSection) customListAddSection.style.display = isAdmin ? 'block' : 'none';
     
-    const openRoutesBtn = document.getElementById('openRoutesBtn');
-    if (openRoutesBtn) openRoutesBtn.style.display = isAdmin ? 'flex' : 'none';
-    if (!isAdmin && (currentView === 'routesManage' || currentView === 'routePick')) navigateTo('mats');
+    syncLogoListChrome();
+    if (!isAdmin && (currentView === 'routesManage' || currentView === 'routePick')) navigateTo('logoRoutes');
   }
 
   // ==================== EVENT LISTENERY ADMINA ====================
@@ -712,7 +711,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const views = {
     home: document.getElementById('homeView'),
     panel: document.getElementById('panelView'),
-    mats: document.getElementById('matsView'),
+    logo: document.getElementById('logoHubView'),
+    logoLocation: document.getElementById('matsView'),
+    logoRoutes: document.getElementById('matsView'),
     routesManage: document.getElementById('routesView'),
     routePick: document.getElementById('routePickView'),
     seasonal: document.getElementById('seasonalView'),
@@ -730,16 +731,44 @@ document.addEventListener("DOMContentLoaded", () => {
   const headerTitle = document.getElementById('headerTitle');
   const backBtn = document.getElementById('backBtn');
   let currentView = 'home';
+  let logoListMode = 'location';
+
+  function isLogoListView(name = currentView) {
+    return name === 'logoLocation' || name === 'logoRoutes';
+  }
+
+  function syncLogoListChrome() {
+    const routes = logoListMode === 'routes';
+    const sectionTitle = document.getElementById('matsSectionTitle');
+    const cardTitle = document.getElementById('matsListTitle');
+    if (sectionTitle) sectionTitle.textContent = routes ? 'Trasy Logo' : 'Lokalizacja Logo';
+    if (cardTitle) cardTitle.textContent = routes ? 'Trasy Logo' : 'Lokalizacja Logo';
+    const search = document.getElementById('matsSearch');
+    if (search) {
+      search.placeholder = routes
+        ? 'Wpisz numer trasy...'
+        : 'Wpisz nazwę, numer, lokalizację lub rozmiar...';
+    }
+    const seasonalBtn = document.getElementById('openSeasonalMatsBtn');
+    const recentBtn = document.getElementById('openRecentMatsBtn');
+    const routesBtn = document.getElementById('openRoutesBtn');
+    if (seasonalBtn) seasonalBtn.style.display = routes ? 'none' : '';
+    if (recentBtn) recentBtn.style.display = routes ? 'none' : '';
+    if (routesBtn) routesBtn.style.display = routes && isAdmin ? 'flex' : 'none';
+  }
+
   const viewParents = {
     'home': null,
     'panel': 'home',
-    'mats': 'home',
-    'routesManage': 'mats',
+    'logo': 'home',
+    'logoLocation': 'logo',
+    'logoRoutes': 'logo',
+    'routesManage': 'logoRoutes',
     'routePick': 'routesManage',
-    'seasonal': 'mats',
+    'seasonal': 'logoLocation',
     'customLists': 'home',
     'customList': 'customLists',
-    'recent': 'mats',
+    'recent': 'logoLocation',
     'washing': 'home',
     'archive': 'home',
     'archive-replacements': 'archive',
@@ -749,9 +778,10 @@ document.addEventListener("DOMContentLoaded", () => {
   };
   
   function navigateTo(viewName) {
+    if (viewName === 'mats') viewName = 'logo';
     if ((viewName === 'routesManage' || viewName === 'routePick') && !isAdmin) {
       showToast('Zarządzanie trasami jest dostępne po zalogowaniu administratora.', 'notice');
-      viewName = 'mats';
+      viewName = 'logoRoutes';
     }
     Object.values(views).forEach(v => v?.classList.remove('active'));
     views[viewName]?.classList.add('active');
@@ -764,13 +794,24 @@ document.addEventListener("DOMContentLoaded", () => {
     } else if (viewName === 'panel') {
       headerTitle.textContent = 'Panel Tras i Zmian';
       backBtn.style.display = 'flex';
-    } else if (viewName === 'mats') {
-      headerTitle.textContent = 'Lista Mat Logo';
+    } else if (viewName === 'logo') {
+      headerTitle.textContent = 'Logo';
       backBtn.style.display = 'flex';
+    } else if (viewName === 'logoLocation' || viewName === 'logoRoutes') {
+      logoListMode = viewName === 'logoRoutes' ? 'routes' : 'location';
+      headerTitle.textContent = logoListMode === 'routes' ? 'Trasy Logo' : 'Lokalizacja Logo';
+      backBtn.style.display = 'flex';
+      const search = document.getElementById('matsSearch');
+      if (search) {
+        search.value = '';
+        search.classList.remove('searching');
+      }
+      syncLogoListChrome();
       (async () => {
           const mats = await fetchAndCacheLogoMats();
-          await ensureMatRoutes(false, true);
-          renderMats(mats, matsSearch.value, true);
+          await ensureMatRoutes(false, logoListMode !== 'routes');
+          if (currentView !== viewName) return;
+          renderMats(mats, '', true);
       })();
     } else if (viewName === 'routesManage') {
       headerTitle.textContent = 'Zarządzanie trasami';
@@ -839,7 +880,7 @@ document.addEventListener("DOMContentLoaded", () => {
     
     document.body.classList.toggle('is-route-pick', viewName === 'routePick');
 
-    if (viewName !== 'mats') {
+    if (!isLogoListView(viewName)) {
       document.querySelectorAll('.mats-virtual-spacer').forEach(spacer => {
         spacer.style.height = '0px';
       });
@@ -2923,7 +2964,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function executeRenderMats(matsData, filter = '', resetScroll = false) {
     const search = filter.toLowerCase().trim();
     
-    const routeSearch = document.getElementById('matsSearchByRoute')?.checked;
+    const routeSearch = logoListMode === 'routes';
     if (routeSearch && search) {
       const matched = new Set();
       allMatRoutes.forEach(route => {
@@ -2959,7 +3000,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     
     matsList.classList.add('mats-virtual');
-    if (resetScroll && currentView === 'mats') {
+    if (resetScroll && isLogoListView()) {
       const scroller = getMatsScroller();
       if (scroller) setMatsScroll(scroller, 0);
     }
@@ -3031,7 +3072,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (matsScrollScheduled) return;
       matsScrollScheduled = requestAnimationFrame(() => {
         matsScrollScheduled = 0;
-        if (currentView !== 'mats' || !matsList.classList.contains('mats-virtual')) return;
+        if (!isLogoListView() || !matsList.classList.contains('mats-virtual')) return;
         renderMatsWindow();
       });
     };
@@ -3583,7 +3624,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <path d="m21 21-4.35-4.35"></path>
         </svg>
         <div class="empty-state-text">
-          ${filter ? 'Nie znaleziono mat spełniających kryteria.' : 'Brak danych do wyświetlenia.'}
+          ${filter ? (logoListMode === 'routes' ? 'Nie znaleziono mat na takiej trasie.' : 'Nie znaleziono mat spełniających kryteria.') : 'Brak danych do wyświetlenia.'}
         </div>
       </div>
     `;
@@ -3616,28 +3657,6 @@ document.addEventListener("DOMContentLoaded", () => {
       renderMats(allLogoMats, '', true);
     }
   });
-
-  const matsSearchByMat = document.getElementById('matsSearchByMat');
-  const matsSearchByRoute = document.getElementById('matsSearchByRoute');
-
-  function setMatSearchMode(mode) {
-    if (matsSearchByMat) matsSearchByMat.checked = mode !== 'routes';
-    if (matsSearchByRoute) matsSearchByRoute.checked = mode === 'routes';
-    if (matsSearch) {
-      matsSearch.placeholder = mode === 'routes'
-        ? 'Wpisz numer trasy...'
-        : 'Wpisz nazwę, lokalizację lub rozmiar...';
-    }
-    if (mode === 'routes') {
-      ensureMatRoutes().then(() => {
-        if (matsSearchByRoute?.checked) renderMats(allLogoMats, matsSearch?.value || '', true);
-      });
-    }
-    renderMats(allLogoMats, matsSearch?.value || '', true);
-  }
-
-  matsSearchByMat?.addEventListener('change', () => setMatSearchMode(matsSearchByMat.checked ? 'mats' : 'routes'));
-  matsSearchByRoute?.addEventListener('change', () => setMatSearchMode(matsSearchByRoute.checked ? 'routes' : 'mats'));
 
   let routeDraft = { id: null, name: '', selected: new Set() };
   let routeDeleteId = null;
@@ -3893,7 +3912,7 @@ document.addEventListener("DOMContentLoaded", () => {
       matRoutesReady = false;
       await ensureMatRoutes(true);
       renderRoutesList();
-      if (currentView === 'mats') renderMats(allLogoMats, matsSearch?.value || '', true);
+      if (isLogoListView()) renderMats(allLogoMats, matsSearch?.value || '', true);
       showToast('Trasa usunięta.');
     } catch (error) {
       if (routeErrorIsSchema(error)) warnRouteSchema();
@@ -4319,6 +4338,23 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
   
+  function routeSortKey(mat) {
+    const names = routeNamesForMat(mat.id);
+    return names.length ? names.join(', ') : '\uffff';
+  }
+
+  function sortedLogoExport() {
+    const routesExport = logoListMode === 'routes';
+    const sortedMats = [...allLogoMats].sort((a, b) => {
+      if (routesExport) {
+        const routeOrder = routeSortKey(a).localeCompare(routeSortKey(b), 'pl', { numeric: true });
+        if (routeOrder) return routeOrder;
+      }
+      return String(a.name || '').localeCompare(String(b.name || ''), 'pl');
+    });
+    return { routesExport, sortedMats };
+  }
+
   exportExcelBtn.addEventListener('click', async () => {
     if (allLogoMats.length === 0) {
       showToast("Brak danych mat do wyeksportowania.", "error");
@@ -4330,24 +4366,26 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     try {
+      if (logoListMode === 'routes') await ensureMatRoutes();
+      const { routesExport, sortedMats } = sortedLogoExport();
+      const lastCol = routesExport ? 'E' : 'D';
       const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet('Inwentaryzacja Mat', { pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 } });
+      const worksheet = workbook.addWorksheet(routesExport ? 'Trasy Logo' : 'Lokalizacja Logo', { pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 } });
       workbook.creator = 'Elis System';
       workbook.created = new Date();
       workbook.company = 'Elis';
       const currentDate = new Date().toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
       const totalQuantity = allLogoMats.reduce((sum, mat) => sum + mat.quantity, 0);
-      const sortedMats = [...allLogoMats].sort((a, b) => a.name.localeCompare(b.name, 'pl'));
 
-      worksheet.mergeCells('A1:D1');
+      worksheet.mergeCells(`A1:${lastCol}1`);
       const titleCell = worksheet.getCell('A1');
-      titleCell.value = 'ELIS - INWENTARYZACJA MAT LOGO';
+      titleCell.value = routesExport ? 'ELIS - TRASY LOGO' : 'ELIS - LOKALIZACJA LOGO';
       titleCell.font = { name: 'Calibri', size: 18, bold: true, color: { argb: 'FFFFFFFF' } };
       titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF00A9BE' } };
       titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
       worksheet.getRow(1).height = 35;
 
-      worksheet.mergeCells('A2:D2');
+      worksheet.mergeCells(`A2:${lastCol}2`);
       const dateCell = worksheet.getCell('A2');
       dateCell.value = `Data wygenerowania: ${currentDate}`;
       dateCell.font = { name: 'Calibri', size: 10, italic: true };
@@ -4356,7 +4394,7 @@ document.addEventListener("DOMContentLoaded", () => {
       worksheet.addRow([]);
 
       const summaryRow1 = worksheet.addRow(['PODSUMOWANIE', '', '', '']);
-      worksheet.mergeCells(`A${summaryRow1.number}:D${summaryRow1.number}`);
+      worksheet.mergeCells(`A${summaryRow1.number}:${lastCol}${summaryRow1.number}`);
       summaryRow1.getCell(1).font = { name: 'Calibri', size: 12, bold: true };
       summaryRow1.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE3E9F0' } };
       summaryRow1.height = 25;
@@ -4370,7 +4408,9 @@ document.addEventListener("DOMContentLoaded", () => {
       });
       worksheet.addRow([]);
 
-      const headerRow = worksheet.addRow(['Nazwa maty', 'Lokalizacja', 'Rozmiar', 'Ilość (szt.)']);
+      const headerRow = worksheet.addRow(routesExport
+        ? ['Nazwa maty', 'Trasa', 'Lokalizacja', 'Rozmiar', 'Ilość (szt.)']
+        : ['Nazwa maty', 'Lokalizacja', 'Rozmiar', 'Ilość (szt.)']);
       headerRow.height = 30;
       headerRow.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
       headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0D1117' } };
@@ -4378,38 +4418,49 @@ document.addEventListener("DOMContentLoaded", () => {
       headerRow.eachCell((cell) => { cell.border = { top: { style: 'thin', color: { argb: 'FF000000' } }, left: { style: 'thin', color: { argb: 'FF000000' } }, bottom: { style: 'medium', color: { argb: 'FF000000' } }, right: { style: 'thin', color: { argb: 'FF000000' } } }; });
 
       sortedMats.forEach((mat, index) => {
-        const row = worksheet.addRow([mat.name, LocationFormat.describeLocation(mat.location) || 'Nie określono', mat.size || 'Nie określono', mat.quantity]);
+        const values = routesExport
+          ? [mat.name, routeNamesForMat(mat.id).join(', ') || '—', LocationFormat.describeLocation(mat.location) || 'Nie określono', mat.size || 'Nie określono', mat.quantity]
+          : [mat.name, LocationFormat.describeLocation(mat.location) || 'Nie określono', mat.size || 'Nie określono', mat.quantity];
+        const row = worksheet.addRow(values);
         row.height = 22;
         row.font = { name: 'Calibri', size: 10 };
         if (index % 2 === 0) { row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9FAFB' } }; }
-        row.getCell(1).alignment = { vertical: 'middle', horizontal: 'left' };
-        row.getCell(2).alignment = { vertical: 'middle', horizontal: 'left' };
-        row.getCell(3).alignment = { vertical: 'middle', horizontal: 'center' };
-        row.getCell(4).alignment = { vertical: 'middle', horizontal: 'center' };
-        row.getCell(4).font = { name: 'Calibri', size: 10, bold: true };
+        const textColumns = routesExport ? 3 : 2;
+        values.forEach((_, cellIndex) => {
+          const cell = row.getCell(cellIndex + 1);
+          const isQty = cellIndex === values.length - 1;
+          cell.alignment = { vertical: 'middle', horizontal: cellIndex < textColumns ? 'left' : 'center' };
+          if (isQty) cell.font = { name: 'Calibri', size: 10, bold: true };
+        });
         row.eachCell((cell) => { cell.border = { top: { style: 'thin', color: { argb: 'FFD1D5DB' } }, left: { style: 'thin', color: { argb: 'FFD1D5DB' } }, bottom: { style: 'thin', color: { argb: 'FFD1D5DB' } }, right: { style: 'thin', color: { argb: 'FFD1D5DB' } } }; });
       });
 
       worksheet.addRow([]);
-      const totalRow = worksheet.addRow(['', '', 'SUMA CAŁKOWITA:', totalQuantity]);
+      const totalRow = worksheet.addRow(routesExport
+        ? ['', '', '', 'SUMA CAŁKOWITA:', totalQuantity]
+        : ['', '', 'SUMA CAŁKOWITA:', totalQuantity]);
+      const totalLabel = routesExport ? 4 : 3;
+      const totalQty = routesExport ? 5 : 4;
       totalRow.height = 28;
-      totalRow.getCell(3).font = { name: 'Calibri', size: 11, bold: true };
-      totalRow.getCell(4).font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FF00A9BE' } };
-      totalRow.getCell(3).alignment = { horizontal: 'right', vertical: 'middle' };
-      totalRow.getCell(4).alignment = { horizontal: 'center', vertical: 'middle' };
-      totalRow.getCell(4).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0F7FA' } };
+      totalRow.getCell(totalLabel).font = { name: 'Calibri', size: 11, bold: true };
+      totalRow.getCell(totalQty).font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FF00A9BE' } };
+      totalRow.getCell(totalLabel).alignment = { horizontal: 'right', vertical: 'middle' };
+      totalRow.getCell(totalQty).alignment = { horizontal: 'center', vertical: 'middle' };
+      totalRow.getCell(totalQty).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0F7FA' } };
 
       worksheet.addRow([]);
       const footerRow = worksheet.addRow(['Dokument wygenerowany automatycznie przez system Elis', '', '', '']);
-      worksheet.mergeCells(`A${footerRow.number}:D${footerRow.number}`);
+      worksheet.mergeCells(`A${footerRow.number}:${lastCol}${footerRow.number}`);
       footerRow.getCell(1).font = { name: 'Calibri', size: 9, italic: true, color: { argb: 'FF6B7280' } };
       footerRow.getCell(1).alignment = { horizontal: 'center' };
 
-      worksheet.columns = [ { width: 40 }, { width: 25 }, { width: 18 }, { width: 15 } ];
+      worksheet.columns = routesExport
+        ? [ { width: 40 }, { width: 22 }, { width: 25 }, { width: 18 }, { width: 15 } ]
+        : [ { width: 40 }, { width: 25 }, { width: 18 }, { width: 15 } ];
       
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const fileName = `Elis_Inwentaryzacja_Mat_${new Date().toISOString().split('T')[0]}.xlsx`;
+      const fileName = `${routesExport ? 'Elis_Trasy_Logo' : 'Elis_Lokalizacja_Logo'}_${new Date().toISOString().split('T')[0]}.xlsx`;
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -4423,20 +4474,21 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  printMatsBtn.addEventListener('click', () => {
+  printMatsBtn.addEventListener('click', async () => {
     if (allLogoMats.length === 0) {
       showToast("Brak danych mat do wydrukowania.", "error");
       return;
     }
+    if (logoListMode === 'routes') await ensureMatRoutes();
+    const { routesExport, sortedMats } = sortedLogoExport();
     const printDate = new Date().toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     const totalQuantity = allLogoMats.reduce((sum, mat) => sum + mat.quantity, 0);
-    const sortedMats = [...allLogoMats].sort((a, b) => a.name.localeCompare(b.name, 'pl'));
     
     let printHTML = `
       <div class="print-mats-header">
         <img src="icons/icon-192.png" alt="Elis Logo">
         <div class="title-block">
-          <h1>Lista Mat Logo - Inwentaryzacja</h1>
+          <h1>${routesExport ? 'Trasy Logo' : 'Lokalizacja Logo'}</h1>
           <p>Data wydruku: ${printDate}</p>
         </div>
       </div>
@@ -4445,11 +4497,12 @@ document.addEventListener("DOMContentLoaded", () => {
         <p><strong>Suma wszystkich mat:</strong> ${totalQuantity} szt.</p>
       </div>
       <table class="print-mats-table">
-        <thead><tr><th>Nazwa</th><th>Lokalizacja</th><th>Rozmiar</th><th>Ilość</th></tr></thead>
+        <thead><tr><th>Nazwa</th>${routesExport ? '<th>Trasa</th>' : ''}<th>Lokalizacja</th><th>Rozmiar</th><th>Ilość</th></tr></thead>
         <tbody>
     `;
     sortedMats.forEach(mat => {
-      printHTML += `<tr><td>${mat.name}</td><td>${escapeHtml(LocationFormat.describeLocation(mat.location)) || '—'}</td><td>${mat.size || '—'}</td><td>${mat.quantity}</td></tr>`;
+      const routeCell = routesExport ? `<td>${escapeHtml(routeNamesForMat(mat.id).join(', ') || '—')}</td>` : '';
+      printHTML += `<tr><td>${escapeHtml(mat.name || '')}</td>${routeCell}<td>${escapeHtml(LocationFormat.describeLocation(mat.location)) || '—'}</td><td>${escapeHtml(mat.size || '') || '—'}</td><td>${mat.quantity}</td></tr>`;
     });
     printHTML += `</tbody></table><div class="print-mats-footer"><p>Dokument wygenerowany automatycznie przez system Elis</p></div>`;
     printOutput.innerHTML = printHTML;
@@ -7161,7 +7214,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     async function syncMatPresence() {
-      if (currentView !== 'mats' || !allLogoMats.length) return;
+      if (!isLogoListView() || !allLogoMats.length) return;
       if (matPresenceStateColumn !== false) {
         const columns = matPresenceNoteColumn === false
           ? 'id,presence_state,present'
@@ -7225,7 +7278,7 @@ document.addEventListener("DOMContentLoaded", () => {
         allLogoMats = [];
         const newMats = await fetchAndCacheLogoMats();
         
-        if (currentView === 'mats') {
+        if (isLogoListView()) {
           renderMats(newMats, matsSearch.value);
         } else if (currentView === 'recent') {
           loadRecentMats();

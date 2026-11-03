@@ -328,6 +328,14 @@ body.halloween .desktop-download-btn {
   max-width: 800px;
 }
 
+.logo-hub-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+  width: 100%;
+  max-width: 820px;
+}
+
 .home-tile {
   background: var(--bg-card);
   backdrop-filter: blur(10px);
@@ -3270,7 +3278,8 @@ body.dark .archive-change-item.addition {
   .home-welcome {
     font-size: 2rem;
   }
-  .home-grid {
+  .home-grid,
+  .logo-hub-grid {
     grid-template-columns: 1fr;
   }
   .mat-item {
@@ -6809,6 +6818,10 @@ body.elis-desktop .home-subtitle {
 body.elis-desktop .home-grid,
 body.elis-desktop .app-footer {
   display: none;
+}
+
+body.elis-desktop .logo-hub-grid {
+  display: grid;
 }
 
 body.elis-desktop .app-main {
