@@ -592,6 +592,54 @@ body.dark .btn-print-mats:hover {
   background: rgba(0, 194, 209, 0.2);
 }
 
+.btn-routes {
+  background: rgba(0, 169, 190, 0.14);
+  border: 2px solid rgba(0, 169, 190, 0.45);
+  color: var(--primary);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.btn-routes:hover {
+  background: rgba(0, 169, 190, 0.24);
+  border-color: var(--primary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 169, 190, 0.22);
+}
+
+.btn-routes svg {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+}
+
+body.dark .btn-routes {
+  background: rgba(0, 194, 209, 0.16);
+  border-color: rgba(0, 194, 209, 0.45);
+}
+
+body.dark .btn-routes:hover {
+  background: rgba(0, 194, 209, 0.26);
+  border-color: var(--primary);
+}
+
+body.nordic .btn-routes {
+  background: rgba(39, 197, 200, 0.14);
+  border-color: rgba(139, 221, 235, 0.4);
+  color: #8BDDEB;
+}
+
+body.nordic .btn-routes:hover {
+  background: rgba(39, 197, 200, 0.24);
+  border-color: #27C5C8;
+  box-shadow: 0 4px 14px rgba(39, 197, 200, 0.22);
+}
+
 /* --- LISTA MAT --- */
 .mats-list {
   display: flex;
@@ -3101,7 +3149,8 @@ body.dark .archive-change-item.addition {
   }
   
   .btn-print-mats,
-  .btn-export-excel {
+  .btn-export-excel,
+  .btn-routes {
     width: 100%;
     justify-content: center;
   }

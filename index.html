@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
   <title>Elis ServiceHub — Centrum Główne</title>
-  <link rel="stylesheet" href="style.css?v=81">
+  <link rel="stylesheet" href="style.css?v=82">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0d1117">
   <meta name="mobile-web-app-capable" content="yes">
@@ -535,7 +535,15 @@
           <div class="card-header">
             <h2 id="matsListTitle">Lista Mat</h2>
             <div class="mats-actions-buttons">
-              <button id="openRoutesBtn" class="btn-secondary" data-navigate="routesManage" style="display: none;">Zarządzanie trasami</button>
+              <button id="openRoutesBtn" class="btn-routes" data-navigate="routesManage" style="display: none;" aria-label="Zarządzanie trasami">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="6" cy="19" r="3"></circle>
+                  <path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"></path>
+                  <circle cx="18" cy="5" r="3"></circle>
+                </svg>
+                <span>Zarządzanie trasami</span>
+              </button>
 
               <button id="openSeasonalMatsBtn" class="btn-print-mats" data-navigate="seasonal" aria-label="Maty logo sezonowe">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
