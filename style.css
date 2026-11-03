@@ -4915,6 +4915,16 @@ body.dark .presence-qty .mat-presence-toggle {
 .mat-item.is-swiping .mat-swipe-reveal {
   visibility: visible;
 }
+.mat-item.is-swiping.presence-missing,
+.mat-item.is-swiping.presence-here,
+.mat-item.is-swiping.presence-qty {
+  border-left-color: #d4892a;
+}
+.mat-item.swipe-ready.presence-missing,
+.mat-item.swipe-ready.presence-here,
+.mat-item.swipe-ready.presence-qty {
+  border-left-color: #c47a1c;
+}
 .mat-swipe-mark {
   width: 28px;
   height: 28px;
