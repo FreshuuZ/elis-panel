@@ -812,39 +812,65 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
     placeReady = true;
-    const url = historyUrl();
-    history.replaceState({ elis: 1, root: 1, view: 'home' }, '', url);
+    seedHistory(view);
     navigateTo(view, { fromHistory: true, keepSearch });
-    if (view !== 'home') history.pushState({ elis: 1, guard: 1, view }, '', url);
   }
 
   let historyNav = false;
-  let leavingViaHistory = false;
 
-  function historyUrl() {
-    return location.pathname + location.search + location.hash;
+  function urlFor(viewName) {
+    const path = location.pathname + location.search;
+    if (!viewName || viewName === 'home') return path;
+    return path + '#' + viewName;
+  }
+
+  function historyState(viewName) {
+    const state = { elis: 1, view: viewName };
+    if (viewName === 'customList' && activeCustomList) {
+      state.customListId = activeCustomList.id;
+      state.customListName = activeCustomList.name || '';
+    }
+    if (viewName === 'logoLocation' || viewName === 'logoRoutes') {
+      state.search = document.getElementById('matsSearch')?.value || '';
+    }
+    return state;
+  }
+
+  function ancestorChain(viewName) {
+    const chain = [];
+    let cursor = viewName;
+    const seen = new Set();
+    while (cursor && !seen.has(cursor)) {
+      seen.add(cursor);
+      chain.unshift(cursor);
+      cursor = viewParents[cursor] || null;
+    }
+    if (chain[0] !== 'home') chain.unshift('home');
+    return chain;
+  }
+
+  function seedHistory(viewName) {
+    const chain = ancestorChain(viewName);
+    history.replaceState({ elis: 1, view: 'home' }, '', urlFor('home'));
+    for (let i = 1; i < chain.length; i++) {
+      const step = chain[i];
+      const state = i === chain.length - 1 ? historyState(step) : { elis: 1, view: step };
+      history.pushState(state, '', urlFor(step));
+    }
   }
 
   function syncHistory(viewName) {
     if (historyNav) return;
-    const url = historyUrl();
-    if (!history.state || history.state.elis !== 1) {
-      history.replaceState({ elis: 1, root: 1, view: 'home' }, '', url);
-    }
-    if (viewName === 'home') {
-      if (history.state && history.state.guard) history.back();
+    const state = history.state;
+    if (state && state.elis && state.view === viewName) {
+      history.replaceState(historyState(viewName), '', urlFor(viewName));
       return;
     }
-    const state = { elis: 1, guard: 1, view: viewName };
-    if (history.state && history.state.guard) history.replaceState(state, '', url);
-    else history.pushState(state, '', url);
-  }
-
-  function overlayOpen() {
-    const lightbox = document.getElementById('reportPhotoLightbox');
-    if (lightbox && !lightbox.hidden) return true;
-    if (document.getElementById('themeMenu')?.classList.contains('open')) return true;
-    return [...document.querySelectorAll('.modal')].some(modal => modal.style.display === 'flex');
+    if (state && state.elis && viewParents[state.view] === viewName) {
+      history.back();
+      return;
+    }
+    history.pushState(historyState(viewName), '', urlFor(viewName));
   }
 
   function dismissTransientUi() {
@@ -997,31 +1023,37 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
 
-  window.addEventListener('popstate', () => {
-    if (leavingViaHistory) return;
+  window.addEventListener('popstate', (event) => {
     if (dismissTransientUi()) {
-      if (overlayOpen() || currentView !== 'home') {
-        history.pushState({ elis: 1, guard: 1, view: currentView }, '', historyUrl());
-      }
+      history.pushState(historyState(currentView), '', urlFor(currentView));
       return;
     }
-    const parent = viewParents[currentView];
-    if (!parent) {
-      leavingViaHistory = true;
-      history.back();
-      window.setTimeout(() => { leavingViaHistory = false; }, 400);
-      return;
+    const state = event.state;
+    let view = state && state.elis && views[state.view] ? state.view : 'home';
+    if (view === 'routePick') view = 'routesManage';
+    if ((view === 'routesManage' || view === 'routePick') && !isAdmin) view = 'logoRoutes';
+    if (view === 'customList') {
+      if (state && state.customListId) {
+        activeCustomList = { id: state.customListId, name: state.customListName || 'Lista' };
+      } else {
+        view = 'customLists';
+      }
+    }
+    const keepSearch = (view === 'logoLocation' || view === 'logoRoutes') && !!(state && state.search);
+    if (keepSearch) {
+      const search = document.getElementById('matsSearch');
+      if (search) {
+        search.value = state.search;
+        search.classList.add('searching');
+      }
     }
     historyNav = true;
-    navigateTo(parent, { fromHistory: true });
+    navigateTo(view, { fromHistory: true, keepSearch });
     historyNav = false;
-    if (parent !== 'home') {
-      history.pushState({ elis: 1, guard: 1, view: parent }, '', historyUrl());
-    }
   });
 
   backBtn.addEventListener('click', () => {
-    if (history.state && history.state.guard) {
+    if (history.state && history.state.elis && history.state.view && history.state.view !== 'home') {
       history.back();
       return;
     }
