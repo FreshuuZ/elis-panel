@@ -793,38 +793,42 @@ document.addEventListener("DOMContentLoaded", () => {
     try { localStorage.setItem(PLACE_KEY, JSON.stringify(place)); } catch (error) {}
   }
 
-  function restorePlace() {
-    let place = null;
-    try { place = JSON.parse(localStorage.getItem(PLACE_KEY) || 'null'); } catch (error) {}
+  function savedPlace() {
+    try { return JSON.parse(localStorage.getItem(PLACE_KEY) || 'null'); } catch (error) { return null; }
+  }
+
+  function normalizeSavedView(place) {
     let view = place && views[place.view] ? place.view : 'home';
     if (view === 'routePick') view = 'routesManage';
     if (view === 'routesManage' && !isAdmin) view = 'logoRoutes';
-    if (view === 'customList') {
-      if (!place.customListId) view = 'customLists';
-      else activeCustomList = { id: place.customListId, name: place.customListName || 'Lista' };
-    }
-    const keepSearch = (view === 'logoLocation' || view === 'logoRoutes') && !!(place && place.search);
-    if (keepSearch) {
-      const search = document.getElementById('matsSearch');
-      if (search) {
-        search.value = place.search;
-        search.classList.add('searching');
-      }
-    }
-    placeReady = true;
-    navigateTo(view, { fromHistory: true, keepSearch });
-    scheduleTrap();
+    if (view === 'customList' && !(place && place.customListId)) view = 'customLists';
+    return view;
   }
 
-  let historyNav = false;
-  let historyTrapReady = false;
-  let armedThisLoad = false;
-  let armAttempts = 0;
+  function panelUrl(viewName) {
+    const url = new URL(location.href);
+    url.hash = '';
+    if (!viewName || viewName === 'home') url.searchParams.delete('panel');
+    else url.searchParams.set('panel', viewName);
+    return url.pathname + url.search;
+  }
 
-  function urlFor(viewName) {
-    const path = location.pathname + location.search;
-    if (!viewName || viewName === 'home') return path;
-    return path + '#' + viewName;
+  function panelFromUrl() {
+    const value = new URL(location.href).searchParams.get('panel');
+    return value && views[value] ? value : 'home';
+  }
+
+  function ancestorChain(viewName) {
+    const chain = [];
+    let cursor = viewName || 'home';
+    const seen = new Set();
+    while (cursor && !seen.has(cursor)) {
+      seen.add(cursor);
+      chain.unshift(cursor);
+      cursor = viewParents[cursor] || null;
+    }
+    if (chain[0] !== 'home') chain.unshift('home');
+    return chain;
   }
 
   function parentOf(viewName) {
@@ -833,39 +837,69 @@ document.addEventListener("DOMContentLoaded", () => {
     return parent;
   }
 
-  function pushTrap(viewName) {
-    history.pushState({ elis: 1, trap: 1, view: viewName }, '', urlFor(viewName));
-    historyTrapReady = true;
+  let leavingForStack = false;
+
+  function afterSettled(fn) {
+    leavingForStack = true;
+    const run = () => setTimeout(fn, 60);
+    if (document.readyState === 'complete') run();
+    else window.addEventListener('load', run, { once: true });
   }
 
-  function armTrap() {
-    if (armedThisLoad || armAttempts >= 8) return;
-    if (!currentView || currentView === 'home') {
-      if (document.readyState === 'complete') armedThisLoad = true;
-      return;
+  function restorePlace() {
+    const place = savedPlace();
+    const saved = normalizeSavedView(place);
+    const here = panelFromUrl();
+    if (!sessionStorage.getItem('elis-stack-ready')) {
+      const chain = ancestorChain(saved);
+      let step = Number(sessionStorage.getItem('elis-step') || '0');
+      if (!Number.isFinite(step) || step < 0) step = 0;
+      if (chain[step] !== here) {
+        sessionStorage.setItem('elis-step', '0');
+        document.documentElement.style.visibility = 'hidden';
+        afterSettled(() => location.replace(panelUrl('home')));
+        return 'redirect';
+      }
+      if (step < chain.length - 1) {
+        sessionStorage.setItem('elis-step', String(step + 1));
+        document.documentElement.style.visibility = 'hidden';
+        navigateTo(chain[step], { fromHistory: true });
+        afterSettled(() => location.assign(panelUrl(chain[step + 1])));
+        return 'redirect';
+      }
+      sessionStorage.setItem('elis-stack-ready', '1');
     }
-    armAttempts += 1;
-    const view = currentView;
-    const before = history.length;
-    history.replaceState({ elis: 1, base: 1, view: 'home' }, '', urlFor('home'));
-    pushTrap(view);
-    if (history.length > before) armedThisLoad = true;
+    let view = here;
+    if (view === 'routePick') view = 'routesManage';
+    if ((view === 'routesManage' || view === 'routePick') && !isAdmin) view = 'logoRoutes';
+    if (view === 'customList' && place && place.customListId) {
+      activeCustomList = { id: place.customListId, name: place.customListName || 'Lista' };
+    }
+    if (view === 'customList' && !(place && place.customListId)) view = 'customLists';
+    const keepSearch = view === saved && (view === 'logoLocation' || view === 'logoRoutes') && !!(place && place.search);
+    if (keepSearch) {
+      const search = document.getElementById('matsSearch');
+      if (search) {
+        search.value = place.search;
+        search.classList.add('searching');
+      }
+    }
+    placeReady = true;
+    document.documentElement.style.visibility = '';
+    navigateTo(view, { fromHistory: true, keepSearch });
+    return 'ok';
   }
 
-  function syncHistory(viewName) {
-    if (historyNav) return;
-    if (viewName === 'home') {
-      historyTrapReady = false;
-      if (history.state && history.state.trap) history.back();
-      else history.replaceState({ elis: 1, base: 1, view: 'home' }, '', urlFor('home'));
+  function syncHistory(viewName, previous) {
+    const next = panelUrl(viewName);
+    if (next === location.pathname + location.search) return;
+    const goingUp = previous && parentOf(previous) === viewName;
+    if (goingUp && history.length > 1) {
+      history.back();
       return;
     }
-    if (history.state && history.state.trap) {
-      history.replaceState({ elis: 1, trap: 1, view: viewName }, '', urlFor(viewName));
-      historyTrapReady = true;
-      return;
-    }
-    pushTrap(viewName);
+    if (goingUp) location.replace(next);
+    else location.assign(next);
   }
 
   function dismissTransientUi() {
@@ -885,6 +919,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function navigateTo(viewName, options = {}) {
+    const leaving = currentView;
     if (viewName === 'mats') viewName = 'logo';
     if ((viewName === 'routesManage' || viewName === 'routePick') && !isAdmin) {
       showToast('Zarządzanie trasami jest dostępne po zalogowaniu administratora.', 'notice');
@@ -1013,41 +1048,31 @@ document.addEventListener("DOMContentLoaded", () => {
     if (appScroller) appScroller.scrollTop = 0;
     root.style.scrollBehavior = previousScroll;
     rememberPlace();
-    if (!options.fromHistory) syncHistory(currentView);
+    if (!options.fromHistory) syncHistory(currentView, leaving);
   }
 
   if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
 
+  window.addEventListener('pageshow', (event) => {
+    if (leavingForStack && !event.persisted) return;
+    document.documentElement.style.visibility = '';
+    if (!event.persisted || !currentView) return;
+    placeReady = true;
+    rememberPlace();
+    if (currentView === 'routesManage') loadRoutesScreen();
+    else if (currentView === 'logoLocation' || currentView === 'logoRoutes') navigateTo(currentView, { fromHistory: true, keepSearch: true });
+    else if (currentView === 'seasonal') loadSeasonalMats();
+    else if (currentView === 'recent') loadRecentMats();
+  });
+
   window.addEventListener('popstate', () => {
-    if (dismissTransientUi()) {
-      if (currentView !== 'home') pushTrap(currentView);
-      return;
-    }
-    const parent = parentOf(currentView);
-    if (!parent) {
-      historyTrapReady = false;
-      return;
-    }
-    historyNav = true;
-    navigateTo(parent, { fromHistory: true });
-    historyNav = false;
-    historyTrapReady = false;
-    if (parent !== 'home') pushTrap(parent);
+    dismissTransientUi();
   });
 
   backBtn.addEventListener('click', () => {
-    if (history.state && history.state.trap) {
-      history.back();
-      return;
-    }
-    navigateTo(parentOf(currentView) || 'home');
+    if (parentOf(currentView)) history.back();
+    else navigateTo('home');
   });
-
-  function scheduleTrap() {
-    [0, 60, 200, 700, 1500].forEach(ms => setTimeout(armTrap, ms));
-    window.addEventListener('pageshow', () => setTimeout(armTrap, 0));
-    document.addEventListener('pointerdown', () => armTrap(), true);
-  }
   
   document.querySelectorAll('[data-navigate]').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -1861,7 +1886,12 @@ document.addEventListener("DOMContentLoaded", () => {
     
     persist(); 
   };
-  const openModal = (modal) => modal.style.display = "flex";
+  const openModal = (modal) => {
+    modal.style.display = 'flex';
+    if (!history.state || !history.state.modal) {
+      history.pushState({ elis: 1, modal: 1 }, '', location.href);
+    }
+  };
   const closeModal = (modal) => modal.style.display = "none";
 
   function openSimpleEditModal(index) {
@@ -7281,7 +7311,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // ==================== INICJALIZACJA ====================
   async function init() {
-    restorePlace();
+    if (restorePlace() === 'redirect') return;
     const logoMatsPromise = fetchAndCacheLogoMats();
     
     createCustomSelect(routeSelectWrapper, routesByDay, "— wybierz trasę —", "route", true);
