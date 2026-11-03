@@ -812,14 +812,14 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
     placeReady = true;
-    if (!history.state || !history.state.elis) {
-      history.replaceState({ elis: 1, base: 1, view: 'home' }, '', urlFor('home'));
-    }
     navigateTo(view, { fromHistory: true, keepSearch });
+    scheduleTrap();
   }
 
   let historyNav = false;
   let historyTrapReady = false;
+  let armedThisLoad = false;
+  let armAttempts = 0;
 
   function urlFor(viewName) {
     const path = location.pathname + location.search;
@@ -839,12 +839,17 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function armTrap() {
-    if (historyTrapReady || (history.state && history.state.trap)) {
-      historyTrapReady = true;
+    if (armedThisLoad || armAttempts >= 8) return;
+    if (!currentView || currentView === 'home') {
+      if (document.readyState === 'complete') armedThisLoad = true;
       return;
     }
-    if (!currentView || currentView === 'home') return;
-    pushTrap(currentView);
+    armAttempts += 1;
+    const view = currentView;
+    const before = history.length;
+    history.replaceState({ elis: 1, base: 1, view: 'home' }, '', urlFor('home'));
+    pushTrap(view);
+    if (history.length > before) armedThisLoad = true;
   }
 
   function syncHistory(viewName) {
@@ -1039,16 +1044,10 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   function scheduleTrap() {
-    const run = () => setTimeout(armTrap, 0);
-    if (document.readyState === 'complete') run();
-    else window.addEventListener('load', run, { once: true });
-    window.addEventListener('pageshow', run);
-    document.addEventListener('pointerdown', function armOnPointer() {
-      armTrap();
-      if (historyTrapReady) document.removeEventListener('pointerdown', armOnPointer, true);
-    }, true);
+    [0, 60, 200, 700, 1500].forEach(ms => setTimeout(armTrap, ms));
+    window.addEventListener('pageshow', () => setTimeout(armTrap, 0));
+    document.addEventListener('pointerdown', () => armTrap(), true);
   }
-  scheduleTrap();
   
   document.querySelectorAll('[data-navigate]').forEach(btn => {
     btn.addEventListener('click', (e) => {
