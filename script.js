@@ -837,10 +837,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return parent;
   }
 
-  let leavingForStack = false;
-
   function afterSettled(fn) {
-    leavingForStack = true;
     const run = () => setTimeout(fn, 60);
     if (document.readyState === 'complete') run();
     else window.addEventListener('load', run, { once: true });
@@ -850,28 +847,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const place = savedPlace();
     const saved = normalizeSavedView(place);
     const here = panelFromUrl();
-    if (!sessionStorage.getItem('elis-stack-ready')) {
-      const chain = ancestorChain(saved);
-      let step = Number(sessionStorage.getItem('elis-step') || '0');
-      if (!Number.isFinite(step) || step < 0) step = 0;
-      if (chain[step] !== here) {
-        sessionStorage.setItem('elis-step', '0');
-        document.documentElement.style.visibility = 'hidden';
-        afterSettled(() => location.replace(panelUrl('home')));
-        return 'redirect';
-      }
-      if (step < chain.length - 1) {
-        sessionStorage.setItem('elis-step', String(step + 1));
-        document.documentElement.style.visibility = 'hidden';
-        navigateTo(chain[step], { fromHistory: true });
-        afterSettled(() => location.assign(panelUrl(chain[step + 1])));
-        return 'redirect';
-      }
-      sessionStorage.setItem('elis-stack-ready', '1');
-    }
-    let view = here;
+    const ready = !!sessionStorage.getItem('elis-stack-ready');
+    let view = ready || here !== 'home' ? here : saved;
+    if (!views[view]) view = 'home';
     if (view === 'routePick') view = 'routesManage';
-    if ((view === 'routesManage' || view === 'routePick') && !isAdmin) view = 'logoRoutes';
+    if (view === 'routesManage' && !isAdmin) view = 'logoRoutes';
     if (view === 'customList' && place && place.customListId) {
       activeCustomList = { id: place.customListId, name: place.customListName || 'Lista' };
     }
@@ -887,19 +867,33 @@ document.addEventListener("DOMContentLoaded", () => {
     placeReady = true;
     document.documentElement.style.visibility = '';
     navigateTo(view, { fromHistory: true, keepSearch });
+    afterSettled(() => armHistory(currentView));
     return 'ok';
   }
 
+  function armHistory(view) {
+    if (sessionStorage.getItem('elis-stack-ready')) return;
+    const chain = ancestorChain(view || 'home');
+    history.replaceState({ elis: 1, view: chain[0] }, '', panelUrl(chain[0]));
+    for (let i = 1; i < chain.length; i++) {
+      history.pushState({ elis: 1, view: chain[i] }, '', panelUrl(chain[i]));
+    }
+    sessionStorage.setItem('elis-stack-ready', '1');
+  }
+
   function syncHistory(viewName, previous) {
+    if (!sessionStorage.getItem('elis-stack-ready')) return;
     const next = panelUrl(viewName);
-    if (next === location.pathname + location.search) return;
-    const goingUp = previous && parentOf(previous) === viewName;
-    if (goingUp && history.length > 1) {
+    const state = { elis: 1, view: viewName };
+    if (previous && parentOf(previous) === viewName && history.length > 1) {
       history.back();
       return;
     }
-    if (goingUp) location.replace(next);
-    else location.assign(next);
+    if (next === location.pathname + location.search) {
+      history.replaceState(state, '', next);
+      return;
+    }
+    history.pushState(state, '', next);
   }
 
   function dismissTransientUi() {
@@ -1053,20 +1047,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
 
-  window.addEventListener('pageshow', (event) => {
-    if (leavingForStack && !event.persisted) return;
+  window.addEventListener('pageshow', () => {
     document.documentElement.style.visibility = '';
-    if (!event.persisted || !currentView) return;
-    placeReady = true;
-    rememberPlace();
-    if (currentView === 'routesManage') loadRoutesScreen();
-    else if (currentView === 'logoLocation' || currentView === 'logoRoutes') navigateTo(currentView, { fromHistory: true, keepSearch: true });
-    else if (currentView === 'seasonal') loadSeasonalMats();
-    else if (currentView === 'recent') loadRecentMats();
   });
 
-  window.addEventListener('popstate', () => {
-    dismissTransientUi();
+  window.addEventListener('popstate', (event) => {
+    const closed = dismissTransientUi();
+    const view = (event.state && event.state.view) || panelFromUrl();
+    if (!views[view] || view === currentView) return;
+    if (closed && panelFromUrl() === currentView) return;
+    navigateTo(view, { fromHistory: true, keepSearch: true });
   });
 
   backBtn.addEventListener('click', () => {
