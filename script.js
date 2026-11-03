@@ -838,19 +838,57 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   let stackArmed = false;
+  let panelWatcher = null;
+  let closeDepth = 0;
 
   function gestureNow() {
     return !!(navigator.userActivation && navigator.userActivation.isActive);
   }
 
-  function armStack() {
-    if (stackArmed || !gestureNow()) return;
+  function androidSystemBack() {
+    return typeof CloseWatcher === 'function'
+      && /Android/i.test(navigator.userAgent)
+      && /Chrome|Chromium/i.test(navigator.userAgent);
+  }
+
+  function armStack(force) {
+    if (stackArmed || androidSystemBack()) return;
+    if (!force && !gestureNow()) return;
     const chain = ancestorChain(currentView || 'home');
     history.replaceState({ elis: 1, view: chain[0] }, '', panelUrl(chain[0]));
     for (let i = 1; i < chain.length; i++) {
       history.pushState({ elis: 1, view: chain[i] }, '', panelUrl(chain[i]));
     }
     stackArmed = true;
+  }
+
+  function syncPanelWatcher() {
+    if (!androidSystemBack()) return;
+    if (panelWatcher) {
+      const old = panelWatcher;
+      panelWatcher = null;
+      try { old.destroy(); } catch (error) {}
+    }
+    if (!parentOf(currentView) || closeDepth > 0) {
+      if (closeDepth > 0 && parentOf(currentView)) setTimeout(syncPanelWatcher, 0);
+      return;
+    }
+    let watcher;
+    try { watcher = new CloseWatcher(); } catch (error) { return; }
+    panelWatcher = watcher;
+    watcher.onclose = () => {
+      if (panelWatcher === watcher) panelWatcher = null;
+      if (dismissTransientUi()) {
+        setTimeout(syncPanelWatcher, 0);
+        return;
+      }
+      const parent = parentOf(currentView);
+      if (!parent) return;
+      closeDepth += 1;
+      navigateTo(parent, { fromHistory: true, keepSearch: true });
+      closeDepth -= 1;
+      setTimeout(syncPanelWatcher, 0);
+    };
   }
 
   function restorePlace() {
@@ -877,10 +915,15 @@ document.addEventListener("DOMContentLoaded", () => {
     document.documentElement.style.visibility = '';
     navigateTo(view, { fromHistory: true, keepSearch });
     history.replaceState({ elis: 1, view: currentView }, '', panelUrl(currentView));
+    if (!(window.chrome && /Chrome|Chromium|Edg\//.test(navigator.userAgent))) {
+      armStack(true);
+    }
+    syncPanelWatcher();
     return 'ok';
   }
 
   function syncHistory(viewName, previous) {
+    if (androidSystemBack()) return;
     const next = panelUrl(viewName);
     const state = { elis: 1, view: viewName };
     if (stackArmed && previous && parentOf(previous) === viewName && history.length > 1) {
@@ -1044,6 +1087,10 @@ document.addEventListener("DOMContentLoaded", () => {
     root.style.scrollBehavior = previousScroll;
     rememberPlace();
     if (!options.fromHistory) syncHistory(currentView, leaving);
+    if (androidSystemBack()) {
+      history.replaceState({ elis: 1, view: currentView }, '', panelUrl(currentView));
+    }
+    syncPanelWatcher();
   }
 
   if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
@@ -1060,8 +1107,14 @@ document.addEventListener("DOMContentLoaded", () => {
     navigateTo(view, { fromHistory: true, keepSearch: true });
   });
 
-  document.addEventListener('pointerdown', () => armStack(), true);
-  document.addEventListener('keydown', () => armStack(), true);
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    const tag = event.target && event.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') event.stopPropagation();
+  }, true);
+  ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'].forEach(type => {
+    document.addEventListener(type, () => armStack(), true);
+  });
 
   backBtn.addEventListener('click', () => {
     armStack();
@@ -1883,11 +1936,28 @@ document.addEventListener("DOMContentLoaded", () => {
   };
   const openModal = (modal) => {
     modal.style.display = 'flex';
-    if (gestureNow() && (!history.state || !history.state.modal)) {
+    if (!androidSystemBack() && gestureNow() && (!history.state || !history.state.modal)) {
       history.pushState({ elis: 1, modal: 1, view: currentView }, '', location.href);
     }
+    if (androidSystemBack() && !modal._elisWatcher) {
+      try {
+        const watcher = new CloseWatcher();
+        modal._elisWatcher = watcher;
+        watcher.onclose = () => {
+          modal._elisWatcher = null;
+          if (modal.style.display === 'flex') closeModal(modal);
+        };
+      } catch (error) {}
+    }
   };
-  const closeModal = (modal) => modal.style.display = "none";
+  const closeModal = (modal) => {
+    modal.style.display = 'none';
+    if (modal && modal._elisWatcher) {
+      const watcher = modal._elisWatcher;
+      modal._elisWatcher = null;
+      try { watcher.destroy(); } catch (error) {}
+    }
+  };
 
   function openSimpleEditModal(index) {
     editIndex = index;
