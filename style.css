@@ -328,6 +328,29 @@ body.halloween .desktop-download-btn {
   max-width: 800px;
 }
 
+.logo-hub.home-main {
+  justify-content: flex-start;
+  min-height: 0;
+  padding-top: 28px;
+  padding-bottom: 32px;
+}
+
+#logoHubView.view.active {
+  min-height: 0;
+}
+
+body:has(#logoHubView.active) {
+  min-height: 0;
+}
+
+body:has(#logoHubView.active) #app {
+  min-height: 0;
+}
+
+.logo-hub .home-subtitle {
+  margin-bottom: 28px;
+}
+
 .logo-hub-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
