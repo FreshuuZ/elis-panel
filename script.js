@@ -812,11 +812,14 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
     placeReady = true;
-    seedHistory(view);
+    if (!history.state || !history.state.elis) {
+      history.replaceState({ elis: 1, base: 1, view: 'home' }, '', urlFor('home'));
+    }
     navigateTo(view, { fromHistory: true, keepSearch });
   }
 
   let historyNav = false;
+  let historyTrapReady = false;
 
   function urlFor(viewName) {
     const path = location.pathname + location.search;
@@ -824,53 +827,40 @@ document.addEventListener("DOMContentLoaded", () => {
     return path + '#' + viewName;
   }
 
-  function historyState(viewName) {
-    const state = { elis: 1, view: viewName };
-    if (viewName === 'customList' && activeCustomList) {
-      state.customListId = activeCustomList.id;
-      state.customListName = activeCustomList.name || '';
-    }
-    if (viewName === 'logoLocation' || viewName === 'logoRoutes') {
-      state.search = document.getElementById('matsSearch')?.value || '';
-    }
-    return state;
+  function parentOf(viewName) {
+    let parent = viewParents[viewName] || null;
+    if ((parent === 'routesManage' || parent === 'routePick') && !isAdmin) parent = 'logoRoutes';
+    return parent;
   }
 
-  function ancestorChain(viewName) {
-    const chain = [];
-    let cursor = viewName;
-    const seen = new Set();
-    while (cursor && !seen.has(cursor)) {
-      seen.add(cursor);
-      chain.unshift(cursor);
-      cursor = viewParents[cursor] || null;
-    }
-    if (chain[0] !== 'home') chain.unshift('home');
-    return chain;
+  function pushTrap(viewName) {
+    history.pushState({ elis: 1, trap: 1, view: viewName }, '', urlFor(viewName));
+    historyTrapReady = true;
   }
 
-  function seedHistory(viewName) {
-    const chain = ancestorChain(viewName);
-    history.replaceState({ elis: 1, view: 'home' }, '', urlFor('home'));
-    for (let i = 1; i < chain.length; i++) {
-      const step = chain[i];
-      const state = i === chain.length - 1 ? historyState(step) : { elis: 1, view: step };
-      history.pushState(state, '', urlFor(step));
+  function armTrap() {
+    if (historyTrapReady || (history.state && history.state.trap)) {
+      historyTrapReady = true;
+      return;
     }
+    if (!currentView || currentView === 'home') return;
+    pushTrap(currentView);
   }
 
   function syncHistory(viewName) {
     if (historyNav) return;
-    const state = history.state;
-    if (state && state.elis && state.view === viewName) {
-      history.replaceState(historyState(viewName), '', urlFor(viewName));
+    if (viewName === 'home') {
+      historyTrapReady = false;
+      if (history.state && history.state.trap) history.back();
+      else history.replaceState({ elis: 1, base: 1, view: 'home' }, '', urlFor('home'));
       return;
     }
-    if (state && state.elis && viewParents[state.view] === viewName) {
-      history.back();
+    if (history.state && history.state.trap) {
+      history.replaceState({ elis: 1, trap: 1, view: viewName }, '', urlFor(viewName));
+      historyTrapReady = true;
       return;
     }
-    history.pushState(historyState(viewName), '', urlFor(viewName));
+    pushTrap(viewName);
   }
 
   function dismissTransientUi() {
@@ -1023,42 +1013,42 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
 
-  window.addEventListener('popstate', (event) => {
+  window.addEventListener('popstate', () => {
     if (dismissTransientUi()) {
-      history.pushState(historyState(currentView), '', urlFor(currentView));
+      if (currentView !== 'home') pushTrap(currentView);
       return;
     }
-    const state = event.state;
-    let view = state && state.elis && views[state.view] ? state.view : 'home';
-    if (view === 'routePick') view = 'routesManage';
-    if ((view === 'routesManage' || view === 'routePick') && !isAdmin) view = 'logoRoutes';
-    if (view === 'customList') {
-      if (state && state.customListId) {
-        activeCustomList = { id: state.customListId, name: state.customListName || 'Lista' };
-      } else {
-        view = 'customLists';
-      }
-    }
-    const keepSearch = (view === 'logoLocation' || view === 'logoRoutes') && !!(state && state.search);
-    if (keepSearch) {
-      const search = document.getElementById('matsSearch');
-      if (search) {
-        search.value = state.search;
-        search.classList.add('searching');
-      }
+    const parent = parentOf(currentView);
+    if (!parent) {
+      historyTrapReady = false;
+      return;
     }
     historyNav = true;
-    navigateTo(view, { fromHistory: true, keepSearch });
+    navigateTo(parent, { fromHistory: true });
     historyNav = false;
+    historyTrapReady = false;
+    if (parent !== 'home') pushTrap(parent);
   });
 
   backBtn.addEventListener('click', () => {
-    if (history.state && history.state.elis && history.state.view && history.state.view !== 'home') {
+    if (history.state && history.state.trap) {
       history.back();
       return;
     }
-    navigateTo(viewParents[currentView] || 'home');
+    navigateTo(parentOf(currentView) || 'home');
   });
+
+  function scheduleTrap() {
+    const run = () => setTimeout(armTrap, 0);
+    if (document.readyState === 'complete') run();
+    else window.addEventListener('load', run, { once: true });
+    window.addEventListener('pageshow', run);
+    document.addEventListener('pointerdown', function armOnPointer() {
+      armTrap();
+      if (historyTrapReady) document.removeEventListener('pointerdown', armOnPointer, true);
+    }, true);
+  }
+  scheduleTrap();
   
   document.querySelectorAll('[data-navigate]').forEach(btn => {
     btn.addEventListener('click', (e) => {
