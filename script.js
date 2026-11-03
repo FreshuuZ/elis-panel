@@ -812,7 +812,55 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
     placeReady = true;
-    navigateTo(view, { keepSearch });
+    const url = historyUrl();
+    history.replaceState({ elis: 1, root: 1, view: 'home' }, '', url);
+    navigateTo(view, { fromHistory: true, keepSearch });
+    if (view !== 'home') history.pushState({ elis: 1, guard: 1, view }, '', url);
+  }
+
+  let historyNav = false;
+  let leavingViaHistory = false;
+
+  function historyUrl() {
+    return location.pathname + location.search + location.hash;
+  }
+
+  function syncHistory(viewName) {
+    if (historyNav) return;
+    const url = historyUrl();
+    if (!history.state || history.state.elis !== 1) {
+      history.replaceState({ elis: 1, root: 1, view: 'home' }, '', url);
+    }
+    if (viewName === 'home') {
+      if (history.state && history.state.guard) history.back();
+      return;
+    }
+    const state = { elis: 1, guard: 1, view: viewName };
+    if (history.state && history.state.guard) history.replaceState(state, '', url);
+    else history.pushState(state, '', url);
+  }
+
+  function overlayOpen() {
+    const lightbox = document.getElementById('reportPhotoLightbox');
+    if (lightbox && !lightbox.hidden) return true;
+    if (document.getElementById('themeMenu')?.classList.contains('open')) return true;
+    return [...document.querySelectorAll('.modal')].some(modal => modal.style.display === 'flex');
+  }
+
+  function dismissTransientUi() {
+    const lightbox = document.getElementById('reportPhotoLightbox');
+    if (lightbox && !lightbox.hidden) {
+      closeReportPhoto();
+      return true;
+    }
+    if (document.getElementById('themeMenu')?.classList.contains('open')) {
+      setThemeMenuOpen(false);
+      return true;
+    }
+    const modals = [...document.querySelectorAll('.modal')].filter(modal => modal.style.display === 'flex');
+    if (!modals.length) return false;
+    closeModal(modals[modals.length - 1]);
+    return true;
   }
 
   function navigateTo(viewName, options = {}) {
@@ -944,11 +992,40 @@ document.addEventListener("DOMContentLoaded", () => {
     if (appScroller) appScroller.scrollTop = 0;
     root.style.scrollBehavior = previousScroll;
     rememberPlace();
+    if (!options.fromHistory) syncHistory(currentView);
   }
 
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+
+  window.addEventListener('popstate', () => {
+    if (leavingViaHistory) return;
+    if (dismissTransientUi()) {
+      if (overlayOpen() || currentView !== 'home') {
+        history.pushState({ elis: 1, guard: 1, view: currentView }, '', historyUrl());
+      }
+      return;
+    }
+    const parent = viewParents[currentView];
+    if (!parent) {
+      leavingViaHistory = true;
+      history.back();
+      window.setTimeout(() => { leavingViaHistory = false; }, 400);
+      return;
+    }
+    historyNav = true;
+    navigateTo(parent, { fromHistory: true });
+    historyNav = false;
+    if (parent !== 'home') {
+      history.pushState({ elis: 1, guard: 1, view: parent }, '', historyUrl());
+    }
+  });
+
   backBtn.addEventListener('click', () => {
-    const parentView = viewParents[currentView] || 'home';
-    navigateTo(parentView);
+    if (history.state && history.state.guard) {
+      history.back();
+      return;
+    }
+    navigateTo(viewParents[currentView] || 'home');
   });
   
   document.querySelectorAll('[data-navigate]').forEach(btn => {
