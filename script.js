@@ -837,18 +837,27 @@ document.addEventListener("DOMContentLoaded", () => {
     return parent;
   }
 
-  function afterSettled(fn) {
-    const run = () => setTimeout(fn, 60);
-    if (document.readyState === 'complete') run();
-    else window.addEventListener('load', run, { once: true });
+  let stackArmed = false;
+
+  function gestureNow() {
+    return !!(navigator.userActivation && navigator.userActivation.isActive);
+  }
+
+  function armStack() {
+    if (stackArmed || !gestureNow()) return;
+    const chain = ancestorChain(currentView || 'home');
+    history.replaceState({ elis: 1, view: chain[0] }, '', panelUrl(chain[0]));
+    for (let i = 1; i < chain.length; i++) {
+      history.pushState({ elis: 1, view: chain[i] }, '', panelUrl(chain[i]));
+    }
+    stackArmed = true;
   }
 
   function restorePlace() {
     const place = savedPlace();
     const saved = normalizeSavedView(place);
     const here = panelFromUrl();
-    const ready = !!sessionStorage.getItem('elis-stack-ready');
-    let view = ready || here !== 'home' ? here : saved;
+    let view = here !== 'home' ? here : saved;
     if (!views[view]) view = 'home';
     if (view === 'routePick') view = 'routesManage';
     if (view === 'routesManage' && !isAdmin) view = 'logoRoutes';
@@ -867,33 +876,24 @@ document.addEventListener("DOMContentLoaded", () => {
     placeReady = true;
     document.documentElement.style.visibility = '';
     navigateTo(view, { fromHistory: true, keepSearch });
-    afterSettled(() => armHistory(currentView));
+    history.replaceState({ elis: 1, view: currentView }, '', panelUrl(currentView));
     return 'ok';
   }
 
-  function armHistory(view) {
-    if (sessionStorage.getItem('elis-stack-ready')) return;
-    const chain = ancestorChain(view || 'home');
-    history.replaceState({ elis: 1, view: chain[0] }, '', panelUrl(chain[0]));
-    for (let i = 1; i < chain.length; i++) {
-      history.pushState({ elis: 1, view: chain[i] }, '', panelUrl(chain[i]));
-    }
-    sessionStorage.setItem('elis-stack-ready', '1');
-  }
-
   function syncHistory(viewName, previous) {
-    if (!sessionStorage.getItem('elis-stack-ready')) return;
     const next = panelUrl(viewName);
     const state = { elis: 1, view: viewName };
-    if (previous && parentOf(previous) === viewName && history.length > 1) {
+    if (stackArmed && previous && parentOf(previous) === viewName && history.length > 1) {
       history.back();
       return;
     }
+    if (!gestureNow()) return;
     if (next === location.pathname + location.search) {
       history.replaceState(state, '', next);
       return;
     }
     history.pushState(state, '', next);
+    stackArmed = true;
   }
 
   function dismissTransientUi() {
@@ -914,6 +914,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function navigateTo(viewName, options = {}) {
     const leaving = currentView;
+    if (!options.fromHistory) armStack();
     if (viewName === 'mats') viewName = 'logo';
     if ((viewName === 'routesManage' || viewName === 'routePick') && !isAdmin) {
       showToast('Zarządzanie trasami jest dostępne po zalogowaniu administratora.', 'notice');
@@ -1059,9 +1060,13 @@ document.addEventListener("DOMContentLoaded", () => {
     navigateTo(view, { fromHistory: true, keepSearch: true });
   });
 
+  document.addEventListener('pointerdown', () => armStack(), true);
+  document.addEventListener('keydown', () => armStack(), true);
+
   backBtn.addEventListener('click', () => {
-    if (parentOf(currentView)) history.back();
-    else navigateTo('home');
+    armStack();
+    if (parentOf(currentView) && stackArmed && history.length > 1) history.back();
+    else navigateTo(parentOf(currentView) || 'home');
   });
   
   document.querySelectorAll('[data-navigate]').forEach(btn => {
@@ -1878,8 +1883,8 @@ document.addEventListener("DOMContentLoaded", () => {
   };
   const openModal = (modal) => {
     modal.style.display = 'flex';
-    if (!history.state || !history.state.modal) {
-      history.pushState({ elis: 1, modal: 1 }, '', location.href);
+    if (gestureNow() && (!history.state || !history.state.modal)) {
+      history.pushState({ elis: 1, modal: 1, view: currentView }, '', location.href);
     }
   };
   const closeModal = (modal) => modal.style.display = "none";
