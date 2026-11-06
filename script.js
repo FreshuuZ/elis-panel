@@ -40,6 +40,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let allReplacementsArchive = [];
 // ==================== SYSTEM ADMINISTRATORA ====================
   let isAdmin = false;
+  let adminPinMemory = '';
 
   // Wyloguj przy zamknięciu strony
   window.addEventListener('beforeunload', () => {
@@ -167,11 +168,14 @@ document.addEventListener("DOMContentLoaded", () => {
     
     if (isValid) {
       isAdmin = true;
+      adminPinMemory = pin;
+      adminPinInput.value = '';
       pinError.style.display = 'none';
       adminPinInput.classList.remove('error');
       closeModal(adminModal);
       updateAdminUI();
       showToast('✅ Zalogowano jako Administrator!', 'success');
+      if (String(currentView).startsWith('schedule')) openScheduleScreen(currentView);
       
       // Odśwież listę mat jeśli jesteśmy w widoku mat
       if (isLogoListView()) {
@@ -202,6 +206,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function logoutAdmin(silent = false) {
     isAdmin = false;
+    wipeScheduleSecrets();
     updateAdminUI();
     
     if (!silent) {
@@ -246,6 +251,7 @@ document.addEventListener("DOMContentLoaded", () => {
     
     syncLogoListChrome();
     if (!isAdmin && (currentView === 'routesManage' || currentView === 'routePick')) navigateTo('logoRoutes');
+    if (!isAdmin && String(currentView).startsWith('schedule')) navigateTo('home');
   }
 
   // ==================== EVENT LISTENERY ADMINA ====================
@@ -725,7 +731,11 @@ document.addEventListener("DOMContentLoaded", () => {
     'archive-replacements': document.getElementById('archiveReplacementsView'), // NOWE
     'archive-washing': document.getElementById('archiveWashingView'), // NOWE (zmienione z archiveView)
     inventory: document.getElementById('inventoryView'),
-    reports: document.getElementById('reportsView')
+    reports: document.getElementById('reportsView'),
+    schedule: document.getElementById('scheduleView'),
+    schedulePeople: document.getElementById('schedulePeopleView'),
+    scheduleBuild: document.getElementById('scheduleBuildView'),
+    scheduleBoard: document.getElementById('scheduleBoardView')
   };
   
   const headerTitle = document.getElementById('headerTitle');
@@ -774,7 +784,11 @@ document.addEventListener("DOMContentLoaded", () => {
     'archive-replacements': 'archive',
     'archive-washing': 'archive',
     'inventory': 'home',
-    'reports': 'home'
+    'reports': 'home',
+    'schedule': 'home',
+    'schedulePeople': 'schedule',
+    'scheduleBuild': 'schedule',
+    'scheduleBoard': 'schedule'
   };
   
   const PLACE_KEY = 'elis-panel-place';
@@ -963,6 +977,10 @@ document.addEventListener("DOMContentLoaded", () => {
       showToast('Zarządzanie trasami jest dostępne po zalogowaniu administratora.', 'notice');
       viewName = 'logoRoutes';
     }
+    if (!isAdmin && ['schedulePeople', 'scheduleBuild', 'scheduleBoard'].includes(viewName)) {
+      showToast('Grafik jest dostępny po zalogowaniu administratora.', 'notice');
+      viewName = 'schedule';
+    }
     Object.values(views).forEach(v => v?.classList.remove('active'));
     views[viewName]?.classList.add('active');
     currentView = viewName;
@@ -1056,6 +1074,22 @@ document.addEventListener("DOMContentLoaded", () => {
       (async () => {
           await fetchReports();
       })();
+    } else if (viewName === 'schedule') {
+      headerTitle.textContent = 'Grafik';
+      backBtn.style.display = 'flex';
+      openScheduleScreen('schedule');
+    } else if (viewName === 'schedulePeople') {
+      headerTitle.textContent = 'Zarządzanie ludźmi';
+      backBtn.style.display = 'flex';
+      openScheduleScreen('schedulePeople');
+    } else if (viewName === 'scheduleBuild') {
+      headerTitle.textContent = 'Utwórz grafik';
+      backBtn.style.display = 'flex';
+      openScheduleScreen('scheduleBuild');
+    } else if (viewName === 'scheduleBoard') {
+      headerTitle.textContent = 'Obecny grafik';
+      backBtn.style.display = 'flex';
+      openScheduleScreen('scheduleBoard');
     }
     
     document.body.classList.toggle('is-route-pick', viewName === 'routePick');
@@ -7373,6 +7407,443 @@ document.addEventListener("DOMContentLoaded", () => {
       showToast("Błąd podczas eksportu: " + error.message, "error");
     }
   }
+
+// ==================== GRAFIK ====================
+  const SCHEDULE_DEFAULTS = [
+    { start: '06:00', end: '14:00' },
+    { start: '14:00', end: '22:00' },
+    { start: '22:00', end: '06:00' }
+  ];
+  let schedulePeople = [];
+  let scheduleCurrent = null;
+  let scheduleDraft = null;
+  let scheduleKeepDraft = false;
+  let scheduleDrag = null;
+
+  function wipeScheduleSecrets() {
+    adminPinMemory = '';
+    schedulePeople = [];
+    scheduleCurrent = null;
+    scheduleDraft = null;
+    scheduleKeepDraft = false;
+    ['schedulePeopleList', 'schedulePool', 'scheduleShifts', 'scheduleBoardBody'].forEach(id => {
+      const node = document.getElementById(id);
+      if (node) node.innerHTML = '';
+    });
+    const name = document.getElementById('schedulePersonName');
+    if (name) name.value = '';
+    const when = document.getElementById('scheduleBoardWhen');
+    if (when) when.textContent = '';
+    const status = document.getElementById('scheduleHubStatus');
+    if (status) status.textContent = '';
+    if (typeof printOutput !== 'undefined' && printOutput && printOutput.dataset.kind === 'schedule') {
+      printOutput.innerHTML = '';
+      delete printOutput.dataset.kind;
+    }
+  }
+
+  function formatShiftHours(start, end) {
+    const pretty = (value) => {
+      const match = /^(\d{2}):(\d{2})$/.exec(value || '');
+      return match ? `${Number(match[1])}:${match[2]}` : (value || '');
+    };
+    return `${pretty(start)}–${pretty(end)}`;
+  }
+
+  function formatScheduleStamp(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+
+  function schedulePersonName(id) {
+    const person = schedulePeople.find(item => item.id === id);
+    return person ? person.name : '';
+  }
+
+  async function scheduleRpc(action, payload) {
+    if (!adminPinMemory) return { ok: false, error: 'forbidden' };
+    try {
+      const { data, error } = await window.supabase.rpc('schedule_api', {
+        candidate: adminPinMemory,
+        action,
+        payload: payload || {}
+      });
+      if (error) {
+        const missing = error.code === 'PGRST202' || /Could not find the function/i.test(error.message || '');
+        return { ok: false, error: missing ? 'missing' : 'network' };
+      }
+      if (!data || data.ok !== true) return data || { ok: false, error: 'network' };
+      schedulePeople = Array.isArray(data.people) ? data.people : [];
+      scheduleCurrent = data.schedule && Array.isArray(data.schedule.shifts) ? data.schedule : null;
+      return data;
+    } catch (error) {
+      return { ok: false, error: 'network' };
+    }
+  }
+
+  function scheduleDenied(result, quietMissing) {
+    if (!result || result.ok) return false;
+    if (result.error === 'locked') {
+      showToast('Za dużo błędnych PIN-ów. Grafik jest zablokowany na 15 minut.', 'error');
+    } else if (result.error === 'forbidden') {
+      wipeScheduleSecrets();
+      isAdmin = false;
+      updateAdminUI();
+      showToast('PIN nie pasuje do grafiku. Zaloguj się ponownie.', 'error');
+    } else if (result.error === 'missing') {
+      if (!quietMissing) showToast('Grafik nie jest jeszcze włączony w bazie. Trzeba jednorazowo wkleić skrypt SQL w Supabase.', 'notice');
+    } else if (result.error === 'duplicate') {
+      showToast('Taka osoba już jest na liście.', 'notice');
+    } else if (result.error === 'invalid') {
+      showToast('Nie da się tak zapisać.', 'error');
+    } else {
+      showToast('Nie udało się połączyć z grafikiem.', 'error');
+    }
+    return true;
+  }
+
+  function renderScheduleHubStatus() {
+    const status = document.getElementById('scheduleHubStatus');
+    if (!status) return;
+    if (!scheduleCurrent) {
+      status.textContent = 'Nie ma jeszcze zapisanego grafiku.';
+      return;
+    }
+    const count = scheduleCurrent.shifts.length;
+    status.textContent = `Obecny grafik z ${formatScheduleStamp(scheduleCurrent.createdAt)}, ${count} ${count === 1 ? 'zmiana' : 'zmiany'}.`;
+  }
+
+  function renderSchedulePeople() {
+    const list = document.getElementById('schedulePeopleList');
+    if (!list) return;
+    if (!schedulePeople.length) {
+      list.innerHTML = '<p class="schedule-empty">Lista jest pusta. Dodaj pierwszą osobę.</p>';
+      return;
+    }
+    list.innerHTML = schedulePeople.map(person => `
+      <div class="schedule-person-row" data-person-id="${escapeHtml(person.id)}">
+        <span>${escapeHtml(person.name)}</span>
+        <button type="button" class="btn-secondary" data-person-edit>Edytuj</button>
+        <button type="button" class="btn-danger" data-person-delete>Usuń</button>
+      </div>
+    `).join('');
+  }
+
+  function renderScheduleBoard() {
+    const body = document.getElementById('scheduleBoardBody');
+    const when = document.getElementById('scheduleBoardWhen');
+    const printBtn = document.getElementById('schedulePrintBtn');
+    if (!body) return;
+    if (!scheduleCurrent) {
+      if (when) when.textContent = 'Nie ma jeszcze zapisanego grafiku.';
+      body.innerHTML = '<p class="schedule-empty">Utwórz grafik, a potem będzie go można wydrukować.</p>';
+      if (printBtn) printBtn.disabled = true;
+      return;
+    }
+    if (when) when.textContent = `Zapisany ${formatScheduleStamp(scheduleCurrent.createdAt)}.`;
+    if (printBtn) printBtn.disabled = false;
+    body.innerHTML = scheduleCurrent.shifts.map((shift, index) => {
+      const names = (shift.people || []).map(schedulePersonName).filter(Boolean);
+      return `<section class="schedule-board-shift"><h3>Zmiana ${index + 1}</h3><div class="schedule-hours">${formatShiftHours(shift.start, shift.end)}</div>${shift.custom ? '<p class="schedule-note">Niestandardowe godziny</p>' : ''}${names.length ? `<ul>${names.map(name => `<li>${escapeHtml(name)}</li>`).join('')}</ul>` : '<p class="schedule-empty">Brak osób</p>'}</section>`;
+    }).join('');
+  }
+
+  function scheduleChip(person) {
+    return `<button type="button" class="schedule-person" data-person-id="${escapeHtml(person.id)}">${escapeHtml(person.name)}</button>`;
+  }
+
+  function renderScheduleBuilder() {
+    const pick = document.getElementById('scheduleCountPick');
+    const builder = document.getElementById('scheduleBuilder');
+    const pool = document.getElementById('schedulePool');
+    const shifts = document.getElementById('scheduleShifts');
+    if (!scheduleDraft || !pool || !shifts) return;
+    if (pick) pick.hidden = true;
+    if (builder) builder.hidden = false;
+    const assigned = new Set(scheduleDraft.shifts.flatMap(shift => shift.people));
+    const waiting = schedulePeople.filter(person => !assigned.has(person.id));
+    pool.innerHTML = waiting.length
+      ? waiting.map(scheduleChip).join('')
+      : '<p class="schedule-empty">Wszyscy są już na zmianach.</p>';
+    shifts.innerHTML = scheduleDraft.shifts.map((shift, index) => {
+      const people = shift.people.map(id => schedulePeople.find(person => person.id === id)).filter(Boolean);
+      const choices = schedulePeople.filter(person => !shift.people.includes(person.id));
+      return `
+        <section class="card schedule-shift">
+          <h2>Zmiana ${index + 1}</h2>
+          <div class="schedule-hours">${formatShiftHours(shift.start, shift.end)}</div>
+          <label class="schedule-custom"><input type="checkbox" data-custom="${index}" ${shift.custom ? 'checked' : ''}> Niestandardowe godziny</label>
+          <div class="schedule-hours-edit">
+            <label>Od <input type="time" data-time="start" data-shift="${index}" value="${shift.start}" ${shift.custom ? '' : 'disabled'}></label>
+            <label>Do <input type="time" data-time="end" data-shift="${index}" value="${shift.end}" ${shift.custom ? '' : 'disabled'}></label>
+          </div>
+          <div class="schedule-drop" data-drop="${index}">
+            ${people.length ? people.map(scheduleChip).join('') : '<p class="schedule-empty">Przeciągnij tutaj osobę</p>'}
+          </div>
+          <select class="schedule-add-select" data-add-shift="${index}">
+            <option value="">Dodaj osobę...</option>
+            ${choices.map(person => `<option value="${escapeHtml(person.id)}">${escapeHtml(person.name)}</option>`).join('')}
+          </select>
+        </section>
+      `;
+    }).join('');
+  }
+
+  function showScheduleBuilder() {
+    if (!scheduleKeepDraft) scheduleDraft = null;
+    scheduleKeepDraft = false;
+    const pick = document.getElementById('scheduleCountPick');
+    const builder = document.getElementById('scheduleBuilder');
+    if (!scheduleDraft) {
+      if (pick) pick.hidden = false;
+      if (builder) builder.hidden = true;
+      return;
+    }
+    renderScheduleBuilder();
+  }
+
+  function chooseShiftCount(count) {
+    const previous = scheduleDraft ? scheduleDraft.shifts : [];
+    scheduleDraft = {
+      shifts: SCHEDULE_DEFAULTS.slice(0, count).map((item, index) => ({
+        start: previous[index] && previous[index].custom ? previous[index].start : item.start,
+        end: previous[index] && previous[index].custom ? previous[index].end : item.end,
+        custom: !!(previous[index] && previous[index].custom),
+        people: previous[index] ? previous[index].people.filter(id => schedulePeople.some(person => person.id === id)) : []
+      }))
+    };
+    renderScheduleBuilder();
+  }
+
+  function placeSchedulePerson(id, drop) {
+    if (!scheduleDraft || !schedulePeople.some(person => person.id === id)) return;
+    scheduleDraft.shifts.forEach(shift => {
+      shift.people = shift.people.filter(personId => personId !== id);
+    });
+    if (drop !== 'pool') {
+      const shift = scheduleDraft.shifts[Number(drop)];
+      if (shift) shift.people.push(id);
+    }
+    renderScheduleBuilder();
+  }
+
+  function printSchedule() {
+    if (!scheduleCurrent) return;
+    const when = formatScheduleStamp(scheduleCurrent.createdAt);
+    const blocks = scheduleCurrent.shifts.map((shift, index) => {
+      const names = (shift.people || []).map(schedulePersonName).filter(Boolean);
+      return `<section class="print-schedule-shift"><h2>Zmiana ${index + 1} · ${formatShiftHours(shift.start, shift.end)}</h2>${shift.custom ? '<p>Niestandardowe godziny</p>' : ''}${names.length ? `<ul>${names.map(name => `<li>${escapeHtml(name)}</li>`).join('')}</ul>` : '<p>Brak osób</p>'}</section>`;
+    }).join('');
+    printOutput.dataset.kind = 'schedule';
+    printOutput.innerHTML = `<div class="print-header"><img src="icons/icon-192.png" alt=""><div class="title-block"><h1>ELIS — GRAFIK</h1><p>Zapisany: ${escapeHtml(when)}</p></div></div>${blocks}<div class="print-mats-footer"><p>Dokument wygenerowany automatycznie przez system Elis</p></div>`;
+    setTimeout(() => {
+      try { window.print(); } catch (error) { showToast('Błąd podczas otwierania okna drukowania.', 'error'); }
+    }, 100);
+  }
+
+  async function openScheduleScreen(viewName) {
+    const lock = document.getElementById('scheduleLock');
+    const hub = document.getElementById('scheduleHub');
+    if (!isAdmin) {
+      if (lock) lock.hidden = false;
+      if (hub) hub.hidden = true;
+      return;
+    }
+    if (lock) lock.hidden = true;
+    if (hub) hub.hidden = viewName !== 'schedule';
+    const loaded = await scheduleRpc('load');
+    if (!isAdmin || currentView !== viewName) return;
+    if (scheduleDenied(loaded, viewName === 'schedule')) {
+      if (loaded && loaded.error === 'missing' && viewName === 'schedule') {
+        const setup = document.getElementById('scheduleSetup');
+        if (setup) setup.hidden = false;
+        document.querySelectorAll('#scheduleHub [data-navigate]').forEach(button => { button.disabled = true; });
+      }
+      return;
+    }
+    const setup = document.getElementById('scheduleSetup');
+    if (setup) setup.hidden = true;
+    document.querySelectorAll('#scheduleHub [data-navigate]').forEach(button => { button.disabled = false; });
+    renderScheduleHubStatus();
+    if (viewName === 'schedulePeople') renderSchedulePeople();
+    if (viewName === 'scheduleBuild') showScheduleBuilder();
+    if (viewName === 'scheduleBoard') renderScheduleBoard();
+  }
+
+  document.getElementById('scheduleLoginBtn')?.addEventListener('click', openAdminModal);
+  document.getElementById('schedulePersonForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const input = document.getElementById('schedulePersonName');
+    const name = input.value.trim();
+    if (!name) return;
+    const button = event.currentTarget.querySelector('button');
+    button.disabled = true;
+    const result = await scheduleRpc('save_person', { name });
+    button.disabled = false;
+    if (scheduleDenied(result)) return;
+    input.value = '';
+    renderSchedulePeople();
+    showToast('Dodano osobę.');
+  });
+  document.getElementById('schedulePeopleList')?.addEventListener('click', async (event) => {
+    const row = event.target.closest('[data-person-id]');
+    if (!row) return;
+    const id = row.dataset.personId;
+    const person = schedulePeople.find(item => item.id === id);
+    if (!person) return;
+    if (event.target.closest('[data-person-edit]')) {
+      row.className = 'schedule-edit-row';
+      row.innerHTML = `<input maxlength="60" autocomplete="off" spellcheck="false" value="${escapeHtml(person.name)}" aria-label="Nowe imię i nazwisko"><button type="button" class="btn-primary" data-person-save>Zapisz</button><button type="button" class="btn-secondary" data-person-cancel>Anuluj</button>`;
+      row.querySelector('input').focus();
+      return;
+    }
+    if (event.target.closest('[data-person-cancel]')) {
+      renderSchedulePeople();
+      return;
+    }
+    if (event.target.closest('[data-person-save]')) {
+      const name = row.querySelector('input').value.trim();
+      if (!name) return;
+      const result = await scheduleRpc('save_person', { id, name });
+      if (scheduleDenied(result)) return;
+      renderSchedulePeople();
+      return;
+    }
+    if (event.target.closest('[data-person-delete]')) {
+      if (!confirm(`Usunąć ${person.name} z listy?`)) return;
+      const result = await scheduleRpc('delete_person', { id });
+      if (scheduleDenied(result)) return;
+      if (scheduleDraft) {
+        scheduleDraft.shifts.forEach(shift => {
+          shift.people = shift.people.filter(personId => personId !== id);
+        });
+      }
+      renderSchedulePeople();
+    }
+  });
+  document.getElementById('scheduleCountPick')?.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-shift-count]');
+    if (!button) return;
+    chooseShiftCount(Number(button.dataset.shiftCount));
+  });
+  document.getElementById('scheduleCountBack')?.addEventListener('click', () => {
+    const pick = document.getElementById('scheduleCountPick');
+    const builder = document.getElementById('scheduleBuilder');
+    if (pick) pick.hidden = false;
+    if (builder) builder.hidden = true;
+  });
+  document.getElementById('scheduleBuildView')?.addEventListener('change', (event) => {
+    if (!scheduleDraft) return;
+    if (event.target.matches('[data-custom]')) {
+      const index = Number(event.target.dataset.custom);
+      const shift = scheduleDraft.shifts[index];
+      if (!shift) return;
+      shift.custom = event.target.checked;
+      if (!shift.custom) {
+        shift.start = SCHEDULE_DEFAULTS[index].start;
+        shift.end = SCHEDULE_DEFAULTS[index].end;
+      }
+      renderScheduleBuilder();
+      return;
+    }
+    if (event.target.matches('[data-time]')) {
+      const shift = scheduleDraft.shifts[Number(event.target.dataset.shift)];
+      if (!shift || !shift.custom || !event.target.value) return;
+      shift[event.target.dataset.time] = event.target.value;
+      const title = event.target.closest('.schedule-shift')?.querySelector('.schedule-hours');
+      if (title) title.textContent = formatShiftHours(shift.start, shift.end);
+      return;
+    }
+    if (event.target.matches('[data-add-shift]') && event.target.value) {
+      placeSchedulePerson(event.target.value, event.target.dataset.addShift);
+    }
+  });
+  document.getElementById('scheduleBuildView')?.addEventListener('pointerdown', (event) => {
+    const chip = event.target.closest('.schedule-person');
+    if (!chip || !scheduleDraft || event.button > 0) return;
+    event.preventDefault();
+    const ghost = chip.cloneNode(true);
+    ghost.classList.add('schedule-ghost');
+    document.body.appendChild(ghost);
+    chip.classList.add('dragging');
+    const pointer = event.pointerId;
+    const move = (clientX, clientY) => {
+      ghost.style.left = `${clientX + 12}px`;
+      ghost.style.top = `${clientY + 12}px`;
+      ghost.hidden = true;
+      const under = document.elementFromPoint(clientX, clientY);
+      ghost.hidden = false;
+      document.querySelectorAll('.schedule-drop').forEach(zone => zone.classList.remove('over'));
+      const zone = under && under.closest('.schedule-drop');
+      if (zone) zone.classList.add('over');
+      scheduleDrag = { id: chip.dataset.personId, zone, ghost, pointer };
+    };
+    move(event.clientX, event.clientY);
+    const onMove = (moveEvent) => {
+      if (!scheduleDrag || moveEvent.pointerId !== pointer) return;
+      move(moveEvent.clientX, moveEvent.clientY);
+    };
+    const onUp = (upEvent) => {
+      if (!scheduleDrag || upEvent.pointerId !== pointer) return;
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onUp);
+      const drop = scheduleDrag.zone ? scheduleDrag.zone.dataset.drop : '';
+      const id = scheduleDrag.id;
+      scheduleDrag.ghost.remove();
+      chip.classList.remove('dragging');
+      document.querySelectorAll('.schedule-drop').forEach(zone => zone.classList.remove('over'));
+      scheduleDrag = null;
+      if (drop) placeSchedulePerson(id, drop);
+    };
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onUp);
+  });
+  document.getElementById('scheduleCreateBtn')?.addEventListener('click', async () => {
+    if (!scheduleDraft) return;
+    const shifts = scheduleDraft.shifts.map(shift => ({
+      start: shift.start,
+      end: shift.end,
+      custom: !!shift.custom,
+      people: shift.people.slice()
+    }));
+    if (!shifts.some(shift => shift.people.length)) {
+      showToast('Dodaj przynajmniej jedną osobę na zmianę.', 'notice');
+      return;
+    }
+    if (scheduleCurrent && !confirm('Zastąpić obecny grafik?')) return;
+    const button = document.getElementById('scheduleCreateBtn');
+    button.disabled = true;
+    const result = await scheduleRpc('save_schedule', { shifts });
+    button.disabled = false;
+    if (scheduleDenied(result)) return;
+    scheduleDraft = null;
+    showToast('Grafik zapisany.');
+    navigateTo('scheduleBoard');
+  });
+  document.getElementById('schedulePrintBtn')?.addEventListener('click', printSchedule);
+  document.getElementById('scheduleRebuildBtn')?.addEventListener('click', () => {
+    if (scheduleCurrent) {
+      scheduleDraft = {
+        shifts: scheduleCurrent.shifts.map(shift => ({
+          start: shift.start,
+          end: shift.end,
+          custom: !!shift.custom,
+          people: (shift.people || []).slice()
+        }))
+      };
+      scheduleKeepDraft = true;
+    }
+    navigateTo('scheduleBuild');
+  });
+  window.addEventListener('afterprint', () => {
+    if (printOutput && printOutput.dataset.kind === 'schedule') {
+      printOutput.innerHTML = '';
+      delete printOutput.dataset.kind;
+    }
+  });
 
 // ==================== INICJALIZACJA ====================
   async function init() {

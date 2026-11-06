@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
   <title>Elis ServiceHub — Centrum Główne</title>
-  <link rel="stylesheet" href="style.css?v=88">
+  <link rel="stylesheet" href="style.css?v=89">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0d1117">
   <meta name="mobile-web-app-capable" content="yes">
@@ -196,6 +196,22 @@
                 <span id="reportsTileBadge" class="tab-badge" style="display: none; background-color: var(--danger, #ef4444);">0</span>
               </h2>
               <p>Zgłaszanie problemów i śledzenie napraw</p>
+            </div>
+          </button>
+
+          <button class="home-tile" data-navigate="schedule">
+            <div class="home-tile-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+              </svg>
+            </div>
+            <div class="home-tile-content">
+              <h2>Grafik</h2>
+              <p>Zmiany i lista ludzi</p>
             </div>
           </button>
 
@@ -1355,6 +1371,108 @@
     </div>
   </div>
 
+    <div id="scheduleView" class="view">
+      <div class="app-main">
+        <div id="scheduleLock" class="card schedule-lock">
+          <h2>Grafik</h2>
+          <p>Lista ludzi i grafik otwierają się dopiero po PIN-ie administratora.</p>
+          <button type="button" id="scheduleLoginBtn" class="btn-primary">Zaloguj jako administrator</button>
+        </div>
+        <div id="scheduleHub" hidden>
+          <div class="home-welcome">Grafik</div>
+          <p class="home-subtitle">Co chcesz zrobić?</p>
+          <p id="scheduleHubStatus" class="schedule-status"></p>
+          <div id="scheduleSetup" class="schedule-setup" hidden>Grafik nie jest jeszcze włączony w bazie. Trzeba jednorazowo wkleić skrypt SQL w Supabase.</div>
+          <div class="home-grid schedule-hub-grid">
+            <button class="home-tile" type="button" data-navigate="schedulePeople">
+              <div class="home-tile-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+              </div>
+              <div class="home-tile-content">
+                <h2>Zarządzanie ludźmi</h2>
+                <p>Dodawaj i usuwaj osoby</p>
+              </div>
+            </button>
+            <button class="home-tile" type="button" data-navigate="scheduleBuild">
+              <div class="home-tile-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="3" y1="10" x2="21" y2="10"></line><line x1="12" y1="10" x2="12" y2="22"></line></svg>
+              </div>
+              <div class="home-tile-content">
+                <h2>Utwórz grafik</h2>
+                <p>Ułóż zmiany na teraz</p>
+              </div>
+            </button>
+            <button class="home-tile" type="button" data-navigate="scheduleBoard">
+              <div class="home-tile-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+              </div>
+              <div class="home-tile-content">
+                <h2>Obecny grafik</h2>
+                <p>Podgląd i wydruk</p>
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="schedulePeopleView" class="view">
+      <div class="app-main">
+        <div class="card">
+          <div class="card-header"><h2>Zarządzanie ludźmi</h2></div>
+          <p class="schedule-note">Imiona i nazwiska wracają z bazy tylko po PIN-ie administratora. Nie zapisują się w przeglądarce.</p>
+          <form id="schedulePersonForm" class="schedule-person-form" autocomplete="off">
+            <input id="schedulePersonName" maxlength="60" autocomplete="off" spellcheck="false" placeholder="Imię i nazwisko" aria-label="Imię i nazwisko">
+            <button class="btn-primary" type="submit">Dodaj</button>
+          </form>
+          <div id="schedulePeopleList" class="schedule-people-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="scheduleBuildView" class="view">
+      <div class="app-main">
+        <div id="scheduleCountPick" class="card">
+          <div class="card-header"><h2>Ile zmian?</h2></div>
+          <div class="schedule-count-grid">
+            <button type="button" class="schedule-count-btn" data-shift-count="1"><strong>1 zmiana</strong><span>6:00–14:00</span></button>
+            <button type="button" class="schedule-count-btn" data-shift-count="2"><strong>2 zmiany</strong><span>6:00–14:00 i 14:00–22:00</span></button>
+            <button type="button" class="schedule-count-btn" data-shift-count="3"><strong>3 zmiany</strong><span>6:00–14:00, 14:00–22:00 i 22:00–6:00</span></button>
+          </div>
+        </div>
+        <div id="scheduleBuilder" hidden>
+          <div class="schedule-layout">
+            <aside class="card schedule-pool-card">
+              <h2>Wszyscy</h2>
+              <p class="schedule-note">Przeciągnij osobę na zmianę. Między zmianami też.</p>
+              <div id="schedulePool" class="schedule-drop" data-drop="pool"></div>
+            </aside>
+            <div id="scheduleShifts" class="schedule-shifts"></div>
+          </div>
+          <div class="schedule-actions">
+            <button type="button" id="scheduleCountBack" class="btn-secondary">Zmień liczbę zmian</button>
+            <button type="button" id="scheduleCreateBtn" class="btn-primary">Utwórz grafik</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="scheduleBoardView" class="view">
+      <div class="app-main">
+        <div class="card">
+          <div class="card-header">
+            <h2>Obecny grafik</h2>
+            <button type="button" id="schedulePrintBtn" class="btn-secondary">Drukuj</button>
+          </div>
+          <p id="scheduleBoardWhen" class="schedule-status"></p>
+          <div id="scheduleBoardBody"></div>
+          <div class="schedule-actions">
+            <button type="button" id="scheduleRebuildBtn" class="btn-primary">Ułóż od nowa</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
   <footer class="app-footer">
     <span>Created by D. & M. Bocian</span>
   </footer>
@@ -1883,7 +2001,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script src="logoData.js?v=33"></script>
   <script src="locationFormat.js?v=1"></script>
-  <script src="script.js?v=94"></script>
+  <script src="script.js?v=95"></script>
 </body>
 
 </html>
