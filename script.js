@@ -251,7 +251,8 @@ document.addEventListener("DOMContentLoaded", () => {
     
     syncLogoListChrome();
     if (!isAdmin && (currentView === 'routesManage' || currentView === 'routePick')) navigateTo('logoRoutes');
-    if (!isAdmin && String(currentView).startsWith('schedule')) navigateTo('home');
+    if (!isAdmin && (currentView === 'schedulePeople' || currentView === 'scheduleBuild')) navigateTo('schedule');
+    else if (!isAdmin && (currentView === 'schedule' || currentView === 'scheduleBoard')) openScheduleScreen(currentView);
   }
 
   // ==================== EVENT LISTENERY ADMINA ====================
@@ -787,9 +788,10 @@ document.addEventListener("DOMContentLoaded", () => {
     'reports': 'home',
     'schedule': 'home',
     'schedulePeople': 'schedule',
-    'scheduleBuild': 'schedule',
+    'scheduleBuild': 'scheduleBoard',
     'scheduleBoard': 'schedule'
   };
+  let schedulePeopleFrom = 'schedule';
   
   const PLACE_KEY = 'elis-panel-place';
   let placeReady = false;
@@ -839,13 +841,14 @@ document.addEventListener("DOMContentLoaded", () => {
     while (cursor && !seen.has(cursor)) {
       seen.add(cursor);
       chain.unshift(cursor);
-      cursor = viewParents[cursor] || null;
+      cursor = parentOf(cursor);
     }
     if (chain[0] !== 'home') chain.unshift('home');
     return chain;
   }
 
   function parentOf(viewName) {
+    if (viewName === 'schedulePeople' && schedulePeopleFrom === 'scheduleBuild') return 'scheduleBuild';
     let parent = viewParents[viewName] || null;
     if ((parent === 'routesManage' || parent === 'routePick') && !isAdmin) parent = 'logoRoutes';
     return parent;
@@ -965,20 +968,24 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     const modals = [...document.querySelectorAll('.modal')].filter(modal => modal.style.display === 'flex');
     if (!modals.length) return false;
-    closeModal(modals[modals.length - 1]);
+    closeModal(modals[modals.length - 1], true);
     return true;
   }
 
   function navigateTo(viewName, options = {}) {
     const leaving = currentView;
+    if (viewName === 'schedulePeople') {
+      schedulePeopleFrom = leaving === 'scheduleBuild' ? 'scheduleBuild' : 'schedule';
+      if (leaving === 'scheduleBuild') scheduleKeepDraft = true;
+    }
     if (!options.fromHistory) armStack();
     if (viewName === 'mats') viewName = 'logo';
     if ((viewName === 'routesManage' || viewName === 'routePick') && !isAdmin) {
       showToast('Zarządzanie trasami jest dostępne po zalogowaniu administratora.', 'notice');
       viewName = 'logoRoutes';
     }
-    if (!isAdmin && ['schedulePeople', 'scheduleBuild', 'scheduleBoard'].includes(viewName)) {
-      showToast('Grafik jest dostępny po zalogowaniu administratora.', 'notice');
+    if (!isAdmin && (viewName === 'schedulePeople' || viewName === 'scheduleBuild')) {
+      showToast('Zarządzanie pracownikami i układanie grafiku są dostępne po zalogowaniu administratora.', 'notice');
       viewName = 'schedule';
     }
     Object.values(views).forEach(v => v?.classList.remove('active'));
@@ -1075,11 +1082,11 @@ document.addEventListener("DOMContentLoaded", () => {
           await fetchReports();
       })();
     } else if (viewName === 'schedule') {
-      headerTitle.textContent = 'Grafik';
+      headerTitle.textContent = isAdmin ? 'Grafik' : 'Obecny grafik';
       backBtn.style.display = 'flex';
       openScheduleScreen('schedule');
     } else if (viewName === 'schedulePeople') {
-      headerTitle.textContent = 'Zarządzanie ludźmi';
+      headerTitle.textContent = 'Zarządzanie pracownikami';
       backBtn.style.display = 'flex';
       openScheduleScreen('schedulePeople');
     } else if (viewName === 'scheduleBuild') {
@@ -1134,6 +1141,11 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   window.addEventListener('popstate', (event) => {
+    if (closingModalHistory) {
+      closingModalHistory = false;
+      dismissTransientUi();
+      return;
+    }
     const closed = dismissTransientUi();
     const view = (event.state && event.state.view) || panelFromUrl();
     if (!views[view] || view === currentView) return;
@@ -1968,10 +1980,13 @@ document.addEventListener("DOMContentLoaded", () => {
     
     persist(); 
   };
+  let closingModalHistory = false;
   const openModal = (modal) => {
     modal.style.display = 'flex';
+    modal.dataset.history = '';
     if (!androidSystemBack() && gestureNow() && (!history.state || !history.state.modal)) {
       history.pushState({ elis: 1, modal: 1, view: currentView }, '', location.href);
+      modal.dataset.history = '1';
     }
     if (androidSystemBack() && !modal._elisWatcher) {
       try {
@@ -1984,12 +1999,20 @@ document.addEventListener("DOMContentLoaded", () => {
       } catch (error) {}
     }
   };
-  const closeModal = (modal) => {
+  const closeModal = (modal, fromHistory) => {
+    if (!modal) return;
+    const wasOpen = modal.style.display === 'flex';
     modal.style.display = 'none';
-    if (modal && modal._elisWatcher) {
+    const pushed = modal.dataset.history === '1';
+    modal.dataset.history = '';
+    if (modal._elisWatcher) {
       const watcher = modal._elisWatcher;
       modal._elisWatcher = null;
       try { watcher.destroy(); } catch (error) {}
+    }
+    if (wasOpen && pushed && !fromHistory) {
+      closingModalHistory = true;
+      history.back();
     }
   };
 
@@ -7417,16 +7440,23 @@ document.addEventListener("DOMContentLoaded", () => {
   let schedulePeople = [];
   let scheduleCurrent = null;
   let scheduleDraft = null;
+  let scheduleWeekStart = '';
   let scheduleKeepDraft = false;
   let scheduleDrag = null;
+  let scheduleDeleteId = '';
+  let scheduleDeleteMode = 'person';
+  let scheduleWriteEpoch = 0;
+  const SCHEDULE_DAY_NAMES = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek', 'Sobota', 'Niedziela'];
+  const SCHEDULE_DAY_SHORT = ['Pon', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob', 'Nd'];
 
   function wipeScheduleSecrets() {
     adminPinMemory = '';
     schedulePeople = [];
     scheduleCurrent = null;
     scheduleDraft = null;
+    scheduleWeekStart = '';
     scheduleKeepDraft = false;
-    ['schedulePeopleList', 'schedulePool', 'scheduleShifts', 'scheduleBoardBody'].forEach(id => {
+    ['schedulePeopleList', 'schedulePool', 'scheduleShifts', 'scheduleBoardBody', 'schedulePublicBody'].forEach(id => {
       const node = document.getElementById(id);
       if (node) node.innerHTML = '';
     });
@@ -7443,11 +7473,24 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function formatShiftHours(start, end) {
-    const pretty = (value) => {
-      const match = /^(\d{2}):(\d{2})$/.exec(value || '');
-      return match ? `${Number(match[1])}:${match[2]}` : (value || '');
-    };
-    return `${pretty(start)}–${pretty(end)}`;
+    return `${clockFace(start)}–${clockFace(end)}`;
+  }
+
+  function clockFace(value) {
+    const match = /^(\d{1,2}):(\d{2})$/.exec(value || '');
+    if (!match) return value || '';
+    const hour = Number(match[1]);
+    if (hour > 23) return value || '';
+    return `${hour}:${match[2]}`;
+  }
+
+  function parseClock(value) {
+    const match = /^(\d{1,2}):(\d{2})$/.exec((value || '').trim());
+    if (!match) return '';
+    const hour = Number(match[1]);
+    const minute = Number(match[2]);
+    if (hour > 23 || minute > 59) return '';
+    return `${String(hour).padStart(2, '0')}:${match[2]}`;
   }
 
   function formatScheduleStamp(value) {
@@ -7456,26 +7499,151 @@ document.addEventListener("DOMContentLoaded", () => {
     return date.toLocaleString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   }
 
+  function schedulePersonById(id) {
+    return schedulePeople.find(item => item.id === id) || null;
+  }
+
   function schedulePersonName(id) {
-    const person = schedulePeople.find(item => item.id === id);
-    return person ? person.name : '';
+    const person = schedulePersonById(id);
+    return person && !person.away ? person.name : '';
+  }
+
+  function scheduleActivePeople() {
+    return schedulePeople.filter(person => !person.away);
+  }
+
+  function dropUnavailablePeople() {
+    if (!scheduleDraft) return;
+    const active = new Set(scheduleActivePeople().map(person => person.id));
+    scheduleDraft.shifts.forEach(shift => {
+      shift.people = shift.people.filter(id => active.has(id));
+    });
+  }
+
+  function mondayOf(date) {
+    const copy = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    copy.setDate(copy.getDate() - ((copy.getDay() + 6) % 7));
+    return copy;
+  }
+
+  function isoDate(date) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  }
+
+  function parseIsoDate(value) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || '');
+    if (!match) return null;
+    const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+    if (date.getFullYear() !== Number(match[1]) || date.getMonth() !== Number(match[2]) - 1 || date.getDate() !== Number(match[3])) return null;
+    return date;
+  }
+
+  function formatDayMonth(date) {
+    return `${date.getDate()}.${date.getMonth() + 1}`;
+  }
+
+  function formatPolishDate(date) {
+    return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
+  }
+
+  function parseScheduleDate(value) {
+    const text = (value || '').trim();
+    const polish = /^(\d{1,2})[./](\d{1,2})[./](\d{4})$/.exec(text);
+    if (polish) {
+      const date = new Date(Number(polish[3]), Number(polish[2]) - 1, Number(polish[1]));
+      if (date.getFullYear() === Number(polish[3]) && date.getMonth() === Number(polish[2]) - 1 && date.getDate() === Number(polish[1])) return date;
+      return null;
+    }
+    return parseIsoDate(text);
+  }
+
+  function weekDates(mondayIso) {
+    const start = parseIsoDate(mondayIso);
+    if (!start || start.getDay() !== 1) return [];
+    return SCHEDULE_DAY_NAMES.map((name, index) => {
+      const date = new Date(start.getFullYear(), start.getMonth(), start.getDate() + index);
+      return { name, short: SCHEDULE_DAY_SHORT[index], date, label: formatDayMonth(date), weekend: index >= 5 };
+    });
+  }
+
+  function weekRangeLabel(mondayIso) {
+    const days = weekDates(mondayIso);
+    if (!days.length) return '';
+    const end = days[6].date;
+    return `${formatDayMonth(days[0].date)}–${end.getDate()}.${end.getMonth() + 1}.${end.getFullYear()}`;
+  }
+
+  function sortSchedulePeople(list) {
+    return list.slice().sort((a, b) => a.name.localeCompare(b.name, 'pl', { sensitivity: 'base' }));
+  }
+
+  function applyScheduleSnapshot(data) {
+    if (Array.isArray(data.people)) {
+      const pending = schedulePeople.filter(person => String(person.id).startsWith('pending-'));
+      const pendingByName = new Map(pending.map(person => [person.name.toLocaleLowerCase('pl'), person]));
+      const incoming = data.people.map(person => {
+        const local = pendingByName.get(String(person.name || '').toLocaleLowerCase('pl'));
+        const serverAway = person.away === true || person.away === 'true';
+        return {
+          id: person.id,
+          name: person.name,
+          away: local && local.awayTouched ? local.away : serverAway,
+          awayTouched: !!(local && local.awayTouched && local.away !== serverAway)
+        };
+      });
+      const incomingNames = new Set(incoming.map(person => person.name.toLocaleLowerCase('pl')));
+      const stillPending = pending.filter(person => !incomingNames.has(person.name.toLocaleLowerCase('pl')));
+      schedulePeople = sortSchedulePeople(incoming.concat(stillPending));
+    }
+    if (data.schedule && Array.isArray(data.schedule.shifts) && data.schedule.shifts.length) {
+      scheduleCurrent = {
+        createdAt: data.schedule.createdAt,
+        weekStart: data.schedule.weekStart || '',
+        shifts: data.schedule.shifts
+      };
+    } else if (!data.schedule || Array.isArray(data.schedule.shifts)) {
+      scheduleCurrent = null;
+    }
   }
 
   async function scheduleRpc(action, payload) {
     if (!adminPinMemory) return { ok: false, error: 'forbidden' };
+    const writing = action !== 'load';
+    const epoch = scheduleWriteEpoch;
+    if (writing) scheduleWriteEpoch += 1;
     try {
       const { data, error } = await window.supabase.rpc('schedule_api', {
         candidate: adminPinMemory,
         action,
         payload: payload || {}
       });
+      if (!writing && epoch !== scheduleWriteEpoch) return { ok: true, stale: true };
       if (error) {
         const missing = error.code === 'PGRST202' || /Could not find the function/i.test(error.message || '');
         return { ok: false, error: missing ? 'missing' : 'network' };
       }
       if (!data || data.ok !== true) return data || { ok: false, error: 'network' };
-      schedulePeople = Array.isArray(data.people) ? data.people : [];
-      scheduleCurrent = data.schedule && Array.isArray(data.schedule.shifts) ? data.schedule : null;
+      applyScheduleSnapshot(data);
+      return data;
+    } catch (error) {
+      if (!writing && epoch !== scheduleWriteEpoch) return { ok: true, stale: true };
+      return { ok: false, error: 'network' };
+    }
+  }
+
+  async function schedulePublicLoad() {
+    try {
+      const { data, error } = await window.supabase.rpc('schedule_board');
+      if (error) {
+        const missing = error.code === 'PGRST202' || /Could not find the function/i.test(error.message || '');
+        return { ok: false, error: missing ? 'missing' : 'network' };
+      }
+      if (!data || data.ok !== true) return data || { ok: false, error: 'network' };
+      scheduleCurrent = data.schedule && Array.isArray(data.schedule.shifts) ? {
+        createdAt: data.schedule.createdAt,
+        weekStart: data.schedule.weekStart || '',
+        shifts: data.schedule.shifts
+      } : null;
       return data;
     } catch (error) {
       return { ok: false, error: 'network' };
@@ -7510,43 +7678,82 @@ document.addEventListener("DOMContentLoaded", () => {
       status.textContent = 'Nie ma jeszcze zapisanego grafiku.';
       return;
     }
-    const count = scheduleCurrent.shifts.length;
-    status.textContent = `Obecny grafik z ${formatScheduleStamp(scheduleCurrent.createdAt)}, ${count} ${count === 1 ? 'zmiana' : 'zmiany'}.`;
+    const range = weekRangeLabel(scheduleCurrent.weekStart);
+    status.textContent = range
+      ? `Obecny grafik: ${range}.`
+      : `Obecny grafik z ${formatScheduleStamp(scheduleCurrent.createdAt)}.`;
+  }
+
+  function shiftDisplayNames(shift) {
+    if (Array.isArray(shift.names)) return shift.names.map(name => String(name || '').trim()).filter(Boolean);
+    return (shift.people || []).map(schedulePersonName).filter(Boolean);
+  }
+
+  function scheduleWeekMarkup(schedule) {
+    const days = weekDates(schedule.weekStart);
+    if (!days.length) {
+      return '<p class="schedule-empty">Ten grafik nie ma wybranego tygodnia. Ułóż go ponownie i wskaż poniedziałek.</p>';
+    }
+    const head = days.map(day => `<th class="${day.weekend ? 'is-weekend' : ''}">${day.name}<span>${day.label}</span></th>`).join('');
+    const rows = schedule.shifts.map((shift, index) => {
+      const names = shiftDisplayNames(shift);
+      const cells = days.map(day => {
+        if (day.weekend) return '<td class="is-weekend"><span class="schedule-off">—</span></td>';
+        if (!names.length) return '<td><span class="schedule-off">Brak</span></td>';
+        return `<td>${names.map(name => `<span>${escapeHtml(name)}</span>`).join('')}</td>`;
+      }).join('');
+      return `<tr><th class="schedule-shift-label">Zmiana ${index + 1}<span>${formatShiftHours(shift.start, shift.end)}</span></th>${cells}</tr>`;
+    }).join('');
+    return `<div class="schedule-week-scroll"><table class="schedule-week"><thead><tr><th>Zmiana</th>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
   }
 
   function renderSchedulePeople() {
     const list = document.getElementById('schedulePeopleList');
     if (!list) return;
     if (!schedulePeople.length) {
-      list.innerHTML = '<p class="schedule-empty">Lista jest pusta. Dodaj pierwszą osobę.</p>';
+      list.innerHTML = '<p class="schedule-empty">Lista jest pusta. Dodaj pierwszego pracownika.</p>';
       return;
     }
     list.innerHTML = schedulePeople.map(person => `
-      <div class="schedule-person-row" data-person-id="${escapeHtml(person.id)}">
-        <span>${escapeHtml(person.name)}</span>
-        <button type="button" class="btn-secondary" data-person-edit>Edytuj</button>
-        <button type="button" class="btn-danger" data-person-delete>Usuń</button>
+      <div class="schedule-person-row${person.away ? ' is-away' : ''}" data-person-id="${escapeHtml(person.id)}">
+        <div class="schedule-person-main">
+          <button type="button" class="schedule-away-toggle ${person.away ? 'is-away' : 'is-here'}" data-person-away aria-pressed="${person.away ? 'false' : 'true'}" title="${person.away ? 'Urlop lub zwolnienie' : 'W pracy'}" aria-label="${person.away ? 'Urlop lub zwolnienie' : 'W pracy'}">${presenceIcon(person.away ? 0 : 1)}</button>
+          <div class="schedule-person-copy">
+            <span class="schedule-person-name">${escapeHtml(person.name)}</span>
+            ${person.away ? '<span class="schedule-away-tag">Urlop / zwolnienie</span>' : ''}
+          </div>
+        </div>
+        <div class="schedule-person-actions">
+          <button type="button" class="btn-secondary" data-person-edit>Edytuj</button>
+          <button type="button" class="btn-danger" data-person-delete>Usuń</button>
+        </div>
       </div>
     `).join('');
   }
 
   function renderScheduleBoard() {
-    const body = document.getElementById('scheduleBoardBody');
-    const when = document.getElementById('scheduleBoardWhen');
-    const printBtn = document.getElementById('schedulePrintBtn');
-    if (!body) return;
-    if (!scheduleCurrent) {
-      if (when) when.textContent = 'Nie ma jeszcze zapisanego grafiku.';
-      body.innerHTML = '<p class="schedule-empty">Utwórz grafik, a potem będzie go można wydrukować.</p>';
-      if (printBtn) printBtn.disabled = true;
-      return;
-    }
-    if (when) when.textContent = `Zapisany ${formatScheduleStamp(scheduleCurrent.createdAt)}.`;
-    if (printBtn) printBtn.disabled = false;
-    body.innerHTML = scheduleCurrent.shifts.map((shift, index) => {
-      const names = (shift.people || []).map(schedulePersonName).filter(Boolean);
-      return `<section class="schedule-board-shift"><h3>Zmiana ${index + 1}</h3><div class="schedule-hours">${formatShiftHours(shift.start, shift.end)}</div>${shift.custom ? '<p class="schedule-note">Niestandardowe godziny</p>' : ''}${names.length ? `<ul>${names.map(name => `<li>${escapeHtml(name)}</li>`).join('')}</ul>` : '<p class="schedule-empty">Brak osób</p>'}</section>`;
-    }).join('');
+    const hasSchedule = !!(scheduleCurrent && Array.isArray(scheduleCurrent.shifts) && scheduleCurrent.shifts.length);
+    const markup = hasSchedule
+      ? scheduleWeekMarkup(scheduleCurrent)
+      : '<p class="schedule-empty">Nie ma jeszcze zapisanego grafiku.</p>';
+    const range = hasSchedule ? weekRangeLabel(scheduleCurrent.weekStart) : '';
+    const whenText = hasSchedule
+      ? (range ? `Tydzień ${range}.` : `Zapisany ${formatScheduleStamp(scheduleCurrent.createdAt)}.`)
+      : '';
+    [['scheduleBoardBody', 'scheduleBoardWhen', 'schedulePrintBtn'], ['schedulePublicBody', 'schedulePublicWhen', 'schedulePublicPrint']].forEach(([bodyId, whenId, printId]) => {
+      const body = document.getElementById(bodyId);
+      const when = document.getElementById(whenId);
+      const printBtn = document.getElementById(printId);
+      if (body) body.innerHTML = markup;
+      if (when) when.textContent = whenText;
+      if (printBtn) printBtn.disabled = !hasSchedule;
+    });
+    const createEntry = document.getElementById('scheduleCreateEntry');
+    const rebuild = document.getElementById('scheduleRebuildBtn');
+    const clearBtn = document.getElementById('scheduleClearBtn');
+    if (createEntry) createEntry.hidden = !isAdmin || hasSchedule;
+    if (rebuild) rebuild.hidden = !isAdmin || !hasSchedule;
+    if (clearBtn) clearBtn.hidden = !isAdmin || !hasSchedule;
   }
 
   function scheduleChip(person) {
@@ -7561,30 +7768,38 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!scheduleDraft || !pool || !shifts) return;
     if (pick) pick.hidden = true;
     if (builder) builder.hidden = false;
+    dropUnavailablePeople();
+    const active = scheduleActivePeople();
     const assigned = new Set(scheduleDraft.shifts.flatMap(shift => shift.people));
-    const waiting = schedulePeople.filter(person => !assigned.has(person.id));
-    pool.innerHTML = waiting.length
-      ? waiting.map(scheduleChip).join('')
-      : '<p class="schedule-empty">Wszyscy są już na zmianach.</p>';
+    const waiting = active.filter(person => !assigned.has(person.id));
+    if (!schedulePeople.length) {
+      pool.innerHTML = '<div class="schedule-empty-people"><p>Nie ma jeszcze żadnego pracownika.</p><button type="button" class="btn-primary" id="scheduleGoPeople">Dodaj pracowników</button></div>';
+    } else if (!active.length) {
+      pool.innerHTML = '<div class="schedule-empty-people"><p>Wszyscy są na urlopie albo zwolnieniu, więc nie ma kogo ułożyć.</p><button type="button" class="btn-primary" id="scheduleGoPeople">Zarządzanie pracownikami</button></div>';
+    } else {
+      pool.innerHTML = waiting.length
+        ? waiting.map(scheduleChip).join('')
+        : '<p class="schedule-empty">Wszyscy dostępni są już na zmianach.</p>';
+    }
     shifts.innerHTML = scheduleDraft.shifts.map((shift, index) => {
-      const people = shift.people.map(id => schedulePeople.find(person => person.id === id)).filter(Boolean);
-      const choices = schedulePeople.filter(person => !shift.people.includes(person.id));
+      const people = shift.people.map(schedulePersonById).filter(person => person && !person.away);
+      const choices = active.filter(person => !shift.people.includes(person.id));
+      const hours = shift.custom
+        ? `<input type="text" inputmode="numeric" maxlength="5" spellcheck="false" data-time="start" data-shift="${index}" value="${clockFace(shift.start)}" aria-label="Godzina od"><span>–</span><input type="text" inputmode="numeric" maxlength="5" spellcheck="false" data-time="end" data-shift="${index}" value="${clockFace(shift.end)}" aria-label="Godzina do">`
+        : formatShiftHours(shift.start, shift.end);
       return `
         <section class="card schedule-shift">
           <h2>Zmiana ${index + 1}</h2>
-          <div class="schedule-hours">${formatShiftHours(shift.start, shift.end)}</div>
-          <label class="schedule-custom"><input type="checkbox" data-custom="${index}" ${shift.custom ? 'checked' : ''}> Niestandardowe godziny</label>
-          <div class="schedule-hours-edit">
-            <label>Od <input type="time" data-time="start" data-shift="${index}" value="${shift.start}" ${shift.custom ? '' : 'disabled'}></label>
-            <label>Do <input type="time" data-time="end" data-shift="${index}" value="${shift.end}" ${shift.custom ? '' : 'disabled'}></label>
-          </div>
+          <div class="schedule-hours">${hours}</div>
+          <label class="schedule-custom">
+            <input type="checkbox" data-custom="${index}" ${shift.custom ? 'checked' : ''}>
+            <span class="schedule-tick" aria-hidden="true"></span>
+            <span>Inne godziny</span>
+          </label>
           <div class="schedule-drop" data-drop="${index}">
-            ${people.length ? people.map(scheduleChip).join('') : '<p class="schedule-empty">Przeciągnij tutaj osobę</p>'}
+            ${people.length ? people.map(scheduleChip).join('') : '<p class="schedule-empty">Upuść osobę</p>'}
           </div>
-          <select class="schedule-add-select" data-add-shift="${index}">
-            <option value="">Dodaj osobę...</option>
-            ${choices.map(person => `<option value="${escapeHtml(person.id)}">${escapeHtml(person.name)}</option>`).join('')}
-          </select>
+          ${choices.length ? `<select class="schedule-add-select" data-add-shift="${index}"><option value="">Dodaj z listy...</option>${choices.map(person => `<option value="${escapeHtml(person.id)}">${escapeHtml(person.name)}</option>`).join('')}</select>` : ''}
         </section>
       `;
     }).join('');
@@ -7610,14 +7825,15 @@ document.addEventListener("DOMContentLoaded", () => {
         start: previous[index] && previous[index].custom ? previous[index].start : item.start,
         end: previous[index] && previous[index].custom ? previous[index].end : item.end,
         custom: !!(previous[index] && previous[index].custom),
-        people: previous[index] ? previous[index].people.filter(id => schedulePeople.some(person => person.id === id)) : []
+        people: previous[index] ? previous[index].people.filter(id => scheduleActivePeople().some(person => person.id === id)) : []
       }))
     };
     renderScheduleBuilder();
   }
 
   function placeSchedulePerson(id, drop) {
-    if (!scheduleDraft || !schedulePeople.some(person => person.id === id)) return;
+    const person = schedulePersonById(id);
+    if (!scheduleDraft || !person || person.away) return;
     scheduleDraft.shifts.forEach(shift => {
       shift.people = shift.people.filter(personId => personId !== id);
     });
@@ -7628,31 +7844,126 @@ document.addEventListener("DOMContentLoaded", () => {
     renderScheduleBuilder();
   }
 
-  function printSchedule() {
-    if (!scheduleCurrent) return;
-    const when = formatScheduleStamp(scheduleCurrent.createdAt);
-    const blocks = scheduleCurrent.shifts.map((shift, index) => {
-      const names = (shift.people || []).map(schedulePersonName).filter(Boolean);
-      return `<section class="print-schedule-shift"><h2>Zmiana ${index + 1} · ${formatShiftHours(shift.start, shift.end)}</h2>${shift.custom ? '<p>Niestandardowe godziny</p>' : ''}${names.length ? `<ul>${names.map(name => `<li>${escapeHtml(name)}</li>`).join('')}</ul>` : '<p>Brak osób</p>'}</section>`;
+  const SCHEDULE_MONTHS = ['styczeń', 'luty', 'marzec', 'kwiecień', 'maj', 'czerwiec', 'lipiec', 'sierpień', 'wrzesień', 'październik', 'listopad', 'grudzień'];
+  let scheduleCalendarOpen = false;
+  let scheduleCalendarCursor = null;
+
+  function renderScheduleWeekPicker() {
+    const host = document.getElementById('scheduleWeekDays');
+    const monday = parseIsoDate(scheduleWeekStart);
+    const label = document.getElementById('scheduleWeekStartText');
+    if (label) label.textContent = monday ? formatPolishDate(monday) : 'Wybierz dzień';
+    const chosen = document.getElementById('scheduleWeekChosen');
+    if (chosen) chosen.textContent = monday ? `Poniedziałek ${formatPolishDate(monday)}` : '';
+    if (scheduleCalendarOpen) renderScheduleCalendar();
+    if (!host) return;
+    const days = weekDates(scheduleWeekStart);
+    host.innerHTML = days.map(day => `<div class="schedule-week-day${day.weekend ? ' is-weekend' : ''}"><strong>${day.short}</strong><span>${day.label}</span></div>`).join('');
+  }
+
+  function renderScheduleCalendar() {
+    const title = document.getElementById('scheduleCalendarTitle');
+    const grid = document.getElementById('scheduleCalendarDays');
+    if (!grid) return;
+    const selected = parseIsoDate(scheduleWeekStart);
+    if (!scheduleCalendarCursor) {
+      const anchor = selected || new Date();
+      scheduleCalendarCursor = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+    }
+    const year = scheduleCalendarCursor.getFullYear();
+    const month = scheduleCalendarCursor.getMonth();
+    if (title) title.textContent = `${SCHEDULE_MONTHS[month]} ${year}`;
+    const start = mondayOf(new Date(year, month, 1));
+    const today = new Date();
+    const todayIso = isoDate(new Date(today.getFullYear(), today.getMonth(), today.getDate()));
+    grid.innerHTML = Array.from({ length: 42 }, (_, index) => {
+      const date = new Date(start.getFullYear(), start.getMonth(), start.getDate() + index);
+      const iso = isoDate(date);
+      const classes = [
+        'schedule-cal-day',
+        date.getMonth() !== month ? 'is-outside' : '',
+        date.getDay() === 0 || date.getDay() === 6 ? 'is-weekend' : '',
+        selected && iso === isoDate(selected) ? 'is-selected' : '',
+        iso === todayIso ? 'is-today' : ''
+      ].filter(Boolean).join(' ');
+      return `<button type="button" class="${classes}" data-date="${iso}">${date.getDate()}</button>`;
     }).join('');
+  }
+
+  function setScheduleCalendarOpen(open) {
+    const popup = document.getElementById('scheduleCalendar');
+    const button = document.getElementById('scheduleWeekStart');
+    scheduleCalendarOpen = open;
+    if (popup) popup.hidden = !open;
+    if (button) button.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (!open) return;
+    const anchor = parseIsoDate(scheduleWeekStart) || new Date();
+    scheduleCalendarCursor = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+    renderScheduleCalendar();
+  }
+
+  function revealSchedulePerson(name) {
+    const added = [...document.querySelectorAll('#schedulePeopleList .schedule-person-name')].find(node => node.textContent === name);
+    if (added) added.closest('.schedule-person-row')?.scrollIntoView({ block: 'nearest' });
+  }
+
+  function setSchedulePrintPage(on) {
+    document.body.classList.toggle('print-schedule', on);
+    const existing = document.getElementById('schedulePrintStyle');
+    if (!on) {
+      if (existing) existing.remove();
+      return;
+    }
+    const tag = existing || document.createElement('style');
+    tag.id = 'schedulePrintStyle';
+    tag.textContent = '@media print { @page { size: A4 landscape; margin: 8mm; } }';
+    if (!existing) document.head.appendChild(tag);
+  }
+
+  function printSchedule() {
+    if (!scheduleCurrent || !scheduleCurrent.shifts.length) return;
     printOutput.dataset.kind = 'schedule';
-    printOutput.innerHTML = `<div class="print-header"><img src="icons/icon-192.png" alt=""><div class="title-block"><h1>ELIS — GRAFIK</h1><p>Zapisany: ${escapeHtml(when)}</p></div></div>${blocks}<div class="print-mats-footer"><p>Dokument wygenerowany automatycznie przez system Elis</p></div>`;
+    printOutput.innerHTML = `<div class="print-schedule-page"><p class="print-schedule-brand">Elis ServiceHub</p>${scheduleWeekMarkup(scheduleCurrent)}</div>`;
+    setSchedulePrintPage(true);
     setTimeout(() => {
-      try { window.print(); } catch (error) { showToast('Błąd podczas otwierania okna drukowania.', 'error'); }
+      try { window.print(); } catch (error) {
+        setSchedulePrintPage(false);
+        showToast('Błąd podczas otwierania okna drukowania.', 'error');
+      }
     }, 100);
   }
 
+  function personAssignedToSchedule(id) {
+    return !!(scheduleCurrent && scheduleCurrent.shifts.some(shift => Array.isArray(shift.people) && shift.people.includes(id)));
+  }
+
+  function openScheduleDeleteDialog() {
+    const confirmBtn = document.getElementById('scheduleDeleteConfirm');
+    const modal = document.getElementById('scheduleDeleteModal');
+    if (confirmBtn) confirmBtn.disabled = true;
+    openModal(modal);
+    setTimeout(() => {
+      if (confirmBtn && modal && modal.style.display === 'flex') confirmBtn.disabled = false;
+    }, 400);
+  }
+
   async function openScheduleScreen(viewName) {
-    const lock = document.getElementById('scheduleLock');
     const hub = document.getElementById('scheduleHub');
+    const publicBoard = document.getElementById('schedulePublic');
     if (!isAdmin) {
-      if (lock) lock.hidden = false;
       if (hub) hub.hidden = true;
+      if (publicBoard) publicBoard.hidden = viewName !== 'schedule';
+      if (viewName !== 'schedule' && viewName !== 'scheduleBoard') return;
+      const loaded = await schedulePublicLoad();
+      if (isAdmin || currentView !== viewName) return;
+      if (loaded && loaded.error === 'network') showToast('Nie udało się wczytać grafiku.', 'error');
+      renderScheduleBoard();
       return;
     }
-    if (lock) lock.hidden = true;
+    if (publicBoard) publicBoard.hidden = true;
     if (hub) hub.hidden = viewName !== 'schedule';
     const loaded = await scheduleRpc('load');
+    if (loaded && loaded.stale) return;
     if (!isAdmin || currentView !== viewName) return;
     if (scheduleDenied(loaded, viewName === 'schedule')) {
       if (loaded && loaded.error === 'missing' && viewName === 'schedule') {
@@ -7667,31 +7978,111 @@ document.addEventListener("DOMContentLoaded", () => {
     document.querySelectorAll('#scheduleHub [data-navigate]').forEach(button => { button.disabled = false; });
     renderScheduleHubStatus();
     if (viewName === 'schedulePeople') renderSchedulePeople();
-    if (viewName === 'scheduleBuild') showScheduleBuilder();
+    if (viewName === 'scheduleBuild') {
+      if (!scheduleWeekStart) scheduleWeekStart = scheduleCurrent && scheduleCurrent.weekStart ? scheduleCurrent.weekStart : isoDate(mondayOf(new Date()));
+      renderScheduleWeekPicker();
+      showScheduleBuilder();
+    }
     if (viewName === 'scheduleBoard') renderScheduleBoard();
   }
 
-  document.getElementById('scheduleLoginBtn')?.addEventListener('click', openAdminModal);
+  function commitScheduleMonday(raw) {
+    const picked = parseScheduleDate(raw);
+    if (!picked) {
+      showToast('Wpisz datę jako dzień.miesiąc.rok, na przykład 09.11.2026.', 'notice');
+      renderScheduleWeekPicker();
+      return;
+    }
+    const monday = mondayOf(picked);
+    if (isoDate(picked) !== isoDate(monday)) showToast('Grafik startuje w poniedziałek. Ustawiam poniedziałek tego tygodnia.', 'notice');
+    scheduleWeekStart = isoDate(monday);
+    renderScheduleWeekPicker();
+  }
+  document.getElementById('scheduleWeekStart')?.addEventListener('click', () => setScheduleCalendarOpen(!scheduleCalendarOpen));
+  document.getElementById('scheduleCalendar')?.addEventListener('click', (event) => {
+    if (event.target.closest('[data-cal="prev"]')) {
+      scheduleCalendarCursor = new Date(scheduleCalendarCursor.getFullYear(), scheduleCalendarCursor.getMonth() - 1, 1);
+      renderScheduleCalendar();
+      return;
+    }
+    if (event.target.closest('[data-cal="next"]')) {
+      scheduleCalendarCursor = new Date(scheduleCalendarCursor.getFullYear(), scheduleCalendarCursor.getMonth() + 1, 1);
+      renderScheduleCalendar();
+      return;
+    }
+    const day = event.target.closest('[data-date]');
+    if (!day) return;
+    commitScheduleMonday(day.dataset.date);
+    setScheduleCalendarOpen(false);
+  });
+  document.addEventListener('click', (event) => {
+    if (!scheduleCalendarOpen || event.target.closest('#scheduleDate')) return;
+    setScheduleCalendarOpen(false);
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && scheduleCalendarOpen) setScheduleCalendarOpen(false);
+  });
   document.getElementById('schedulePersonForm')?.addEventListener('submit', async (event) => {
     event.preventDefault();
     const input = document.getElementById('schedulePersonName');
     const name = input.value.trim();
     if (!name) return;
+    const away = event.currentTarget.querySelector('input[name="schedulePersonAway"]:checked')?.value === '1';
+    const pendingId = `pending-${Date.now()}`;
+    schedulePeople = sortSchedulePeople(schedulePeople.concat([{ id: pendingId, name, away }]));
+    renderSchedulePeople();
+    revealSchedulePerson(name);
     const button = event.currentTarget.querySelector('button');
     button.disabled = true;
-    const result = await scheduleRpc('save_person', { name });
+    const result = await scheduleRpc('save_person', { name, away });
     button.disabled = false;
-    if (scheduleDenied(result)) return;
+    if (!result || result.ok !== true) {
+      schedulePeople = schedulePeople.filter(person => person.id !== pendingId);
+      renderSchedulePeople();
+      scheduleDenied(result);
+      return;
+    }
     input.value = '';
+    const saved = schedulePeople.find(person => person.name.toLocaleLowerCase('pl') === name.toLocaleLowerCase('pl') && !String(person.id).startsWith('pending-'));
+    if (saved && saved.awayTouched) {
+      const desired = saved.away;
+      saved.awayTouched = false;
+      const follow = await scheduleRpc('save_person', { id: saved.id, name: saved.name, away: desired });
+      const current = schedulePersonById(saved.id);
+      if (current && follow && follow.ok === true) current.away = desired;
+    }
     renderSchedulePeople();
-    showToast('Dodano osobę.');
+    revealSchedulePerson(name);
+    showToast('Dodano pracownika.');
   });
   document.getElementById('schedulePeopleList')?.addEventListener('click', async (event) => {
     const row = event.target.closest('[data-person-id]');
     if (!row) return;
     const id = row.dataset.personId;
-    const person = schedulePeople.find(item => item.id === id);
+    const person = schedulePersonById(id);
     if (!person) return;
+    if (event.target.closest('[data-person-away]')) {
+      const nextAway = !person.away;
+      person.away = nextAway;
+      person.awayTouched = true;
+      renderSchedulePeople();
+      if (String(id).startsWith('pending-')) return;
+      const result = await scheduleRpc('save_person', { id, name: person.name, away: nextAway });
+      const current = schedulePersonById(id);
+      if (!result || result.ok !== true) {
+        if (current) current.away = !nextAway;
+        renderSchedulePeople();
+        scheduleDenied(result);
+        return;
+      }
+      if (current) {
+        current.away = nextAway;
+        current.awayTouched = false;
+      }
+      dropUnavailablePeople();
+      renderSchedulePeople();
+      return;
+    }
     if (event.target.closest('[data-person-edit]')) {
       row.className = 'schedule-edit-row';
       row.innerHTML = `<input maxlength="60" autocomplete="off" spellcheck="false" value="${escapeHtml(person.name)}" aria-label="Nowe imię i nazwisko"><button type="button" class="btn-primary" data-person-save>Zapisz</button><button type="button" class="btn-secondary" data-person-cancel>Anuluj</button>`;
@@ -7706,21 +8097,72 @@ document.addEventListener("DOMContentLoaded", () => {
       const name = row.querySelector('input').value.trim();
       if (!name) return;
       const result = await scheduleRpc('save_person', { id, name });
+      if (result && result.stale) return;
       if (scheduleDenied(result)) return;
       renderSchedulePeople();
       return;
     }
     if (event.target.closest('[data-person-delete]')) {
-      if (!confirm(`Usunąć ${person.name} z listy?`)) return;
-      const result = await scheduleRpc('delete_person', { id });
-      if (scheduleDenied(result)) return;
-      if (scheduleDraft) {
-        scheduleDraft.shifts.forEach(shift => {
-          shift.people = shift.people.filter(personId => personId !== id);
-        });
+      event.preventDefault();
+      event.stopPropagation();
+      scheduleDeleteMode = 'person';
+      scheduleDeleteId = id;
+      const title = document.querySelector('#scheduleDeleteModal h3');
+      const text = document.getElementById('scheduleDeleteText');
+      if (title) title.textContent = 'Usuń pracownika';
+      if (text) {
+        text.textContent = personAssignedToSchedule(id)
+          ? `Usunąć ${person.name}? Ta osoba jest na obecnym grafiku, więc zniknie też ze zmian. Tej operacji nie da się cofnąć.`
+          : `Usunąć ${person.name} z listy? Tej operacji nie da się cofnąć.`;
       }
-      renderSchedulePeople();
+      openScheduleDeleteDialog();
     }
+  });
+  document.getElementById('scheduleDeleteCancel')?.addEventListener('click', () => {
+    scheduleDeleteId = '';
+    scheduleDeleteMode = 'person';
+    closeModal(document.getElementById('scheduleDeleteModal'));
+  });
+  document.getElementById('scheduleDeleteConfirm')?.addEventListener('click', async () => {
+    const button = document.getElementById('scheduleDeleteConfirm');
+    if (!button || button.disabled) return;
+    if (scheduleDeleteMode === 'schedule') {
+      button.disabled = true;
+      const result = await scheduleRpc('clear_schedule', {});
+      button.disabled = false;
+      if (result && result.error === 'invalid') {
+        showToast('Usuwanie całego grafiku trzeba jeszcze włączyć w bazie. Wklej nowy skrypt SQL.', 'notice');
+        return;
+      }
+      if (scheduleDenied(result)) return;
+      scheduleDeleteMode = 'person';
+      closeModal(document.getElementById('scheduleDeleteModal'));
+      scheduleDraft = null;
+      renderScheduleBoard();
+      renderScheduleHubStatus();
+      showToast('Grafik usunięty.');
+      return;
+    }
+    const id = scheduleDeleteId;
+    const person = schedulePersonById(id);
+    if (!person) {
+      scheduleDeleteId = '';
+      closeModal(document.getElementById('scheduleDeleteModal'));
+      return;
+    }
+    button.disabled = true;
+    const result = await scheduleRpc('delete_person', { id });
+    button.disabled = false;
+    if (scheduleDenied(result)) return;
+    scheduleDeleteId = '';
+    closeModal(document.getElementById('scheduleDeleteModal'));
+    if (scheduleDraft) {
+      scheduleDraft.shifts.forEach(shift => {
+        shift.people = shift.people.filter(personId => personId !== id);
+      });
+    }
+    renderSchedulePeople();
+    showToast('Usunięto osobę.');
   });
   document.getElementById('scheduleCountPick')?.addEventListener('click', (event) => {
     const button = event.target.closest('[data-shift-count]');
@@ -7745,19 +8187,29 @@ document.addEventListener("DOMContentLoaded", () => {
         shift.end = SCHEDULE_DEFAULTS[index].end;
       }
       renderScheduleBuilder();
+      if (shift.custom) {
+        document.querySelector(`#scheduleShifts [data-time="start"][data-shift="${index}"]`)?.focus();
+      }
       return;
     }
     if (event.target.matches('[data-time]')) {
       const shift = scheduleDraft.shifts[Number(event.target.dataset.shift)];
-      if (!shift || !shift.custom || !event.target.value) return;
-      shift[event.target.dataset.time] = event.target.value;
-      const title = event.target.closest('.schedule-shift')?.querySelector('.schedule-hours');
-      if (title) title.textContent = formatShiftHours(shift.start, shift.end);
+      if (!shift || !shift.custom) return;
+      const parsed = parseClock(event.target.value);
+      if (!parsed) {
+        event.target.value = clockFace(shift[event.target.dataset.time]);
+        return;
+      }
+      shift[event.target.dataset.time] = parsed;
+      event.target.value = clockFace(parsed);
       return;
     }
     if (event.target.matches('[data-add-shift]') && event.target.value) {
       placeSchedulePerson(event.target.value, event.target.dataset.addShift);
     }
+  });
+  document.getElementById('scheduleBuildView')?.addEventListener('click', (event) => {
+    if (event.target.closest('#scheduleGoPeople')) navigateTo('schedulePeople');
   });
   document.getElementById('scheduleBuildView')?.addEventListener('pointerdown', (event) => {
     const chip = event.target.closest('.schedule-person');
@@ -7803,6 +8255,10 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   document.getElementById('scheduleCreateBtn')?.addEventListener('click', async () => {
     if (!scheduleDraft) return;
+    if (!weekDates(scheduleWeekStart).length) {
+      showToast('Wybierz poniedziałek, od którego liczy się grafik.', 'notice');
+      return;
+    }
     const shifts = scheduleDraft.shifts.map(shift => ({
       start: shift.start,
       end: shift.end,
@@ -7816,22 +8272,43 @@ document.addEventListener("DOMContentLoaded", () => {
     if (scheduleCurrent && !confirm('Zastąpić obecny grafik?')) return;
     const button = document.getElementById('scheduleCreateBtn');
     button.disabled = true;
-    const result = await scheduleRpc('save_schedule', { shifts });
+    const result = await scheduleRpc('save_schedule', { weekStart: scheduleWeekStart, shifts });
     button.disabled = false;
+    if (result && result.stale) return;
     if (scheduleDenied(result)) return;
     scheduleDraft = null;
     showToast('Grafik zapisany.');
     navigateTo('scheduleBoard');
   });
   document.getElementById('schedulePrintBtn')?.addEventListener('click', printSchedule);
+  document.getElementById('schedulePublicPrint')?.addEventListener('click', printSchedule);
+  document.getElementById('scheduleCreateEntry')?.addEventListener('click', () => {
+    if (!isAdmin) return;
+    scheduleDraft = null;
+    scheduleKeepDraft = false;
+    if (!scheduleWeekStart) scheduleWeekStart = isoDate(mondayOf(new Date()));
+    navigateTo('scheduleBuild');
+  });
+  document.getElementById('scheduleClearBtn')?.addEventListener('click', () => {
+    if (!isAdmin || !scheduleCurrent) return;
+    scheduleDeleteMode = 'schedule';
+    scheduleDeleteId = '';
+    const title = document.querySelector('#scheduleDeleteModal h3');
+    const text = document.getElementById('scheduleDeleteText');
+    if (title) title.textContent = 'Usuń grafik';
+    if (text) text.textContent = 'Usunąć cały obecny grafik? Pracownicy zostają na liście. Tej operacji nie da się cofnąć.';
+    openScheduleDeleteDialog();
+  });
   document.getElementById('scheduleRebuildBtn')?.addEventListener('click', () => {
+    if (!isAdmin) return;
     if (scheduleCurrent) {
+      scheduleWeekStart = scheduleCurrent.weekStart || isoDate(mondayOf(new Date()));
       scheduleDraft = {
         shifts: scheduleCurrent.shifts.map(shift => ({
           start: shift.start,
           end: shift.end,
           custom: !!shift.custom,
-          people: (shift.people || []).slice()
+          people: (shift.people || []).filter(id => scheduleActivePeople().some(person => person.id === id))
         }))
       };
       scheduleKeepDraft = true;
@@ -7842,8 +8319,16 @@ document.addEventListener("DOMContentLoaded", () => {
     if (printOutput && printOutput.dataset.kind === 'schedule') {
       printOutput.innerHTML = '';
       delete printOutput.dataset.kind;
+      setSchedulePrintPage(false);
     }
   });
+  document.addEventListener('wheel', (event) => {
+    const scroller = event.target.closest && event.target.closest('.schedule-week-scroll');
+    if (!scroller || scroller.scrollWidth <= scroller.clientWidth + 1) return;
+    if (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+    scroller.scrollLeft += event.deltaY;
+    event.preventDefault();
+  }, { passive: false });
 
 // ==================== INICJALIZACJA ====================
   async function init() {
