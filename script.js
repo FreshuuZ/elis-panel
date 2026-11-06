@@ -7783,7 +7783,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     shifts.innerHTML = scheduleDraft.shifts.map((shift, index) => {
       const people = shift.people.map(schedulePersonById).filter(person => person && !person.away);
-      const choices = active.filter(person => !shift.people.includes(person.id));
+      const choices = waiting;
       const hours = shift.custom
         ? `<input type="text" inputmode="numeric" maxlength="5" spellcheck="false" data-time="start" data-shift="${index}" value="${clockFace(shift.start)}" aria-label="Godzina od"><span>–</span><input type="text" inputmode="numeric" maxlength="5" spellcheck="false" data-time="end" data-shift="${index}" value="${clockFace(shift.end)}" aria-label="Godzina do">`
         : formatShiftHours(shift.start, shift.end);
