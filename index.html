@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
-  <title>Elis ServiceHub — Centrum Główne</title>
+  <title>Elis ServiceHub - Centrum Główne</title>
   <link rel="stylesheet" href="style.css?v=99">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0d1117">
@@ -1282,7 +1282,7 @@
       <div class="app-main schedule-screen">
         <div class="card">
           <div class="card-header"><h2>Zarządzanie pracownikami</h2></div>
-          <p class="schedule-note">Szary znaczek oznacza, że pracownik jest w pracy. Czerwony X to urlop albo zwolnienie — wtedy nie wchodzi do grafiku.</p>
+          <p class="schedule-note">Szary znaczek oznacza, że pracownik jest w pracy. Czerwony X to urlop albo zwolnienie - wtedy nie wchodzi do grafiku.</p>
           <form id="schedulePersonForm" class="schedule-person-form" autocomplete="off">
             <div class="schedule-person-add">
               <input id="schedulePersonName" maxlength="60" autocomplete="off" spellcheck="false" placeholder="Imię i nazwisko" aria-label="Imię i nazwisko">
@@ -1345,6 +1345,7 @@
             <div id="scheduleShifts" class="schedule-shifts"></div>
           </div>
           <div class="schedule-actions">
+            <button type="button" id="scheduleSwapBtn" class="btn-secondary" hidden>Zamień zmianę 1 i 2</button>
             <button type="button" id="scheduleCountBack" class="btn-secondary">Zmień liczbę zmian</button>
             <button type="button" id="scheduleCreateBtn" class="btn-primary">Utwórz grafik</button>
           </div>
@@ -2041,7 +2042,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script src="logoData.js?v=33"></script>
   <script src="locationFormat.js?v=1"></script>
-  <script src="script.js?v=105"></script>
+  <script src="script.js?v=106"></script>
 </body>
 
 </html>

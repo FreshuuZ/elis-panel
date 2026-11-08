@@ -1928,7 +1928,7 @@ document.addEventListener("DOMContentLoaded", () => {
               <span class="change-meta-value">${c.mat} <span class="badge">×${c.qty}</span></span>
             </div>`;
         } else if (c.type === 'multi') {
-            const altsHtml = c.alternatives.map(alt => `<li><span>${alt.alt}</span> <span class="badge">×${alt.qty}</span> ${alt.client ? `<span class="client-name">— ${alt.client}</span>` : ''}</li>`).join('');
+            const altsHtml = c.alternatives.map(alt => `<li><span>${alt.alt}</span> <span class="badge">×${alt.qty}</span> ${alt.client ? `<span class="client-name">- ${alt.client}</span>` : ''}</li>`).join('');
             detailsHtml = `
               <div class="change-meta-row">
                 <span class="change-meta-label">Baza:</span>
@@ -1943,7 +1943,7 @@ document.addEventListener("DOMContentLoaded", () => {
               <li>
                 <span>${c.alt}</span> 
                 <span class="badge">×${c.qty}</span> 
-                ${c.client ? `<span class="client-name">— ${c.client}</span>` : ''}
+                ${c.client ? `<span class="client-name">- ${c.client}</span>` : ''}
               </li>
             `;
             detailsHtml = `
@@ -2241,10 +2241,10 @@ document.addEventListener("DOMContentLoaded", () => {
           printHTML += `<h2>Zamienniki (${replacements.length})</h2>`;
           printHTML += replacements.map(c => {
             if (c.type === 'multi') {
-              const alts = c.alternatives.map(alt => `<li>${alt.alt} (×${alt.qty})${alt.client ? ` <span class="client">— ${alt.client}</span>` : ''}</li>`).join('');
+              const alts = c.alternatives.map(alt => `<li>${alt.alt} (×${alt.qty})${alt.client ? ` <span class="client">- ${alt.client}</span>` : ''}</li>`).join('');
               return `<div class="print-change-item"><div class="base">${c.base} (ilość bazowa: ×${c.qtyBase})</div><ul class="multi-alt-list">${alts}</ul></div>`;
             }
-            return `<div class="print-change-item"><div class="base">${c.base} (×${c.qty})</div><div class="simple-alt">${c.alt} (×${c.qty})${c.client ? ` <span class="client">— ${c.client}</span>` : ''}</div></div>`;
+            return `<div class="print-change-item"><div class="base">${c.base} (×${c.qty})</div><div class="simple-alt">${c.alt} (×${c.qty})${c.client ? ` <span class="client">- ${c.client}</span>` : ''}</div></div>`;
           }).join('');
         }
         
@@ -2330,16 +2330,16 @@ document.addEventListener("DOMContentLoaded", () => {
     actionAddition.classList.remove('selected');
     advancedModeToggle.checked = false; 
     advancedModeToggle.dispatchEvent(new Event('change')); 
-    baseMatSelectWrapper.reset('— wybierz matę —'); 
-    altMatSelectWrapper.reset('— wybierz zamiennik —');
-    additionMatSelectWrapper.reset('— wybierz matę —');
+    baseMatSelectWrapper.reset('- wybierz matę -'); 
+    altMatSelectWrapper.reset('- wybierz zamiennik -');
+    additionMatSelectWrapper.reset('- wybierz matę -');
     updateFormState(); 
     updatePalletDisplay();
   });
   
   baseMatSelectWrapper.addEventListener("change", () => { 
-    altMatSelectWrapper.reset('— wybierz zamiennik —'); 
-    multiAltSelectWrapper.reset('— wybierz zamiennik —'); 
+    altMatSelectWrapper.reset('- wybierz zamiennik -'); 
+    multiAltSelectWrapper.reset('- wybierz zamiennik -'); 
     updateFormState(); 
   });
   
@@ -2360,7 +2360,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!appState.multiAltMat || qty < 1) { showToast("Wybierz zamiennik i poprawną ilość.", "error"); return; } 
     tempAlternatives.push({ alt: appState.multiAltMat, qty, client }); 
     renderTempAltList(); 
-    multiAltSelectWrapper.reset("— wybierz zamiennik —"); 
+    multiAltSelectWrapper.reset("- wybierz zamiennik -"); 
     multiAltQtyInput.value = 1; 
     multiAltClientInput.value = ""; 
     updateFormState(); 
@@ -2377,7 +2377,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!appState.editMultiAltMat || qty < 1) { showToast("Wybierz zamiennik i poprawną ilość.", "error"); return; } 
     editTempAlternatives.push({ alt: appState.editMultiAltMat, qty, client }); 
     renderEditTempAltList(); 
-    editMultiAltSelectWrapper.reset("— wybierz zamiennik —"); 
+    editMultiAltSelectWrapper.reset("- wybierz zamiennik -"); 
     editMultiAltQtyInput.value = 1; 
     editMultiAltClientInput.value = ""; 
   });
@@ -2415,7 +2415,7 @@ document.addEventListener("DOMContentLoaded", () => {
     showToast("✅ Dodano zmianę!");
 
     if (advancedModeToggle.checked) { advancedModeToggle.checked = false; advancedModeToggle.dispatchEvent(new Event('change')); }
-    altMatSelectWrapper.reset('— wybierz zamiennik —');
+    altMatSelectWrapper.reset('- wybierz zamiennik -');
     simpleClientInput.value = '';
     qtyInput.value = 1;
     advQtyBaseInput.value = 1;
@@ -2441,7 +2441,7 @@ document.addEventListener("DOMContentLoaded", () => {
     renderChanges();
     showToast("✅ Dodano dołożenie!");
     
-    additionMatSelectWrapper.reset('— wybierz matę —');
+    additionMatSelectWrapper.reset('- wybierz matę -');
     additionQty.value = 1;
     updateFormState();
     additionCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -4988,7 +4988,7 @@ document.addEventListener("DOMContentLoaded", () => {
     distributeStep2.style.display = 'none';
     distributeClients = [];
     const distributeMatSelectWrapper = document.getElementById('distributeMatSelectWrapper');
-    distributeMatSelectWrapper.reset('— wybierz matę —');
+    distributeMatSelectWrapper.reset('- wybierz matę -');
     distributeTotalQty.value = '1';
     
     const singleRadio = document.querySelector('input[name="advancedMode"][value="single"]');
@@ -5896,7 +5896,7 @@ document.addEventListener("DOMContentLoaded", () => {
         showToast(`✅ Dodano ${qtyToWash} × ${matDetails.name} do prania!`);
       }
       
-      washingMatSelectWrapper.reset('— wybierz matę logo —');
+      washingMatSelectWrapper.reset('- wybierz matę logo -');
       washingQty.value = 1;
       
       const activeItems = await fetchActiveWashing();
@@ -6804,7 +6804,7 @@ document.addEventListener("DOMContentLoaded", () => {
           `;
         } else if (change.type === 'multi') {
           const altsHtml = change.alternatives.map(alt => 
-            `<li>${alt.alt} <span class="badge">×${alt.qty}</span> ${alt.client ? `<span style="color: var(--muted); font-style: italic;">— ${alt.client}</span>` : ''}</li>`
+            `<li>${alt.alt} <span class="badge">×${alt.qty}</span> ${alt.client ? `<span style="color: var(--muted); font-style: italic;">- ${alt.client}</span>` : ''}</li>`
           ).join('');
           
           return `
@@ -6823,7 +6823,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 ${change.base} <span class="badge">×${change.qty}</span>
               </div>
               <ul class="archive-change-alts">
-                <li>${change.alt} <span class="badge">×${change.qty}</span> ${change.client ? `<span style="color: var(--muted); font-style: italic;">— ${change.client}</span>` : ''}</li>
+                <li>${change.alt} <span class="badge">×${change.qty}</span> ${change.client ? `<span style="color: var(--muted); font-style: italic;">- ${change.client}</span>` : ''}</li>
               </ul>
             </div>
           `;
@@ -7137,7 +7137,7 @@ document.addEventListener("DOMContentLoaded", () => {
               `;
             } else if (change.type === 'multi') {
               const alts = change.alternatives.map(alt => 
-                `<li>${alt.alt} (×${alt.qty})${alt.client ? ` <span class="client">— ${alt.client}</span>` : ''}</li>`
+                `<li>${alt.alt} (×${alt.qty})${alt.client ? ` <span class="client">- ${alt.client}</span>` : ''}</li>`
               ).join('');
               printHTML += `
                 <div class="print-change-item" style="margin-top: 8px;">
@@ -7149,7 +7149,7 @@ document.addEventListener("DOMContentLoaded", () => {
               printHTML += `
                 <div class="print-change-item" style="margin-top: 8px;">
                   <div class="base">${change.base} (×${change.qty})</div>
-                  <div class="simple-alt">${change.alt} (×${change.qty})${change.client ? ` <span class="client">— ${change.client}</span>` : ''}</div>
+                  <div class="simple-alt">${change.alt} (×${change.qty})${change.client ? ` <span class="client">- ${change.client}</span>` : ''}</div>
                 </div>
               `;
             }
@@ -7781,6 +7781,8 @@ document.addEventListener("DOMContentLoaded", () => {
         ? waiting.map(scheduleChip).join('')
         : '<p class="schedule-empty">Wszyscy dostępni są już na zmianach.</p>';
     }
+    const swapBtn = document.getElementById('scheduleSwapBtn');
+    if (swapBtn) swapBtn.hidden = scheduleDraft.shifts.length < 2;
     shifts.innerHTML = scheduleDraft.shifts.map((shift, index) => {
       const people = shift.people.map(schedulePersonById).filter(person => person && !person.away);
       const choices = waiting;
@@ -8169,6 +8171,13 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!button) return;
     chooseShiftCount(Number(button.dataset.shiftCount));
   });
+  document.getElementById('scheduleSwapBtn')?.addEventListener('click', () => {
+    if (!scheduleDraft || scheduleDraft.shifts.length < 2) return;
+    const first = scheduleDraft.shifts[0].people;
+    scheduleDraft.shifts[0].people = scheduleDraft.shifts[1].people;
+    scheduleDraft.shifts[1].people = first;
+    renderScheduleBuilder();
+  });
   document.getElementById('scheduleCountBack')?.addEventListener('click', () => {
     const pick = document.getElementById('scheduleCountPick');
     const builder = document.getElementById('scheduleBuilder');
@@ -8335,15 +8344,15 @@ document.addEventListener("DOMContentLoaded", () => {
     if (restorePlace() === 'redirect') return;
     const logoMatsPromise = fetchAndCacheLogoMats();
     
-    createCustomSelect(routeSelectWrapper, routesByDay, "— wybierz trasę —", "route", true);
-    createCustomSelect(baseMatSelectWrapper, mats, "— wybierz matę —", "baseMat");
-    createCustomSelect(altMatSelectWrapper, mats, "— wybierz zamiennik —", "altMat");
-    createCustomSelect(multiAltSelectWrapper, mats, "— wybierz zamiennik —", "multiAltMat");
-    createCustomSelect(editMultiAltSelectWrapper, mats, "— wybierz zamiennik —", "editMultiAltMat");
-    createCustomSelect(additionMatSelectWrapper, mats, "— wybierz matę —", "additionMat");
+    createCustomSelect(routeSelectWrapper, routesByDay, "- wybierz trasę -", "route", true);
+    createCustomSelect(baseMatSelectWrapper, mats, "- wybierz matę -", "baseMat");
+    createCustomSelect(altMatSelectWrapper, mats, "- wybierz zamiennik -", "altMat");
+    createCustomSelect(multiAltSelectWrapper, mats, "- wybierz zamiennik -", "multiAltMat");
+    createCustomSelect(editMultiAltSelectWrapper, mats, "- wybierz zamiennik -", "editMultiAltMat");
+    createCustomSelect(additionMatSelectWrapper, mats, "- wybierz matę -", "additionMat");
     const distributeMatSelectWrapper = document.getElementById('distributeMatSelectWrapper');
-    createCustomSelect(distributeMatSelectWrapper, mats, "— wybierz matę —", "distributeMat");
-    createCustomSelect(washingMatSelectWrapper, [], "— wybierz matę logo —", "washingMat");
+    createCustomSelect(distributeMatSelectWrapper, mats, "- wybierz matę -", "distributeMat");
+    createCustomSelect(washingMatSelectWrapper, [], "- wybierz matę logo -", "washingMat");
     
     renderChanges();
     updateFormState();
