@@ -7782,7 +7782,11 @@ document.addEventListener("DOMContentLoaded", () => {
         : '<p class="schedule-empty">Wszyscy dostępni są już na zmianach.</p>';
     }
     const swapBtn = document.getElementById('scheduleSwapBtn');
-    if (swapBtn) swapBtn.hidden = scheduleDraft.shifts.length < 2;
+    if (swapBtn) {
+      const shiftCount = scheduleDraft.shifts.length;
+      swapBtn.hidden = shiftCount < 2;
+      swapBtn.textContent = shiftCount >= 3 ? 'Przerzuć zmiany: 1 → 2 → 3 → 1' : 'Zamień zmianę 1 i 2';
+    }
     shifts.innerHTML = scheduleDraft.shifts.map((shift, index) => {
       const people = shift.people.map(schedulePersonById).filter(person => person && !person.away);
       const choices = waiting;
@@ -8173,9 +8177,11 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   document.getElementById('scheduleSwapBtn')?.addEventListener('click', () => {
     if (!scheduleDraft || scheduleDraft.shifts.length < 2) return;
-    const first = scheduleDraft.shifts[0].people;
-    scheduleDraft.shifts[0].people = scheduleDraft.shifts[1].people;
-    scheduleDraft.shifts[1].people = first;
+    const people = scheduleDraft.shifts.map(shift => shift.people);
+    const count = people.length;
+    scheduleDraft.shifts.forEach((shift, index) => {
+      shift.people = people[(index + count - 1) % count];
+    });
     renderScheduleBuilder();
   });
   document.getElementById('scheduleCountBack')?.addEventListener('click', () => {
